@@ -4,6 +4,10 @@
 .env
 .env.local
 .env.*.local
+.env.evolution
+.env.evolution-lite
+.env.evolution.example
+.env.evolution-lite.example
 *.key
 *.pem
 

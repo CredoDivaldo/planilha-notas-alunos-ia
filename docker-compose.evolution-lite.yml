@@ -1,0 +1,39 @@
+services:
+  evolution_api:
+    container_name: evolution_api
+    image: atendai/evolution-api-lite:latest
+    restart: always
+    depends_on:
+      - redis
+      - postgres
+    ports:
+      - "8080:8080"
+    volumes:
+      - evolution_instances:/evolution/instances
+    env_file:
+      - .env.evolution-lite
+
+  redis:
+    image: redis:latest
+    container_name: evolution_redis
+    command: redis-server --port 6379 --appendonly yes
+    volumes:
+      - evolution_redis:/data
+
+  postgres:
+    container_name: evolution_postgres
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: evolution
+      POSTGRES_HOST_AUTH_METHOD: trust
+    command: ["postgres", "-c", "max_connections=1000", "-c", "listen_addresses=*"]
+    volumes:
+      - evolution_postgres:/var/lib/postgresql/data
+
+volumes:
+  evolution_instances:
+  evolution_redis:
+  evolution_postgres:

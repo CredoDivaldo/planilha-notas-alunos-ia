@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MVP Notas + WhatsApp</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>MVP Notas + WhatsApp</h1>
+
+      <section>
+        <h2>1) Upload de estudantes (CSV)</h2>
+        <form id="studentsForm">
+          <input type="file" id="studentsFile" accept=".csv" required />
+          <button type="submit">Importar estudantes</button>
+        </form>
+        <p id="studentsStatus"></p>
+      </section>
+
+      <section>
+        <h2>2) Upload de notas (CSV)</h2>
+        <form id="gradesForm">
+          <input type="file" id="gradesFile" accept=".csv" required />
+          <button type="submit">Importar notas</button>
+        </form>
+        <p id="gradesStatus"></p>
+      </section>
+
+      <section>
+        <h2>3) Gerar match</h2>
+        <button id="matchBtn">Gerar match</button>
+        <p id="matchStats"></p>
+        <div class="table-wrap">
+          <table id="matchTable">
+            <thead>
+              <tr>
+                <th>Número</th>
+                <th>Nome</th>
+                <th>Turma</th>
+                <th>WhatsApp</th>
+                <th>Nota</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>4) Conectar WhatsApp (Evolution Lite)</h2>
+        <div class="checks">
+          <button id="createInstanceBtn" type="button">Criar instância</button>
+          <button id="connectInstanceBtn" type="button">Gerar QR de conexão</button>
+          <button id="stateInstanceBtn" type="button">Ver estado da conexão</button>
+        </div>
+        <p id="evolutionStatus"></p>
+        <img id="qrImage" alt="QR Code WhatsApp" style="max-width: 280px; display:none;" />
+        <pre id="evolutionResult"></pre>
+      </section>
+
+      <section>
+        <h2>5) Mensagem e disparo</h2>
+        <p>Variáveis: {{nome}}, {{numero_estudante}}, {{turma}}, {{nota}}</p>
+        <textarea id="template" rows="5">Olá {{nome}}, tua nota é {{nota}} (Turma: {{turma}}).</textarea>
+
+        <div class="checks">
+          <label><input type="checkbox" id="confirmReal" /> Confirmo envio real para os números da lista</label>
+          <label><input type="checkbox" id="dryRun" /> Simular envio (sem chamar API)</label>
+        </div>
+
+        <button id="sendBtn">Disparar em massa</button>
+        <pre id="sendResult"></pre>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

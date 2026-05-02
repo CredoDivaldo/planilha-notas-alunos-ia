@@ -94,5 +94,27 @@
       "Write(.aiox-core/development/agents/*/MEMORY.md)",
       "Read(.aiox-core/**)"
     ]
+  },
+  "hooks": {
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "set -euo pipefail; payload=$(cat); repo=$(printf '%s' \"$payload\" | jq -r '.repoPath // .repository // .cwd // .project_path // .workspacePath // .tool_input.repoPath // .tool_input.cwd // empty'); [ -n \"$repo\" ] || repo=\"$PWD\"; path=$(printf '%s' \"$payload\" | jq -r '.worktreePath // .path // .tool_input.worktreePath // .tool_input.path // empty'); name=$(printf '%s' \"$payload\" | jq -r '.worktreeName // .name // .tool_input.worktreeName // .tool_input.name // empty'); base=$(printf '%s' \"$payload\" | jq -r '.baseRef // .base // .tool_input.baseRef // .tool_input.base // empty'); [ -n \"$name\" ] || name=\"wt-$(date +%s)\"; [ -n \"$path\" ] || path=\"$repo/.claude/worktrees/$name\"; [ -n \"$base\" ] || base=HEAD; branch=$(basename \"$path\" | tr ' ' '-'); mkdir -p \"$(dirname \"$path\")\"; git -C \"$repo\" worktree add -b \"$branch\" \"$path\" \"$base\"; printf '{\"systemMessage\":\"Worktree criado: %s\"}\n' \"$path\""
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "set -euo pipefail; payload=$(cat); repo=$(printf '%s' \"$payload\" | jq -r '.repoPath // .repository // .cwd // .project_path // .workspacePath // .tool_input.repoPath // .tool_input.cwd // empty'); [ -n \"$repo\" ] || repo=\"$PWD\"; path=$(printf '%s' \"$payload\" | jq -r '.worktreePath // .path // .tool_input.worktreePath // .tool_input.path // empty'); if [ -z \"$path\" ]; then printf '{\"continue\":false,\"stopReason\":\"WorktreeRemove: path ausente no payload\"}\n'; exit 0; fi; git -C \"$repo\" worktree remove \"$path\" --force; printf '{\"systemMessage\":\"Worktree removido: %s\"}\n' \"$path\""
+          }
+        ]
+      }
+    ]
   }
 }
