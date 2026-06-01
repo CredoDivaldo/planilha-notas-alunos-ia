@@ -30,6 +30,10 @@ EXPECTED_TABLES = {
     "user_sessions",
     "delegate_assignments",
     "pending_credential_deliveries",
+    # Story 5.4 additions
+    "academic_contexts",
+    "class_enrollments",
+    "context_subject_configurations",
 }
 
 
@@ -54,7 +58,7 @@ def test_bootstrap_db_applies_initial_academic_schema(tmp_path: Path) -> None:
 
     assert EXPECTED_TABLES.issubset(table_names)
     assert journal_mode == "wal"
-    assert alembic_version == ("20260531_0002",)
+    assert alembic_version == ("20260601_0003",)
 
 
 def test_legacy_json_import_dry_run_reports_counts_without_mutating_files(tmp_path: Path) -> None:
