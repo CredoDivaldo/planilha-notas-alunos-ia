@@ -3,6 +3,13 @@ from __future__ import annotations
 
 from backend.app.models.academic import AuditLog, CalculationResult, GradeEntry
 from backend.app.models.base import Base, TimestampMixin
+from backend.app.models.contexts import (
+    AcademicContext,
+    ClassEnrollment,
+    ContextSubjectConfiguration,
+    Semester,
+    Shift,
+)
 from backend.app.models.publication import BroadcastJob, NotificationDelivery, PublicationSnapshot
 
 __all__ = [
@@ -14,4 +21,9 @@ __all__ = [
     "PublicationSnapshot",
     "NotificationDelivery",
     "AuditLog",
+    "Semester",
+    "Shift",
+    "AcademicContext",
+    "ClassEnrollment",
+    "ContextSubjectConfiguration",
 ]
