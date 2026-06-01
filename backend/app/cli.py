@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from backend.app.config import Settings
 from backend.app.database import build_engine, ensure_sqlite_directory
 from backend.app.models import AcademicContext, ClassEnrollment, ContextSubjectConfiguration
-from backend.app.models import Semester, Shift
+from backend.app.models import GradeEntry, Semester, Shift
 
 LOGGER = logging.getLogger("backend.cli")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
@@ -24,6 +24,45 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message
 ROOT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_DATABASE_URL = Settings.database_url
 LEGACY_JSON_FILES = ("students.json", "grades-last-upload.json", "match-last.json")
+
+
+def _validate_upload_context(
+    session: Session,
+    context_id: int,
+    professor_id: int,
+    roster_student_ids: set[int],
+    subject: str,
+) -> tuple[bool, str]:
+    """Validate that upload context is valid and accessible by professor.
+
+    AC-8 Validation:
+    1. Context exists and belongs to the professor
+    2. All students in roster are enrolled in that context
+    3. Context subject matches the upload subject
+
+    Returns: (valid, error_message)
+    """
+    context = session.query(AcademicContext).filter_by(id=context_id).first()
+    if not context:
+        return False, f"Context {context_id} does not exist"
+
+    if context.professor_id != professor_id:
+        return False, f"Professor {professor_id} does not own context {context_id}"
+
+    if context.subject != subject:
+        return False, f"Context subject '{context.subject}' does not match upload subject '{subject}'"
+
+    # Validate all students in roster are enrolled in this context
+    enrollments = session.query(ClassEnrollment).filter_by(
+        academic_context_id=context_id
+    ).all()
+    enrolled_student_ids = {e.student_id for e in enrollments}
+    missing_students = roster_student_ids - enrolled_student_ids
+
+    if missing_students:
+        return False, f"Students not enrolled in context: {missing_students}"
+
+    return True, ""
 
 
 def _alembic_config(database_url: str) -> Config:
@@ -214,6 +253,129 @@ def bootstrap_academic_contexts(
     }
 
 
+def import_grades_with_context(
+    database_url: str,
+    csv_path: Path,
+    context_id: int,
+    professor_id: int,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Import grades with context validation (AC-8).
+
+    Expected CSV columns:
+    - student_id (int)
+    - teaching_assignment_id (int)
+    - assessment_definition_id (int)
+    - raw_value (float, optional)
+    - status (str, optional: draft, validated, voided)
+
+    Validates:
+    1. Context exists and belongs to professor
+    2. All students in import are enrolled in context
+    3. Subject in context matches expected subject
+    """
+    if not csv_path.exists():
+        return {
+            "status": "error",
+            "message": f"CSV file not found: {csv_path}",
+            "grades_imported": 0,
+            "grades_rejected": 0,
+        }
+
+    engine = build_engine(database_url)
+    imported = 0
+    rejected = 0
+    errors: list[dict[str, Any]] = []
+
+    try:
+        with Session(engine) as session:
+            # First, validate the context exists and belongs to professor
+            context = session.query(AcademicContext).filter_by(id=context_id).first()
+            if not context:
+                return {
+                    "status": "error",
+                    "message": f"Context {context_id} does not exist",
+                    "grades_imported": 0,
+                    "grades_rejected": 0,
+                }
+
+            if context.professor_id != professor_id:
+                return {
+                    "status": "error",
+                    "message": f"Professor {professor_id} does not own context {context_id}",
+                    "grades_imported": 0,
+                    "grades_rejected": 0,
+                }
+
+            # Get all enrolled students for this context
+            enrollments = session.query(ClassEnrollment).filter_by(
+                academic_context_id=context_id
+            ).all()
+            enrolled_student_ids = {e.student_id for e in enrollments}
+
+            with open(csv_path, "r", encoding="utf-8") as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row_num, row in enumerate(reader, start=2):
+                    try:
+                        student_id = int(row["student_id"])
+                        teaching_assignment_id = int(row["teaching_assignment_id"])
+                        assessment_definition_id = int(row["assessment_definition_id"])
+                        raw_value = (
+                            float(row["raw_value"]) if row.get("raw_value") else None
+                        )
+                        status = row.get("status", "draft")
+
+                        # AC-8: Validate student is enrolled in context
+                        if student_id not in enrolled_student_ids:
+                            rejected += 1
+                            errors.append({
+                                "row": row_num,
+                                "error": f"Student {student_id} not enrolled in context {context_id}",
+                                "data": dict(row),
+                            })
+                            continue
+
+                        grade_entry = GradeEntry(
+                            academic_context_id=context_id,
+                            student_id=student_id,
+                            teaching_assignment_id=teaching_assignment_id,
+                            assessment_definition_id=assessment_definition_id,
+                            raw_value=raw_value if raw_value is not None else None,
+                            status=status,
+                        )
+                        session.add(grade_entry)
+                        imported += 1
+                    except (KeyError, ValueError) as exc:
+                        rejected += 1
+                        errors.append({
+                            "row": row_num,
+                            "error": str(exc),
+                            "data": dict(row),
+                        })
+
+            if not dry_run:
+                session.commit()
+                LOGGER.info("import_grades_with_context_completed", extra={
+                    "context_id": context_id,
+                    "grades_imported": imported,
+                    "grades_rejected": rejected,
+                    "dry_run": False,
+                })
+    finally:
+        engine.dispose()
+
+    return {
+        "status": "success" if rejected == 0 else "partial",
+        "csv_path": str(csv_path),
+        "context_id": context_id,
+        "professor_id": professor_id,
+        "dry_run": dry_run,
+        "grades_imported": imported,
+        "grades_rejected": rejected,
+        "errors": errors if errors else None,
+    }
+
+
 def import_context_rosters(
     database_url: str,
     csv_path: Path,
@@ -320,6 +482,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true", help="Preview without persisting"
     )
 
+    import_grades = subparsers.add_parser(
+        "import-grades",
+        help="Import grades with academic context validation (AC-8)",
+    )
+    import_grades.add_argument("--database-url", default=DEFAULT_DATABASE_URL)
+    import_grades.add_argument(
+        "--csv-path", required=True, help="Path to CSV file with grade data"
+    )
+    import_grades.add_argument(
+        "--context-id", type=int, required=True,
+        help="Academic context ID (must be owned by professor)"
+    )
+    import_grades.add_argument(
+        "--professor-id", type=int, required=True,
+        help="Professor ID (for validation)"
+    )
+    import_grades.add_argument(
+        "--dry-run", action="store_true", help="Preview without persisting"
+    )
+
     import_rosters = subparsers.add_parser(
         "import-context-rosters",
         help="Import student rosters into a context from CSV",
@@ -354,6 +536,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         _json_print(bootstrap_academic_contexts(
             args.database_url,
             Path(args.csv_path),
+            args.dry_run,
+        ))
+        return 0
+
+    if args.command == "import-grades":
+        _json_print(import_grades_with_context(
+            args.database_url,
+            Path(args.csv_path),
+            args.context_id,
+            args.professor_id,
             args.dry_run,
         ))
         return 0

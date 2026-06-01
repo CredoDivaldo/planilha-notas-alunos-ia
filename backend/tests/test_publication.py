@@ -128,6 +128,25 @@ def engine():
         conn.execute(
             text(
                 """
+                CREATE TABLE academic_contexts (
+                    id INTEGER PRIMARY KEY,
+                    professor_id INTEGER NOT NULL,
+                    academic_year INTEGER NOT NULL,
+                    turma TEXT NOT NULL,
+                    subject TEXT NOT NULL,
+                    semester_id INTEGER NOT NULL,
+                    shift_id INTEGER NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'draft',
+                    notes TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
                 CREATE TABLE class_groups (
                     id INTEGER PRIMARY KEY,
                     course_id INTEGER,
@@ -227,6 +246,7 @@ def engine():
                 """
                 CREATE TABLE grade_entries (
                     id INTEGER PRIMARY KEY,
+                    academic_context_id INTEGER,
                     student_id INTEGER NOT NULL,
                     teaching_assignment_id INTEGER NOT NULL,
                     assessment_definition_id INTEGER NOT NULL,

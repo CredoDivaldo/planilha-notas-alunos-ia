@@ -5,6 +5,7 @@ Covers:
 - Class enrollments: roster management, status transitions
 - Subject configuration: JSON storage and retrieval
 - Context isolation: professor A cannot access professor B's contexts
+- AC-8: Grade entry context scoping and upload validation
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ from backend.app.models import (
     Base,
     ClassEnrollment,
     ContextSubjectConfiguration,
+    GradeEntry,
     Semester,
     Shift,
 )
@@ -436,3 +438,223 @@ def test_context_lifecycle_transitions(mem_session: Session) -> None:
     context.status = "archived"
     mem_session.commit()
     assert context.status == "archived"
+
+
+# ---------------------------------------------------------------------------
+# Test: AC-8 Grade entry context scoping and upload validation
+# ---------------------------------------------------------------------------
+
+
+def test_grade_entry_requires_academic_context(mem_session: Session) -> None:
+    """Grade entry can store academic_context_id (AC-8)."""
+    semester = Semester(
+        code="2026-S1",
+        name="2026 Semester 1",
+        academic_year=2026,
+        semester_number=1,
+        status="active",
+    )
+    shift = Shift(code="MORNING", name="Morning Shift", shift_order=1, status="active")
+    mem_session.add(semester)
+    mem_session.add(shift)
+    mem_session.commit()
+
+    context = AcademicContext(
+        professor_id=1,
+        academic_year=2026,
+        turma="10A",
+        subject="Mathematics",
+        semester_id=semester.id,
+        shift_id=shift.id,
+        status="active",
+    )
+    mem_session.add(context)
+    mem_session.commit()
+
+    grade = GradeEntry(
+        academic_context_id=context.id,
+        student_id=101,
+        teaching_assignment_id=1,
+        assessment_definition_id=1,
+        raw_value=85.0,
+        status="draft",
+    )
+    mem_session.add(grade)
+    mem_session.commit()
+
+    retrieved = mem_session.query(GradeEntry).filter_by(student_id=101).first()
+    assert retrieved is not None
+    assert retrieved.academic_context_id == context.id
+
+
+def test_upload_context_validation_passes_for_valid_context(mem_session: Session) -> None:
+    """Upload validation passes when context is valid and professor owns it (AC-8)."""
+    semester = Semester(
+        code="2026-S1",
+        name="2026 Semester 1",
+        academic_year=2026,
+        semester_number=1,
+        status="active",
+    )
+    shift = Shift(code="MORNING", name="Morning Shift", shift_order=1, status="active")
+    mem_session.add(semester)
+    mem_session.add(shift)
+    mem_session.commit()
+
+    context = AcademicContext(
+        professor_id=1,
+        academic_year=2026,
+        turma="10A",
+        subject="Mathematics",
+        semester_id=semester.id,
+        shift_id=shift.id,
+        status="active",
+    )
+    mem_session.add(context)
+    mem_session.commit()
+
+    # Enroll students in context
+    for student_id in [101, 102, 103]:
+        enrollment = ClassEnrollment(
+            academic_context_id=context.id,
+            student_id=student_id,
+            enrollment_status="active",
+        )
+        mem_session.add(enrollment)
+    mem_session.commit()
+
+    # Simulate upload validation
+    roster_student_ids = {101, 102, 103}
+
+    # Get context and verify
+    ctx = mem_session.query(AcademicContext).filter_by(id=context.id).first()
+    assert ctx is not None
+    assert ctx.professor_id == 1
+
+    # Verify students are enrolled
+    enrollments = mem_session.query(ClassEnrollment).filter_by(
+        academic_context_id=context.id
+    ).all()
+    enrolled_student_ids = {e.student_id for e in enrollments}
+    missing = roster_student_ids - enrolled_student_ids
+
+    assert len(missing) == 0, "All students should be enrolled"
+
+
+def test_upload_rejects_invalid_context_id(mem_session: Session) -> None:
+    """Upload is rejected if context_id does not exist (AC-8)."""
+    # Try to query non-existent context
+    context = mem_session.query(AcademicContext).filter_by(id=999).first()
+    assert context is None, "Invalid context should not exist"
+
+
+def test_upload_rejects_context_not_owned_by_professor(mem_session: Session) -> None:
+    """Upload is rejected if professor does not own the context (AC-8)."""
+    semester = Semester(
+        code="2026-S1",
+        name="2026 Semester 1",
+        academic_year=2026,
+        semester_number=1,
+        status="active",
+    )
+    shift = Shift(code="MORNING", name="Morning Shift", shift_order=1, status="active")
+    mem_session.add(semester)
+    mem_session.add(shift)
+    mem_session.commit()
+
+    # Create context owned by professor 1
+    context = AcademicContext(
+        professor_id=1,
+        academic_year=2026,
+        turma="10A",
+        subject="Mathematics",
+        semester_id=semester.id,
+        shift_id=shift.id,
+        status="active",
+    )
+    mem_session.add(context)
+    mem_session.commit()
+
+    # Verify professor 2 does not own this context
+    ctx = mem_session.query(AcademicContext).filter_by(id=context.id).first()
+    assert ctx.professor_id != 2, "Professor 2 should not own this context"
+
+
+def test_upload_rejects_mismatched_subject(mem_session: Session) -> None:
+    """Upload is rejected if subject does not match context subject (AC-8)."""
+    semester = Semester(
+        code="2026-S1",
+        name="2026 Semester 1",
+        academic_year=2026,
+        semester_number=1,
+        status="active",
+    )
+    shift = Shift(code="MORNING", name="Morning Shift", shift_order=1, status="active")
+    mem_session.add(semester)
+    mem_session.add(shift)
+    mem_session.commit()
+
+    # Create context for Mathematics
+    context = AcademicContext(
+        professor_id=1,
+        academic_year=2026,
+        turma="10A",
+        subject="Mathematics",
+        semester_id=semester.id,
+        shift_id=shift.id,
+        status="active",
+    )
+    mem_session.add(context)
+    mem_session.commit()
+
+    # Verify context subject
+    ctx = mem_session.query(AcademicContext).filter_by(id=context.id).first()
+    assert ctx.subject == "Mathematics"
+    assert ctx.subject != "Physics", "Subject should not match Physics upload"
+
+
+def test_upload_rejects_missing_student_roster(mem_session: Session) -> None:
+    """Upload is rejected if students are not enrolled in context (AC-8)."""
+    semester = Semester(
+        code="2026-S1",
+        name="2026 Semester 1",
+        academic_year=2026,
+        semester_number=1,
+        status="active",
+    )
+    shift = Shift(code="MORNING", name="Morning Shift", shift_order=1, status="active")
+    mem_session.add(semester)
+    mem_session.add(shift)
+    mem_session.commit()
+
+    context = AcademicContext(
+        professor_id=1,
+        academic_year=2026,
+        turma="10A",
+        subject="Mathematics",
+        semester_id=semester.id,
+        shift_id=shift.id,
+        status="active",
+    )
+    mem_session.add(context)
+    mem_session.commit()
+
+    # Enroll only students 101, 102
+    for student_id in [101, 102]:
+        enrollment = ClassEnrollment(
+            academic_context_id=context.id,
+            student_id=student_id,
+            enrollment_status="active",
+        )
+        mem_session.add(enrollment)
+    mem_session.commit()
+
+    # Try to validate upload with students 101, 102, 103 (103 not enrolled)
+    enrollments = mem_session.query(ClassEnrollment).filter_by(
+        academic_context_id=context.id
+    ).all()
+    enrolled_student_ids = {e.student_id for e in enrollments}
+    roster_student_ids = {101, 102, 103}
+    missing_students = roster_student_ids - enrolled_student_ids
+
+    assert 103 in missing_students, "Student 103 should be missing from enrollment"

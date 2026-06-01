@@ -59,11 +59,17 @@ class GradeEntry(Base, TimestampMixin):
     Use ``PublicationSnapshot`` for student-facing data.
 
     Lifecycle: draft → validated → voided
+
+    AC-8: All grade entries are scoped to an academic_context_id.
+    Uploads must specify the context and validate against that context's
+    student roster and subject configuration.
     """
 
     __tablename__ = "grade_entries"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # FK: academic_contexts.id — scopes grade to professor's teaching assignment (AC-8)
+    academic_context_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # FK: students.id — enforced at DB level via migration; not declared in ORM to
     # allow in-memory test fixtures that create tables via raw DDL.
     student_id: Mapped[int] = mapped_column(Integer, nullable=False)
