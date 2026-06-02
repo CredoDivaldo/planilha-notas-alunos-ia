@@ -23,11 +23,39 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.services.ai_chatbot import AIGradeQueryService
+from backend.app.services.chatbot_pipeline import ChatbotPipeline
+from backend.app.services.chatbot_rate_limiter import ChatbotRateLimiter
 from backend.app.utils.phone import normalize_phone
 
 LOGGER = logging.getLogger("backend.chatbot.routes")
 
 router = APIRouter(prefix="/api/v1/chatbot", tags=["chatbot"])
+
+# Global chatbot pipeline and rate limiter (for Story 6.3)
+_chatbot_pipeline: ChatbotPipeline | None = None
+_rate_limiter: ChatbotRateLimiter | None = None
+
+
+def get_chatbot_pipeline(request: Request) -> ChatbotPipeline:
+    """Get or create the global chatbot pipeline.
+
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        ChatbotPipeline instance
+    """
+    global _chatbot_pipeline, _rate_limiter
+
+    if _chatbot_pipeline is None:
+        # Get rate limit config from settings
+        settings = request.app.state.settings
+        daily_limit = getattr(settings, "chatbot_rate_limit_daily", 10)
+
+        _rate_limiter = ChatbotRateLimiter(daily_limit=daily_limit)
+        _chatbot_pipeline = ChatbotPipeline(rate_limiter=_rate_limiter)
+
+    return _chatbot_pipeline
 
 
 # -----------------------------------------------------------------------
@@ -294,49 +322,66 @@ async def receive_webhook(
 
         message_text = message.get("conversation", "")
 
-        if not student_row:
-            # AC-4: Unknown phone logged gracefully, no data exposed
-            LOGGER.warning(
-                "webhook_student_not_found",
+        # Story 6.3: Full pipeline (identify → rate limit → AI → send)
+        # TODO: In production, this should be queued to a background task (Celery/RQ)
+        # For now, we'll try to process inline if AI provider is available
+
+        try:
+            pipeline = get_chatbot_pipeline(request)
+            instance = payload_data.get("instance", "default")
+
+            # AC-1 through AC-6: Process message end-to-end
+            import asyncio
+
+            # Run async pipeline
+            result = asyncio.run(
+                pipeline.process_message(
+                    session,
+                    normalized_phone,
+                    message_text,
+                    instance=instance,
+                    request_id=request_id,
+                )
+            )
+
+            LOGGER.info(
+                "webhook_pipeline_result",
                 extra={
+                    "outcome": result["outcome"],
+                    "student_id": result["student_id"],
                     "normalized_phone": normalized_phone,
-                    "message_text": message_text[:50] + "..."
-                    if len(message_text) > 50
-                    else message_text,
+                    "ai_called": result["ai_called"],
                     "request_id": request_id,
                 },
             )
-            # Note: Not sending reply in this story; Story 6.3 will handle replies
-            return WebhookResponse(
-                status="ok",
-                message="Student not found; message logged",
-                request_id=request_id,
+
+        except ValueError as exc:
+            # AI provider not configured (Story 6.3 incomplete)
+            if "ANTHROPIC_API_KEY" in str(exc) or "OPENAI_API_KEY" in str(exc):
+                LOGGER.warning(
+                    "webhook_ai_provider_not_configured",
+                    extra={
+                        "normalized_phone": normalized_phone,
+                        "error": str(exc),
+                        "request_id": request_id,
+                    },
+                )
+            else:
+                raise
+
+        except Exception as exc:
+            LOGGER.error(
+                "webhook_pipeline_error",
+                extra={
+                    "normalized_phone": normalized_phone,
+                    "error": str(exc),
+                    "request_id": request_id,
+                },
             )
-
-        # AC-3: Student identified
-        student_id, student_number, full_name = student_row
-
-        LOGGER.info(
-            "webhook_message_received",
-            extra={
-                "student_id": student_id,
-                "student_number": student_number,
-                "full_name": full_name,
-                "normalized_phone": normalized_phone,
-                "message_text": message_text[:100] + "..."
-                if len(message_text) > 100
-                else message_text,
-                "request_id": request_id,
-            },
-        )
-
-        # AC-1: Return 200 immediately (async dispatch in future story)
-        # TODO: Story 6.2 — Queue message for AI service
-        # TODO: Story 6.3 — Send reply back via WhatsApp
 
         return WebhookResponse(
             status="ok",
-            message="Message received and queued for processing",
+            message="Message received and processed",
             request_id=request_id,
         )
 

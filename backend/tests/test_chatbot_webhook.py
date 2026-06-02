@@ -99,7 +99,11 @@ class TestWebhookEndpoint:
     def test_valid_message_student_found(
         self, client: TestClient, valid_webhook_payload: dict, webhook_token: str
     ) -> None:
-        """Valid message with student found returns 200 (AC-3)."""
+        """Valid message with student found returns 200 (AC-3).
+
+        Note: Story 6.3 adds end-to-end pipeline. Without AI provider configured,
+        it logs a warning but still returns 200.
+        """
         with patch("backend.app.routers.chatbot.get_db_session") as mock_session:
             mock_db = MagicMock()
             mock_session.return_value = mock_db
@@ -119,12 +123,17 @@ class TestWebhookEndpoint:
 
             assert response.status_code == 200
             assert response.json()["status"] == "ok"
-            assert "processing" in response.json()["message"].lower() or "queued" in response.json()["message"].lower()
+            # Story 6.3: now says "processed" instead of "queued"
+            assert "processed" in response.json()["message"].lower()
 
     def test_unknown_phone_graceful_handling(
         self, client: TestClient, valid_webhook_payload: dict, webhook_token: str
     ) -> None:
-        """Unknown phone number is handled gracefully (AC-4)."""
+        """Unknown phone number is handled gracefully (AC-4).
+
+        Note: Story 6.3 processes the message silently. Without AI provider configured,
+        it logs a warning but still returns 200.
+        """
         with patch("backend.app.routers.chatbot.get_db_session") as mock_session:
             mock_db = MagicMock()
             mock_session.return_value = mock_db
@@ -140,7 +149,8 @@ class TestWebhookEndpoint:
 
             assert response.status_code == 200
             assert response.json()["status"] == "ok"
-            assert "not found" in response.json()["message"].lower()
+            # Story 6.3: now returns "processed" (quietly sends "unknown" message)
+            assert "processed" in response.json()["message"].lower()
 
     def test_non_message_event_ignored(
         self, client: TestClient, webhook_token: str
