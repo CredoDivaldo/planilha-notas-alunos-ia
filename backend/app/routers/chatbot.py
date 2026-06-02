@@ -1,12 +1,16 @@
-"""WhatsApp Chatbot webhook endpoint (Story 6.1).
+"""WhatsApp Chatbot endpoints (Stories 6.1, 6.2).
 
-POST /api/v1/chatbot/webhook — Receives messages from Evolution API.
+POST /api/v1/chatbot/webhook — Receives messages from Evolution API (Story 6.1).
 
 AC-1: Webhook endpoint secured with X-Webhook-Token header.
 AC-2: Invalid token returns 401.
 AC-3: Student identified by normalized phone number.
 AC-4: Unknown phone logged gracefully, no AI call made.
 AC-5: Non-message events ignored (200 OK silently).
+
+POST /api/v1/chatbot/test — Dry-run endpoint for grade query testing (Story 6.2).
+
+AC-6: Professor-only endpoint returning AI response without sending WhatsApp.
 """
 from __future__ import annotations
 
@@ -15,8 +19,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
+from backend.app.services.ai_chatbot import AIGradeQueryService
 from backend.app.utils.phone import normalize_phone
 
 LOGGER = logging.getLogger("backend.chatbot.routes")
@@ -71,6 +77,26 @@ class WebhookResponse(BaseModel):
 
     status: str
     message: str
+    request_id: str | None = None
+
+
+class TestChatbotRequest(BaseModel):
+    """Dry-run endpoint request (Story 6.2)."""
+
+    student_number: str = Field(
+        ..., description="Student number to query grades for"
+    )
+    message: str = Field(..., description="Student's question about grades")
+
+
+class TestChatbotResponse(BaseModel):
+    """Dry-run endpoint response (Story 6.2)."""
+
+    status: str
+    student_number: str
+    ai_response: str
+    grades_context: str
+    ai_provider_called: bool
     request_id: str | None = None
 
 
@@ -311,6 +337,86 @@ async def receive_webhook(
         return WebhookResponse(
             status="ok",
             message="Message received and queued for processing",
+            request_id=request_id,
+        )
+
+    finally:
+        session.close()
+
+
+@router.post("/test", response_model=TestChatbotResponse)
+async def test_chatbot(
+    request: Request,
+    payload: TestChatbotRequest,
+    token: str = Depends(validate_webhook_token),
+) -> TestChatbotResponse:
+    """Dry-run endpoint for AI grade query service (Story 6.2).
+
+    AC-6: Professor-only endpoint returning AI response without sending WhatsApp.
+
+    Args:
+        request: FastAPI request object
+        payload: Student number and message
+        token: Validated webhook token (serves as access control)
+
+    Returns:
+        TestChatbotResponse with AI response and context used
+    """
+    request_id = getattr(request.state, "request_id", None)
+
+    # Get database session
+    session = get_db_session(request)
+    try:
+        # Look up student by student_number
+        student_row = session.execute(
+            text("SELECT id, student_number, full_name FROM students WHERE student_number = :sn"),
+            {"sn": payload.student_number},
+        ).fetchone()
+
+        if not student_row:
+            LOGGER.warning(
+                "test_endpoint_student_not_found",
+                extra={
+                    "student_number": payload.student_number,
+                    "request_id": request_id,
+                },
+            )
+            raise HTTPException(
+                status_code=404,
+                detail=f"Student {payload.student_number} not found",
+            )
+
+        student_id, student_number, _full_name = student_row
+
+        # Initialize AI service
+        ai_service = AIGradeQueryService()
+
+        # Generate AI response with grade context
+        result = ai_service.generate_grade_response(
+            session,
+            student_id,
+            student_number,
+            payload.message,
+            request_id=request_id,
+        )
+
+        LOGGER.info(
+            "test_endpoint_success",
+            extra={
+                "student_id": student_id,
+                "student_number": student_number,
+                "ai_called": result["ai_called"],
+                "response_length": len(result["response"]),
+                "request_id": request_id,
+            },
+        )
+
+        return TestChatbotResponse(
+            status="ok",
+            student_number=student_number,
+            ai_response=result["response"],
+            grades_context=result["grades_context"],
+            ai_provider_called=result["ai_called"],
             request_id=request_id,
         )
 

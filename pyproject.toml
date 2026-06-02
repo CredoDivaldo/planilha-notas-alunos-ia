@@ -5,8 +5,10 @@ description = "FastAPI backend foundation for the local academic platform"
 requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.13,<2",
+  "anthropic>=0.28,<1",
   "argon2-cffi>=23,<25",
   "fastapi>=0.115,<1",
+  "openai>=1.42,<2",
   "pydantic>=2,<3",
   "sqlalchemy>=2,<3",
   "uvicorn[standard]>=0.30,<1",
