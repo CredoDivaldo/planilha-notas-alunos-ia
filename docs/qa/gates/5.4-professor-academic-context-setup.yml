@@ -1,0 +1,25 @@
+schema: 1
+story: '5.4'
+gate: CONCERNS
+status_reason: 'All 8 ACs implemented and 142 tests passing; 3 non-blocking tasks remain open (enrollment pre-check, regression proof, observability logging) with no AC violations or test failures.'
+reviewer: 'Quinn'
+updated: '2026-06-03T00:00:00Z'
+top_issues:
+  - id: '5.4-001'
+    severity: low
+    finding: 'Task not completed: context must have at least one enrolled student before grade entry or publication. The CLI bootstrap and import functions do not enforce this guard; contexts can remain empty and still accept grade imports since the only enrollment check in import_grades_with_context validates individual students, not roster non-emptiness.'
+    suggested_action: 'Add a guard in _validate_upload_context (and the grade-entry path) that queries COUNT(class_enrollments WHERE academic_context_id=X AND enrollment_status=active) > 0 before allowing grade entry or publication. Add a corresponding unit test.'
+  - id: '5.4-002'
+    severity: low
+    finding: 'Task not completed: regression check that the existing JSON upload / match / send flow remains operational under context scoping transition. No test covers the backward-compatible path (upload without context_id). The story notes a professor-facing mapping flow but it is not exercised in the test suite.'
+    suggested_action: 'Add a regression test in test_cli.py or test_app.py that exercises the legacy JSON import path and confirms it still succeeds without a context_id. Document the mapping decision in Dev Notes.'
+  - id: '5.4-003'
+    severity: low
+    finding: 'Task not completed: minimum observability (context_id in grade-related logs, request_id propagation). The LOGGER.info calls in cli.py include context_id in extras for import_grades_with_context, but grade-entry routes in the API layer and the audit_log entries do not systematically include context_id. The AuditLog model has no context_id field.'
+    suggested_action: 'Add context_id to AuditLog model (nullable, for context events), or at minimum document this as known tech debt with a follow-up task. Ensure all grade-related log calls include context_id in extras.'
+  - id: '5.4-004'
+    severity: low
+    finding: 'Minor design note: academic_context_id in GradeEntry is nullable=True (migration 0004), which means a GradeEntry can exist without context association. This is intentional for the transition period, but there is no enforcement that grade entries in active use carry a non-null context_id.'
+    suggested_action: 'Document the nullability intent in Dev Notes. Plan a future migration to set NOT NULL once all legacy entries are migrated or sunset.'
+waiver:
+  active: false
