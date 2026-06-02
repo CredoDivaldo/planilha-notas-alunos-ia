@@ -26,14 +26,13 @@ from backend.app.models import (
     Shift,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures: in-memory SQLite with schema
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
-def mem_session() -> Session:
+def mem_session() -> Session:  # type: ignore[misc]
     """In-memory SQLite session with all schema tables."""
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
 
@@ -301,6 +300,7 @@ def test_enrollment_status_transitions(mem_session: Session) -> None:
     mem_session.commit()
 
     retrieved = mem_session.query(ClassEnrollment).filter_by(student_id=101).first()
+    assert retrieved is not None
     assert retrieved.enrollment_status == "dropped"
     assert retrieved.dropped_at is not None
 
@@ -391,6 +391,7 @@ def test_configuration_json_helpers(mem_session: Session) -> None:
     retrieved = mem_session.query(ContextSubjectConfiguration).filter_by(
         academic_context_id=context.id
     ).first()
+    assert retrieved is not None
     retrieved_config = retrieved.get_config()
     assert retrieved_config["formula_version"] == "v2.0"
     assert retrieved_config["assessment_count"] == 5
@@ -577,6 +578,7 @@ def test_upload_rejects_context_not_owned_by_professor(mem_session: Session) -> 
 
     # Verify professor 2 does not own this context
     ctx = mem_session.query(AcademicContext).filter_by(id=context.id).first()
+    assert ctx is not None
     assert ctx.professor_id != 2, "Professor 2 should not own this context"
 
 
@@ -609,6 +611,7 @@ def test_upload_rejects_mismatched_subject(mem_session: Session) -> None:
 
     # Verify context subject
     ctx = mem_session.query(AcademicContext).filter_by(id=context.id).first()
+    assert ctx is not None
     assert ctx.subject == "Mathematics"
     assert ctx.subject != "Physics", "Subject should not match Physics upload"
 

@@ -14,10 +14,10 @@ Models:
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
-from typing import Any
+from datetime import datetime
+from typing import Any, cast
 
-from sqlalchemy import DateTime, Integer, String, Text, text
+from sqlalchemy import DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base, TimestampMixin
@@ -200,7 +200,7 @@ class ContextSubjectConfiguration(Base, TimestampMixin):
 
     def get_config(self) -> dict[str, Any]:
         """Parse and return configuration as dictionary."""
-        return json.loads(self.configuration_json)
+        return cast(dict[str, Any], json.loads(self.configuration_json))
 
     def set_config(self, config: dict[str, Any]) -> None:
         """Store configuration as JSON string."""

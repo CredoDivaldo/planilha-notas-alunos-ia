@@ -16,31 +16,28 @@ Regression:
 from __future__ import annotations
 
 import json
-from datetime import datetime
 
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from backend.app.models.academic import (
+    DERIVED_STATE_PROVISIONAL,
     GRADE_STATUS_DRAFT,
     GRADE_STATUS_VALIDATED,
     GRADE_STATUS_VOIDED,
-    DERIVED_STATE_PROVISIONAL,
     AuditLog,
     CalculationResult,
     GradeEntry,
 )
-from backend.app.models.base import Base
 from backend.app.models.publication import (
+    DELIVERY_STATUS_FAILED,
+    DELIVERY_STATUS_SENT,
     JOB_STATUS_COMPLETED,
     JOB_STATUS_FAILED,
     JOB_STATUS_PENDING,
     JOB_STATUS_RUNNING,
-    DELIVERY_STATUS_FAILED,
-    DELIVERY_STATUS_SENT,
     BroadcastJob,
-    NotificationDelivery,
     PublicationSnapshot,
 )
 from backend.app.publication.service import (
@@ -52,7 +49,6 @@ from backend.app.publication.service import (
     PreflightError,
     PublicationService,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -464,6 +460,7 @@ def test_create_broadcast_job_returns_pending_job(session: Session, svc: Publica
     session.commit()
     assert job.id is not None
     assert job.status == JOB_STATUS_PENDING
+    assert job.channels_json is not None
     assert json.loads(job.channels_json) == ["whatsapp"]
 
 
@@ -548,7 +545,7 @@ def test_republish_creates_new_version_and_supersedes_current(
     session.commit()
 
     # Re-publication
-    job2 = svc.republish(
+    svc.republish(
         session,
         teaching_assignment_id=1,
         actor_user_id=1,
@@ -859,6 +856,7 @@ def test_audit_event_contains_broadcast_job_id(session: Session, svc: Publicatio
     from sqlalchemy import select as _select
     events = list(session.execute(_select(AuditLog)).scalars())
     pub_start = next(e for e in events if e.action == ACTION_PUBLICATION_START)
+    assert pub_start.after_json is not None
     payload = json.loads(pub_start.after_json)
     assert payload["broadcast_job_id"] == job.id
 
@@ -947,7 +945,6 @@ def test_model_imports_succeed() -> None:
         GradeEntry,
         NotificationDelivery,
         PublicationSnapshot,
-        TimestampMixin,
     )
     assert Base is not None
     assert GradeEntry is not None

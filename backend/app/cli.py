@@ -10,13 +10,15 @@ from typing import Any
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from backend.app.config import Settings
 from backend.app.database import build_engine, ensure_sqlite_directory
-from backend.app.models import AcademicContext, ClassEnrollment, ContextSubjectConfiguration
-from backend.app.models import GradeEntry, Semester, Shift
+from backend.app.models import (
+    AcademicContext,
+    ClassEnrollment,
+    GradeEntry,
+)
 
 LOGGER = logging.getLogger("backend.cli")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
@@ -50,7 +52,11 @@ def _validate_upload_context(
         return False, f"Professor {professor_id} does not own context {context_id}"
 
     if context.subject != subject:
-        return False, f"Context subject '{context.subject}' does not match upload subject '{subject}'"
+        msg = (
+            f"Context subject '{context.subject}' does not match "
+            f"upload subject '{subject}'"
+        )
+        return False, msg
 
     # Validate all students in roster are enrolled in this context
     enrollments = session.query(ClassEnrollment).filter_by(
@@ -201,7 +207,7 @@ def bootstrap_academic_contexts(
 
     try:
         with Session(engine) as session:
-            with open(csv_path, "r", encoding="utf-8") as csvfile:
+            with open(csv_path, encoding="utf-8") as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row_num, row in enumerate(reader, start=2):  # Start at 2 (header is row 1)
                     try:
@@ -313,7 +319,7 @@ def import_grades_with_context(
             ).all()
             enrolled_student_ids = {e.student_id for e in enrollments}
 
-            with open(csv_path, "r", encoding="utf-8") as csvfile:
+            with open(csv_path, encoding="utf-8") as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row_num, row in enumerate(reader, start=2):
                     try:
@@ -330,7 +336,10 @@ def import_grades_with_context(
                             rejected += 1
                             errors.append({
                                 "row": row_num,
-                                "error": f"Student {student_id} not enrolled in context {context_id}",
+                                "error": (
+                                    f"Student {student_id} not enrolled in "
+                                    f"context {context_id}"
+                                ),
                                 "data": dict(row),
                             })
                             continue
@@ -405,7 +414,7 @@ def import_context_rosters(
 
     try:
         with Session(engine) as session:
-            with open(csv_path, "r", encoding="utf-8") as csvfile:
+            with open(csv_path, encoding="utf-8") as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row_num, row in enumerate(reader, start=2):
                     try:

@@ -43,12 +43,12 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.academic import AuditLog
 from backend.app.models.publication import (
+    DELIVERY_STATUS_FAILED,
+    DELIVERY_STATUS_SENT,
     JOB_STATUS_COMPLETED,
     JOB_STATUS_FAILED,
     JOB_STATUS_PENDING,
     JOB_STATUS_RUNNING,
-    DELIVERY_STATUS_FAILED,
-    DELIVERY_STATUS_SENT,
     BroadcastJob,
     NotificationDelivery,
     PublicationSnapshot,
@@ -479,7 +479,7 @@ class PublicationService:
             class_group_id (int | None)
             existing_current_snapshots (int)  — students already published
         """
-        from backend.app.models.academic import GradeEntry, GRADE_STATUS_VALIDATED
+        from backend.app.models.academic import GRADE_STATUS_VALIDATED, GradeEntry
 
         stmt = select(func.count(GradeEntry.id)).where(
             GradeEntry.teaching_assignment_id == teaching_assignment_id,

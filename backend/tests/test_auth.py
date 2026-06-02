@@ -7,7 +7,6 @@ Covers:
 """
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -23,7 +22,6 @@ from backend.app.auth.sessions import (
 )
 from backend.app.config import Settings
 from backend.app.main import create_app
-
 
 # ---------------------------------------------------------------------------
 # Password hashing tests
