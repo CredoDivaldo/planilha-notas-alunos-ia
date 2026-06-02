@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict
 from backend.app.config import Settings, get_settings
 from backend.app.database import build_engine, ensure_sqlite_directory, inspect_sqlite_runtime
 from backend.app.portal.routes import router as portal_router
+from backend.app.routers.chatbot import router as chatbot_router
 
 LOGGER = logging.getLogger("backend.app")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
@@ -37,12 +38,15 @@ class ErrorResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    from sqlalchemy.orm import sessionmaker
+
     settings = getattr(app.state, "settings", None) or get_settings()
     ensure_sqlite_directory(settings.database_url)
     engine = build_engine(settings.database_url)
     app.state.settings = settings
     app.state.engine = engine
     app.state.database_runtime = inspect_sqlite_runtime(engine)
+    app.state.session_factory = sessionmaker(bind=engine)
     LOGGER.info(
         "backend_startup",
         extra={
@@ -83,6 +87,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Register portal router (AC-1: read-only student portal)
     app.include_router(portal_router)
+
+    # Register chatbot router (Story 6.1+: WhatsApp webhook)
+    app.include_router(chatbot_router)
 
     @app.get(f"{resolved_settings.api_prefix}/health", response_model=HealthResponse)
     async def health(request: Request) -> HealthResponse:

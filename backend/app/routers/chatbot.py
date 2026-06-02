@@ -1,0 +1,318 @@
+"""WhatsApp Chatbot webhook endpoint (Story 6.1).
+
+POST /api/v1/chatbot/webhook — Receives messages from Evolution API.
+
+AC-1: Webhook endpoint secured with X-Webhook-Token header.
+AC-2: Invalid token returns 401.
+AC-3: Student identified by normalized phone number.
+AC-4: Unknown phone logged gracefully, no AI call made.
+AC-5: Non-message events ignored (200 OK silently).
+"""
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.orm import Session, sessionmaker
+
+from backend.app.utils.phone import normalize_phone
+
+LOGGER = logging.getLogger("backend.chatbot.routes")
+
+router = APIRouter(prefix="/api/v1/chatbot", tags=["chatbot"])
+
+
+# -----------------------------------------------------------------------
+# Request/Response Models
+# -----------------------------------------------------------------------
+
+
+class WebhookKeyData(BaseModel):
+    """Evolution API message key."""
+
+    model_config = ConfigDict(extra="allow")  # Allow additional fields
+    remoteJid: str = Field(..., description="Sender phone + @s.whatsapp.net")
+    fromMe: bool = Field(default=False)
+    id: str = Field(...)
+
+
+class WebhookMessageData(BaseModel):
+    """Evolution API message content."""
+
+    model_config = ConfigDict(extra="allow")
+
+    conversation: str | None = Field(default=None, description="Text message content")
+
+
+class WebhookDataPayload(BaseModel):
+    """Evolution API webhook data payload."""
+
+    model_config = ConfigDict(extra="allow")
+
+    key: WebhookKeyData
+    message: WebhookMessageData | None = Field(default=None)
+    messageType: str | None = Field(default=None)
+
+
+class WebhookPayload(BaseModel):
+    """Evolution API webhook payload structure."""
+
+    model_config = ConfigDict(extra="allow")
+
+    event: str = Field(..., description="Event type (e.g., 'messages.upsert')")
+    instance: str = Field(...)
+    data: WebhookDataPayload
+
+
+class WebhookResponse(BaseModel):
+    """Success response."""
+
+    status: str
+    message: str
+    request_id: str | None = None
+
+
+# -----------------------------------------------------------------------
+# Dependencies
+# -----------------------------------------------------------------------
+
+
+async def validate_webhook_token(request: Request) -> str:
+    """Validate X-Webhook-Token header.
+
+    AC-2: Missing or incorrect token returns 401.
+
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        The token if valid
+
+    Raises:
+        HTTPException: 401 if token missing or incorrect
+    """
+    settings = request.app.state.settings
+    provided_token = request.headers.get("X-Webhook-Token")
+
+    if not provided_token:
+        LOGGER.warning(
+            "webhook_auth_failed",
+            extra={
+                "reason": "missing_token",
+                "remote_addr": request.client.host if request.client else "unknown",
+            },
+        )
+        raise HTTPException(status_code=401, detail="Missing X-Webhook-Token header")
+
+    # Get expected token from settings/env (will be set via config)
+    expected_token = getattr(settings, "chatbot_webhook_token", None)
+    if not expected_token:
+        LOGGER.error(
+            "webhook_config_error",
+            extra={"reason": "CHATBOT_WEBHOOK_TOKEN not configured"},
+        )
+        raise HTTPException(status_code=500, detail="Webhook not configured")
+
+    if provided_token != expected_token:
+        LOGGER.warning(
+            "webhook_auth_failed",
+            extra={
+                "reason": "invalid_token",
+                "remote_addr": request.client.host if request.client else "unknown",
+            },
+        )
+        raise HTTPException(status_code=401, detail="Invalid X-Webhook-Token")
+
+    return provided_token
+
+
+def get_db_session(request: Request) -> Session:
+    """Get database session from app state.
+
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        SQLAlchemy Session
+    """
+    SessionLocal = request.app.state.session_factory
+    return SessionLocal()
+
+
+# -----------------------------------------------------------------------
+# Endpoints
+# -----------------------------------------------------------------------
+
+
+@router.post("/webhook", response_model=WebhookResponse)
+async def receive_webhook(
+    request: Request,
+    token: str = Depends(validate_webhook_token),
+) -> WebhookResponse:
+    """Receive message webhook from Evolution API.
+
+    AC-5: Non-message events return 200 silently.
+    AC-1: Valid token → 200 OK immediately.
+    AC-3: Student lookup by normalized phone.
+    AC-4: Unknown phone → logged, no AI call.
+
+    Args:
+        request: FastAPI request object
+        token: Validated webhook token
+
+    Returns:
+        WebhookResponse with 200 status
+    """
+    request_id = getattr(request.state, "request_id", None)
+
+    # Parse raw JSON to handle flexible/malformed payloads
+    try:
+        payload_data = await request.json()
+    except Exception as exc:
+        LOGGER.warning(
+            "webhook_json_parse_failed",
+            extra={
+                "error": str(exc),
+                "request_id": request_id,
+            },
+        )
+        return WebhookResponse(
+            status="ok",
+            message="Invalid JSON ignored",
+            request_id=request_id,
+        )
+
+    # AC-5: Ignore non-message events silently
+    event = payload_data.get("event")
+    if event != "messages.upsert":
+        LOGGER.debug(
+            "webhook_event_ignored",
+            extra={
+                "event": event,
+                "request_id": request_id,
+            },
+        )
+        return WebhookResponse(
+            status="ok",
+            message="Event processed",
+            request_id=request_id,
+        )
+
+    # Extract sender phone from remoteJid
+    data = payload_data.get("data", {})
+    key = data.get("key", {})
+    message = data.get("message", {})
+
+    if not key:
+        LOGGER.warning(
+            "webhook_malformed_payload",
+            extra={
+                "reason": "missing_key_data",
+                "request_id": request_id,
+            },
+        )
+        return WebhookResponse(
+            status="ok",
+            message="Malformed payload ignored",
+            request_id=request_id,
+        )
+
+    remote_jid = key.get("remoteJid", "")
+
+    # AC-5: Ignore non-text messages silently
+    message_type = data.get("messageType")
+    if message_type != "conversation" or not message.get("conversation"):
+        LOGGER.debug(
+            "webhook_non_text_message",
+            extra={
+                "remote_jid": remote_jid,
+                "message_type": message_type,
+                "request_id": request_id,
+            },
+        )
+        return WebhookResponse(
+            status="ok",
+            message="Non-text message ignored",
+            request_id=request_id,
+        )
+
+    # AC-3: Normalize phone and lookup student
+    normalized_phone = normalize_phone(remote_jid)
+
+    if not normalized_phone:
+        LOGGER.warning(
+            "webhook_invalid_phone",
+            extra={
+                "remote_jid": remote_jid,
+                "request_id": request_id,
+            },
+        )
+        return WebhookResponse(
+            status="ok",
+            message="Invalid phone format",
+            request_id=request_id,
+        )
+
+    # Get database session
+    session = get_db_session(request)
+    try:
+        # Query students table by normalized phone
+        from sqlalchemy import text
+
+        student_row = session.execute(
+            text("SELECT id, student_number, full_name FROM students WHERE phone = :phone"),
+            {"phone": normalized_phone},
+        ).fetchone()
+
+        message_text = message.get("conversation", "")
+
+        if not student_row:
+            # AC-4: Unknown phone logged gracefully, no data exposed
+            LOGGER.warning(
+                "webhook_student_not_found",
+                extra={
+                    "normalized_phone": normalized_phone,
+                    "message_text": message_text[:50] + "..."
+                    if len(message_text) > 50
+                    else message_text,
+                    "request_id": request_id,
+                },
+            )
+            # Note: Not sending reply in this story; Story 6.3 will handle replies
+            return WebhookResponse(
+                status="ok",
+                message="Student not found; message logged",
+                request_id=request_id,
+            )
+
+        # AC-3: Student identified
+        student_id, student_number, full_name = student_row
+
+        LOGGER.info(
+            "webhook_message_received",
+            extra={
+                "student_id": student_id,
+                "student_number": student_number,
+                "full_name": full_name,
+                "normalized_phone": normalized_phone,
+                "message_text": message_text[:100] + "..."
+                if len(message_text) > 100
+                else message_text,
+                "request_id": request_id,
+            },
+        )
+
+        # AC-1: Return 200 immediately (async dispatch in future story)
+        # TODO: Story 6.2 — Queue message for AI service
+        # TODO: Story 6.3 — Send reply back via WhatsApp
+
+        return WebhookResponse(
+            status="ok",
+            message="Message received and queued for processing",
+            request_id=request_id,
+        )
+
+    finally:
+        session.close()
