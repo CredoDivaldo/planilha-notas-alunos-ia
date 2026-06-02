@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict
 
 from backend.app.config import Settings, get_settings
 from backend.app.database import build_engine, ensure_sqlite_directory, inspect_sqlite_runtime
+from backend.app.portal.routes import router as portal_router
 
 LOGGER = logging.getLogger("backend.app")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
@@ -79,6 +80,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title=resolved_settings.app_name, version="0.1.0", lifespan=lifespan)
     app.state.settings = resolved_settings
     app.middleware("http")(request_id_middleware)
+
+    # Register portal router (AC-1: read-only student portal)
+    app.include_router(portal_router)
 
     @app.get(f"{resolved_settings.api_prefix}/health", response_model=HealthResponse)
     async def health(request: Request) -> HealthResponse:
