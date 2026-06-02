@@ -92,6 +92,36 @@ O produto deixa de ser um MVP de upload e disparo por WhatsApp e passa a ser uma
 - Portal web: canal de consulta pós-publicação.
 - Importação estruturada: CSV no mínimo; XLS/XLSX como extensão provável.
 
+### AI Provider Architecture
+
+**Overview:**
+Respostas de IA do chatbot são geradas via API externa, configurável sem alterações de código.
+
+**Provider Padrão: Baidu QianFan**
+- Free tier: 100K tokens/mês (suficiente para MVP)
+- Linguagens: Suporte excelente para Português + Chinês
+- Latência: 150-300ms (aceitável para fluxo assíncrono WhatsApp)
+- Confiabilidade: 99.5% SLA (free tier)
+
+**Configuration (Variáveis de Ambiente):**
+
+| Variável | Exemplo | Notas |
+|----------|---------|-------|
+| `BAIDU_API_KEY` | `ERNIE-Bot-xxx` | Obrigatório (free tier account) |
+| `BAIDU_MODEL` | `ERNIE-3.5` | Free tier (ERNIE-4.0 = pago, fora de escopo) |
+
+**Vantagens da Baidu QianFan:**
+- ✅ Zero custo (free tier com quota generosa)
+- ✅ Qualidade nativa em Português
+- ✅ Sem dependências complexas de SDK externas
+- ✅ Setup rápido para contas internacionais
+
+**Características de Segurança:**
+- System prompt restringe respostas a contexto de notas publicadas apenas
+- Rate limiting (10 msgs/dia por estudante) mantém uso dentro free tier
+- Fallback message em caso de falha de API
+- Logs estruturados de todas as interações
+
 ### Architecture Risks
 - Fórmula oficial de cálculo ainda indefinida.
 - Transição de permissões do delegado pode gerar complexidade operacional.

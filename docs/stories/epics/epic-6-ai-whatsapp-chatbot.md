@@ -11,7 +11,7 @@
 
 ## Overview
 
-Adicionar um chatbot com IA ao canal WhatsApp já existente, permitindo que estudantes enviem perguntas em linguagem natural sobre as suas notas publicadas e recebam respostas automáticas geradas por um modelo de linguagem (Claude API ou OpenAI).
+Adicionar um chatbot com IA ao canal WhatsApp já existente, permitindo que estudantes enviem perguntas em linguagem natural sobre as suas notas publicadas e recebam respostas automáticas geradas por um modelo de linguagem (Baidu QianFan).
 
 Este epic cumpre o requisito externo da disciplina de Fundamentos de Programação: **o projecto deve integrar IA de forma funcional**.
 
@@ -61,7 +61,7 @@ O chatbot com IA:
 - **Story 5.3:** `publication_snapshots` necessários para aceder a notas publicadas.
 - **Story 5.5:** Student read model necessário para construir contexto do chatbot.
 - **Evolution API:** já integrada (CR4); precisa de suporte a webhook de entrada.
-- **Claude API ou OpenAI:** chave de API em variável de ambiente `AI_API_KEY`.
+- **Baidu QianFan:** chave de API em variável de ambiente `BAIDU_API_KEY` (free tier, sem custos).
 
 ## Stories
 
@@ -76,8 +76,9 @@ O chatbot com IA:
 - **Points:** 5
 - **Owner:** @dev
 - **Priority:** P0
-- **Description:** Integrar modelo de linguagem (Claude API ou OpenAI), construir prompt com notas publicadas do estudante e gerar resposta em linguagem natural em Português.
+- **Description:** Integrar modelo de linguagem (Baidu QianFan), construir prompt com notas publicadas do estudante e gerar resposta em linguagem natural em Português.
 - **File:** `docs/stories/6.2.ai-grade-query-service.md`
+- **Status:** Draft (Change Trigger — Provider pivot to Baidu QianFan)
 
 ### Story 6.3: Chatbot End-to-End Flow
 - **Points:** 3
@@ -107,7 +108,7 @@ Stories 6.1 e 6.2 podem ser desenvolvidas em paralelo como design, mas a Story 6
 | Risco | Mitigação |
 |-------|-----------|
 | Chatbot expõe notas não publicadas | Queries ao read model de snapshots publicados apenas; nunca acede a `grade_entries` |
-| Chave de API de IA não disponível | Usar variável de ambiente `AI_API_KEY`; endpoint de teste usa mock quando ausente |
+| Chave de API de IA não disponível | Usar variável de ambiente `BAIDU_API_KEY`; endpoint de teste usa mock quando ausente |
 | Evolution API não suporta webhook de entrada | Verificar configuração da instância antes de implementar; documentar pré-requisito |
 | Aluno não identificado pelo telefone | Resposta educada pedindo contacto com o professor; não expor dados de outros alunos |
 | Rate abuse (spam de mensagens) | Rate limiting por número de telefone (max 10 mensagens/dia por defeito) |
@@ -115,3 +116,12 @@ Stories 6.1 e 6.2 podem ser desenvolvidas em paralelo como design, mas a Story 6
 ---
 
 *Epic criado por Orion, aiox-master — 2026-05-31 (correct-course: requisito de IA)*
+
+---
+
+## Change Log
+
+| Date | Version | Description | Author |
+|------|---------|-------------|--------|
+| 2026-06-02 | 2.1 | Change Trigger: Provider pivot from Claude/OpenAI to Baidu QianFan (free tier). Story 6.2 reverted to Draft for re-implementation. | @aiox-master |
+| 2026-06-02 | 2.0 | QA Gate PASS. Epic moved to Complete. | @qa |
