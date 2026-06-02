@@ -10,12 +10,23 @@
 # Dependencies (AIOX)
 node_modules/
 node_modules
+.venv/
 
 # Build & Logs (AIOX)
 dist/
 build/
 *.log
 logs/
+
+# Python Local (Epic 5)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+data/app.sqlite3
+data/app.sqlite3-*
 
 # IDE & OS (AIOX)
 .DS_Store
@@ -26,5 +37,13 @@ Thumbs.db
 # AIOX Local (AIOX)
 .aiox-core/local/
 .claude/settings.local.json
+.claude/CLAUDE.md.backup.*
+.claude/worktrees/
 .aiox/install-log.txt
 .aiox/
+
+# Database & Runtime (Project)
+academic.db
+academic.db-*
+*.sqlite3
+*.sqlite3-*

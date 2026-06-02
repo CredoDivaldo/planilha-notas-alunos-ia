@@ -1,0 +1,43 @@
+schema: 1
+story: '5.3'
+gate: CONCERNS
+status_reason: >
+  All 6 ACs are met with concrete, tested implementations. One low-severity
+  maintenance issue is present (deprecated datetime.utcnow on NotificationDelivery.updated_at
+  onupdate callback) but does not affect correctness or runtime behaviour.
+reviewer: Aria
+updated: '2026-05-31T23:15:00Z'
+
+checks:
+  ac_coverage:
+    ac1: PASS  # grade_entries/calculation_results never referenced by portal read model
+    ac2: PASS  # BroadcastJob created first; snapshot only after confirmed broadcast
+    ac3: PASS  # snapshot.broadcast_job_id FK; NotificationDelivery per recipient
+    ac4: PASS  # republish sets is_current=False on prior row; new version inserted; DB UNIQUE index enforces one-current
+    ac5: PASS  # get_current_snapshots_for_portal queries ONLY publication_snapshots WHERE is_current=True
+    ac6: PASS  # formula_version stored verbatim; derived_state default=provisional; no hard-coded rules
+  architectural_alignment: PASS
+  test_coverage: PASS   # 30 new tests + 22 regression = 52/52 passing
+  security: PASS
+  data_integrity: PASS
+  code_quality: CONCERNS  # see MNT-001
+  documentation: PASS
+
+top_issues:
+  - id: MNT-001
+    severity: low
+    category: MNT
+    file: backend/app/models/publication.py
+    line: 211
+    description: >
+      NotificationDelivery.updated_at uses `onupdate=datetime.utcnow` (bare reference
+      to the deprecated datetime.utcnow method). Python 3.12+ emits a DeprecationWarning.
+      All other timestamp fields in the codebase use the timezone-aware
+      `lambda: datetime.now(UTC)` pattern already adopted in this story.
+    recommendation: >
+      Replace `onupdate=datetime.utcnow` with `onupdate=lambda: datetime.now(UTC)`
+      to be consistent with the rest of the model layer. Low-risk, one-line fix.
+    blocking: false
+
+waiver:
+  active: false

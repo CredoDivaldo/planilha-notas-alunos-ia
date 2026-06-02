@@ -1,18 +1,57 @@
-# PRD — Planilha de Notas de Alunos
+# PRD Brownfield de Melhoria Full-Stack - Planilha de Notas de Alunos
 
-## Visão geral
-Aplicação para registo, gestão e acompanhamento de notas de alunos, com foco em simplicidade operacional para docentes.
+## Table of Contents
 
-## Objectivo
-Permitir cadastro de turmas, alunos, avaliações e cálculo consolidado de notas finais.
-
-## Escopo inicial
-- Cadastro de alunos
-- Lançamento de notas por avaliação
-- Consulta de médias por aluno
-- Exportação simples de resultados
-
-## Fora de escopo (fase inicial)
-- Integrações externas
-- Relatórios avançados
-- Gestão financeira
+- [PRD Brownfield de Melhoria Full-Stack - Planilha de Notas de Alunos](#table-of-contents)
+  - [Análise Introdutória do Projecto e Contexto](./anlise-introdutria-do-projecto-e-contexto.md)
+    - [Visão Geral do Projecto Existente](./anlise-introdutria-do-projecto-e-contexto.md#viso-geral-do-projecto-existente)
+      - [Fonte de Análise](./anlise-introdutria-do-projecto-e-contexto.md#fonte-de-anlise)
+      - [Estado Actual do Projecto](./anlise-introdutria-do-projecto-e-contexto.md#estado-actual-do-projecto)
+    - [Análise da Documentação Disponível](./anlise-introdutria-do-projecto-e-contexto.md#anlise-da-documentao-disponvel)
+      - [Documentação Disponível](./anlise-introdutria-do-projecto-e-contexto.md#documentao-disponvel)
+    - [Definição do Escopo da Melhoria](./anlise-introdutria-do-projecto-e-contexto.md#definio-do-escopo-da-melhoria)
+      - [Tipo de Melhoria](./anlise-introdutria-do-projecto-e-contexto.md#tipo-de-melhoria)
+      - [Descrição da Melhoria](./anlise-introdutria-do-projecto-e-contexto.md#descrio-da-melhoria)
+      - [Avaliação de Impacto](./anlise-introdutria-do-projecto-e-contexto.md#avaliao-de-impacto)
+    - [Objectivos e Contexto de Fundo](./anlise-introdutria-do-projecto-e-contexto.md#objectivos-e-contexto-de-fundo)
+      - [Objectivos](./anlise-introdutria-do-projecto-e-contexto.md#objectivos)
+      - [Contexto de Fundo](./anlise-introdutria-do-projecto-e-contexto.md#contexto-de-fundo)
+    - [Registo de Alterações](./anlise-introdutria-do-projecto-e-contexto.md#registo-de-alteraes)
+  - [Requisitos](./requisitos.md)
+    - [Funcionais](./requisitos.md#funcionais)
+    - [Não Funcionais](./requisitos.md#no-funcionais)
+    - [Requisitos de Compatibilidade](./requisitos.md#requisitos-de-compatibilidade)
+  - [Objectivos de Melhoria da Interface](./objectivos-de-melhoria-da-interface.md)
+    - [Integração com a UI Existente](./objectivos-de-melhoria-da-interface.md#integrao-com-a-ui-existente)
+    - [Ecrãs e Vistas Novos ou Alterados](./objectivos-de-melhoria-da-interface.md#ecrs-e-vistas-novos-ou-alterados)
+    - [Requisitos de Consistência UI](./objectivos-de-melhoria-da-interface.md#requisitos-de-consistncia-ui)
+  - [Restrições Técnicas e Requisitos de Integração](./restries-tcnicas-e-requisitos-de-integrao.md)
+    - [Stack Tecnológico Existente](./restries-tcnicas-e-requisitos-de-integrao.md#stack-tecnolgico-existente)
+    - [Abordagem de Integração](./restries-tcnicas-e-requisitos-de-integrao.md#abordagem-de-integrao)
+    - [Organização de Código e Normas](./restries-tcnicas-e-requisitos-de-integrao.md#organizao-de-cdigo-e-normas)
+    - [Implantação e Operações](./restries-tcnicas-e-requisitos-de-integrao.md#implantao-e-operaes)
+    - [Avaliação de Riscos e Mitigação](./restries-tcnicas-e-requisitos-de-integrao.md#avaliao-de-riscos-e-mitigao)
+  - [Estrutura de Epics e Stories](./estrutura-de-epics-e-stories.md)
+    - [Abordagem de Epics](./estrutura-de-epics-e-stories.md#abordagem-de-epics)
+  - [Epic 5: Fundação da Plataforma Académica](./epic-5-fundao-da-plataforma-acadmica.md)
+    - [Story 5.1 Fundação de Backend Python e Base de Dados Local](./epic-5-fundao-da-plataforma-acadmica.md#story-51-fundao-de-backend-python-e-base-de-dados-local)
+      - [Critérios de Aceitação](./epic-5-fundao-da-plataforma-acadmica.md#critrios-de-aceitao)
+      - [Verificação de Integração](./epic-5-fundao-da-plataforma-acadmica.md#verificao-de-integrao)
+    - [Story 5.2 Fundação de Autenticação e Papéis](./epic-5-fundao-da-plataforma-acadmica.md#story-52-fundao-de-autenticao-e-papis)
+      - [Critérios de Aceitação](./epic-5-fundao-da-plataforma-acadmica.md#critrios-de-aceitao)
+      - [Verificação de Integração](./epic-5-fundao-da-plataforma-acadmica.md#verificao-de-integrao)
+    - [Story 5.3 Fundação do Fluxo de Publicação de Notas](./epic-5-fundao-da-plataforma-acadmica.md#story-53-fundao-do-fluxo-de-publicao-de-notas)
+      - [Critérios de Aceitação](./epic-5-fundao-da-plataforma-acadmica.md#critrios-de-aceitao)
+      - [Verificação de Integração](./epic-5-fundao-da-plataforma-acadmica.md#verificao-de-integrao)
+    - [Story 5.4 Configuração de Contexto Académico pelo Professor](./epic-5-fundao-da-plataforma-acadmica.md#story-54-configurao-de-contexto-acadmico-pelo-professor)
+      - [Critérios de Aceitação](./epic-5-fundao-da-plataforma-acadmica.md#critrios-de-aceitao)
+      - [Verificação de Integração](./epic-5-fundao-da-plataforma-acadmica.md#verificao-de-integrao)
+    - [Story 5.5 Fundação do Modelo de Leitura do Portal do Estudante](./epic-5-fundao-da-plataforma-acadmica.md#story-55-fundao-do-modelo-de-leitura-do-portal-do-estudante)
+      - [Critérios de Aceitação](./epic-5-fundao-da-plataforma-acadmica.md#critrios-de-aceitao)
+      - [Verificação de Integração](./epic-5-fundao-da-plataforma-acadmica.md#verificao-de-integrao)
+  - [Decisões de Produto em Aberto e Dependências](./decises-de-produto-em-aberto-e-dependncias.md)
+    - [Decisões de Produto em Aberto](./decises-de-produto-em-aberto-e-dependncias.md#decises-de-produto-em-aberto)
+    - [Decisões de Arquitectura Resolvidas em ](./decises-de-produto-em-aberto-e-dependncias.md#decises-de-arquitectura-resolvidas-em)
+    - [Dependências de Backlog e Validação](./decises-de-produto-em-aberto-e-dependncias.md#dependncias-de-backlog-e-validao)
+  - [Fora de Escopo Nesta Fase de Melhoria](./fora-de-escopo-nesta-fase-de-melhoria.md)
+  - [Métricas de Sucesso](./mtricas-de-sucesso.md)

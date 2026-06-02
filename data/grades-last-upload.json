@@ -1,38 +1,14 @@
 [
   {
-    "numero_estudante": "2026001",
-    "nome": "Credo Lopes",
+    "numero_estudante": "1001",
+    "nome": "Ana Silva",
     "nota": "17",
-    "turma": "10A"
+    "turma": "T1"
   },
   {
-    "numero_estudante": "2026002",
-    "nome": "Isaú Neves",
-    "nota": "19",
-    "turma": "10A"
-  },
-  {
-    "numero_estudante": "11297725",
-    "nome": "Djenabu Kaba",
-    "nota": "15",
-    "turma": "10A"
-  },
-  {
-    "numero_estudante": "11190525",
-    "nome": "Eunice Domingos",
-    "nota": "19",
-    "turma": "10A"
-  },
-  {
-    "numero_estudante": "11191325",
-    "nome": "Magno Cândido",
-    "nota": "16",
-    "turma": "10A"
-  },
-  {
-    "numero_estudante": "11207325",
-    "nome": "Nathalia Garcia",
-    "nota": "18",
-    "turma": "10A"
+    "numero_estudante": "1002",
+    "nome": "Bruno Costa",
+    "nota": "13",
+    "turma": "T1"
   }
 ]

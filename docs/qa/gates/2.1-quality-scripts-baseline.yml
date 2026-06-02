@@ -1,0 +1,41 @@
+schema: 1
+story: '2.1'
+story_title: 'Quality Scripts Baseline'
+gate: PASS
+status_reason: 'O script agregado quality foi implementado, a documentação foi actualizada e a execução real de test, lint e typecheck passou sem falhas.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-05-02T21:10:00Z'
+
+top_issues: []
+waiver:
+  active: false
+
+quality_score: 100
+expires: '2026-05-16T21:10:00Z'
+
+evidence:
+  tests_reviewed: 2
+  risks_identified: 1
+  trace:
+    ac_covered: [1, 2, 3, 4]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Sem nova superfície de ataque; alteração limitada a scripts npm e documentação.'
+  performance:
+    status: PASS
+    notes: 'A agregação sequencial introduz apenas o custo esperado de executar as ferramentas existentes.'
+  reliability:
+    status: PASS
+    notes: 'npm run quality passou integralmente em execução real durante a revisão.'
+  maintainability:
+    status: PASS
+    notes: 'A solução reutiliza a configuração ESLint flat já existente e evita duplicação desnecessária.'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Criar stories futuras com premissas alinhadas ao estado real do repositório para evitar ajustes desnecessários durante implementação.'
+      refs: ['docs/stories/2.1.quality-scripts-baseline.md']

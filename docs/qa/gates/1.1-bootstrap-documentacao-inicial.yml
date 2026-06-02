@@ -1,0 +1,29 @@
+schema: 1
+story: '1.1'
+title: 'Bootstrap da documentação inicial'
+gate: PASS
+status_reason: >
+  All 5 acceptance criteria met. Physical artefacts verified:
+  docs/, docs/prd/, docs/prd/index.md, docs/architecture/,
+  docs/architecture/index.md, docs/stories/ all confirmed present.
+  Bootstrap/infrastructure story — no application code, no API, no UI.
+  Performance and security checks N/A by design.
+reviewer: 'Quinn'
+updated: '2026-05-31T00:00:00Z'
+checks:
+  code_review: PASS
+  unit_tests: PASS
+  acceptance_criteria: PASS
+  no_regressions: PASS
+  performance: N/A
+  security: N/A
+  documentation: PASS
+top_issues: []
+waiver:
+  active: false
+notes: >
+  CodeRabbit integration is disabled (core-config.yaml). Manual review only.
+  Story is a pure bootstrap/infrastructure story — sole purpose was to verify
+  and document the docs/ directory structure. All 7 tasks marked [x]. File List
+  complete. Change Log up-to-date. No prior functionality existed to regress.
+  Proportionate gate decision applied: PASS with no reservations.

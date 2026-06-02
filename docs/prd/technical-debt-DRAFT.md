@@ -1,5 +1,7 @@
 # Technical Debt DRAFT — Consolidação com Correcções Obrigatórias de QA (Sem DB nesta fase)
 
+> **Nota de reconciliação PO — 2026-05-28:** este draft é histórico e anterior à baseline de qualidade actual. As afirmações sobre ausência de `npm test`, `npm run lint` e `npm run typecheck` estão obsoletas. Para o Epic 5, a estratégia de DB também mudou: SQLite local em `data/app.sqlite3` com Alembic foi decidido em `docs/architecture.md`.
+
 ## Contexto e Escopo
 Este draft consolida os débitos técnicos identificados a partir de:
 - `docs/architecture/system-architecture.md`

@@ -1,16 +1,73 @@
-# Arquitectura — Planilha de Notas de Alunos
+# Arquitectura Brownfield de Melhoria — Planilha de Notas de Alunos IA
 
-## Visão técnica inicial
-Projecto Node.js com estrutura AIOX para conduzir ciclo de stories orientado por documentação.
+## Table of Contents
 
-## Componentes base
-- Configuração: `core-config.yaml`
-- Orquestração de workflows: `.aiox-core/development/workflows/`
-- Stories: `docs/stories/`
-- PRD shardado: `docs/prd/`
-- Arquitectura shardada: `docs/architecture/`
-
-## Decisões iniciais
-1. Manter documentação mínima obrigatória antes de avançar para features.
-2. Evoluir incrementalmente via Story Development Cycle.
-3. Validar qualidade por QA gate em cada story.
+- [Arquitectura Brownfield de Melhoria — Planilha de Notas de Alunos IA](#table-of-contents)
+  - [Introdução](./introduo.md)
+    - [Análise do Projecto Existente](./introduo.md#anlise-do-projecto-existente)
+      - [Estado Actual do Projecto](./introduo.md#estado-actual-do-projecto)
+      - [Documentação Disponível](./introduo.md#documentao-disponvel)
+      - [Restrições Identificadas](./introduo.md#restries-identificadas)
+    - [Registo de Alterações](./introduo.md#registo-de-alteraes)
+  - [Escopo da Melhoria e Estratégia de Integração](./escopo-da-melhoria-e-estratgia-de-integrao.md)
+    - [Visão Geral da Melhoria](./escopo-da-melhoria-e-estratgia-de-integrao.md#viso-geral-da-melhoria)
+    - [Estratégia de Integração](./escopo-da-melhoria-e-estratgia-de-integrao.md#estratgia-de-integrao)
+    - [Requisitos de Compatibilidade](./escopo-da-melhoria-e-estratgia-de-integrao.md#requisitos-de-compatibilidade)
+  - [Alinhamento de Tech Stack](./alinhamento-de-tech-stack.md)
+    - [Stack Existente](./alinhamento-de-tech-stack.md#stack-existente)
+    - [Novas Decisões Técnicas](./alinhamento-de-tech-stack.md#novas-decises-tcnicas)
+  - [Decisões Arquitecturais Resolvidas](./decises-arquitecturais-resolvidas.md)
+  - [Modelos de Dados e Estratégia de Esquema](./modelos-de-dados-e-estratgia-de-esquema.md)
+    - [Modelo Relacional Inicial](./modelos-de-dados-e-estratgia-de-esquema.md#modelo-relacional-inicial)
+    - [Estratégia de Migração e Bootstrap](./modelos-de-dados-e-estratgia-de-esquema.md#estratgia-de-migrao-e-bootstrap)
+  - [Arquitectura de Componentes](./arquitectura-de-componentes.md)
+    - [Componentes Novos](./arquitectura-de-componentes.md#componentes-novos)
+      - [Backend Python API](./arquitectura-de-componentes.md#backend-python-api)
+      - [Academic Registry](./arquitectura-de-componentes.md#academic-registry)
+      - [Grade Ingestion and Management](./arquitectura-de-componentes.md#grade-ingestion-and-management)
+      - [Calculation Engine](./arquitectura-de-componentes.md#calculation-engine)
+      - [Publication Service](./arquitectura-de-componentes.md#publication-service)
+      - [Notification Service](./arquitectura-de-componentes.md#notification-service)
+      - [Student Portal Read Model](./arquitectura-de-componentes.md#student-portal-read-model)
+    - [Diagrama de Interacção](./arquitectura-de-componentes.md#diagrama-de-interaco)
+  - [Estratégia de API e Integração](./estratgia-de-api-e-integrao.md)
+    - [Princípios](./estratgia-de-api-e-integrao.md#princpios)
+    - [Endpoints Iniciais](./estratgia-de-api-e-integrao.md#endpoints-iniciais)
+      - [Autenticação](./estratgia-de-api-e-integrao.md#autenticao)
+      - [Troca de palavra-passe inicial](./estratgia-de-api-e-integrao.md#troca-de-palavra-passe-inicial)
+      - [Contextos Académicos](./estratgia-de-api-e-integrao.md#contextos-acadmicos)
+      - [Importação de Notas](./estratgia-de-api-e-integrao.md#importao-de-notas)
+      - [Publicação](./estratgia-de-api-e-integrao.md#publicao)
+      - [Portal do Estudante](./estratgia-de-api-e-integrao.md#portal-do-estudante)
+    - [Integração Evolution API](./estratgia-de-api-e-integrao.md#integrao-evolution-api)
+  - [Integração com Source Tree](./integrao-com-source-tree.md)
+    - [Estrutura Actual Relevante](./integrao-com-source-tree.md#estrutura-actual-relevante)
+    - [Nova Organização Prevista](./integrao-com-source-tree.md#nova-organizao-prevista)
+    - [Regras de Integração](./integrao-com-source-tree.md#regras-de-integrao)
+  - [Infraestrutura, Implantação e Rollback](./infraestrutura-implantao-e-rollback.md)
+    - [Infraestrutura Existente](./infraestrutura-implantao-e-rollback.md#infraestrutura-existente)
+    - [Estratégia de Deployment da Melhoria](./infraestrutura-implantao-e-rollback.md#estratgia-de-deployment-da-melhoria)
+    - [Rollback](./infraestrutura-implantao-e-rollback.md#rollback)
+  - [Normas de Código e Convenções](./normas-de-cdigo-e-convenes.md)
+    - [Conformidade com Standards Existentes](./normas-de-cdigo-e-convenes.md#conformidade-com-standards-existentes)
+    - [Standards Específicos da Melhoria](./normas-de-cdigo-e-convenes.md#standards-especficos-da-melhoria)
+    - [Regras Críticas de Integração](./normas-de-cdigo-e-convenes.md#regras-crticas-de-integrao)
+  - [Estratégia de Testes](./estratgia-de-testes.md)
+    - [Integração com Testes Existentes](./estratgia-de-testes.md#integrao-com-testes-existentes)
+    - [Novos Testes Python](./estratgia-de-testes.md#novos-testes-python)
+      - [Unitários](./estratgia-de-testes.md#unitrios)
+      - [Integração](./estratgia-de-testes.md#integrao)
+      - [Regressão Brownfield](./estratgia-de-testes.md#regresso-brownfield)
+    - [Comandos de Qualidade](./estratgia-de-testes.md#comandos-de-qualidade)
+  - [Segurança](./segurana.md)
+    - [Estado Actual](./segurana.md#estado-actual)
+    - [Modelo de Segurança Alvo](./segurana.md#modelo-de-segurana-alvo)
+    - [Testes de Segurança](./segurana.md#testes-de-segurana)
+  - [Checklist de Arquitectura Brownfield](./checklist-de-arquitectura-brownfield.md)
+  - [Decisões Abertas](./decises-abertas.md)
+    - [Produto](./decises-abertas.md#produto)
+    - [Backlog e Governança](./decises-abertas.md#backlog-e-governana)
+  - [Notas de Handoff](./notas-de-handoff.md)
+    - [Handoff para Story Manager](./notas-de-handoff.md#handoff-para-story-manager)
+    - [Handoff para Desenvolvimento](./notas-de-handoff.md#handoff-para-desenvolvimento)
+    - [Sequência Recomendada](./notas-de-handoff.md#sequncia-recomendada)

@@ -1,0 +1,36 @@
+schema: 1
+story: '5.1'
+gate: PASS
+status_reason: >
+  All six acceptance criteria are fully met. FastAPI foundation is correctly structured
+  with /api/v1 namespace, WAL-enabled SQLite via Alembic, all 19 academic tables present
+  in a reversible migration, JSON legacy files untouched, and quality gates passing
+  across both Node and Python stacks.
+reviewer: 'Aria'
+updated: '2026-05-31T00:00:00Z'
+top_issues: []
+waiver:
+  active: false
+
+checks:
+  ac1_fastapi_foundation: PASS
+  ac2_sqlite_alembic_wal: PASS
+  ac3_complete_academic_schema_18_tables: PASS
+  ac4_json_coexistence_preserved: PASS
+  ac5_api_namespace_and_openapi: PASS
+  ac6_quality_gates_documented_passing: PASS
+  architectural_alignment_fastapi_sqlalchemy2_pydantic2_absolute_imports: PASS
+  node_express_coexistence_intact: PASS
+  security_baseline_no_sensitive_logging_type_hints: PASS
+  migration_reversible_downgrade_complete: PASS
+
+notes: >
+  AC-3 enumerates 18 tables; the migration implements all 18 plus audit_log (19 total),
+  which is strictly additive and architecturally sound. The config.py uses a dataclass
+  (not Pydantic) for Settings — acceptable for this foundation story given it satisfies
+  the requirement for typed configuration; Pydantic external contracts are used for API
+  responses (HealthResponse, ErrorResponse). WAL pragma is set on every SQLite connection
+  via SQLAlchemy event listener — correct pattern. Absolute imports from backend.app are
+  consistently used throughout. No sensitive data logged; request_id propagation is
+  implemented correctly. downgrade() function in the migration drops all tables in
+  correct reverse-dependency order — fully reversible.

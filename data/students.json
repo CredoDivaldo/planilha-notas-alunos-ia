@@ -1,38 +1,14 @@
 [
   {
-    "numero_estudante": "2026001",
-    "nome": "Credo Lopes",
-    "turma": "10A",
-    "whatsapp": "244938745635"
+    "numero_estudante": "1001",
+    "nome": "Ana Silva",
+    "turma": "T1",
+    "whatsapp": "244923456789"
   },
   {
-    "numero_estudante": "2026002",
-    "nome": "Isaú Neves",
-    "turma": "10A",
-    "whatsapp": "244933069338"
-  },
-  {
-    "numero_estudante": "11297725",
-    "nome": "Djenabu Kaba",
-    "turma": "10A",
-    "whatsapp": "244943374343"
-  },
-  {
-    "numero_estudante": "11190525",
-    "nome": "Eunice Domingos",
-    "turma": "10A",
-    "whatsapp": "244928997682"
-  },
-  {
-    "numero_estudante": "11191325",
-    "nome": "Magno Cândido",
-    "turma": "10A",
-    "whatsapp": "244946946978"
-  },
-  {
-    "numero_estudante": "11207325",
-    "nome": "Nathalia Garcia",
-    "turma": "10A",
-    "whatsapp": "244972584176"
+    "numero_estudante": "1002",
+    "nome": "Bruno Costa",
+    "turma": "T1",
+    "whatsapp": "244934567890"
   }
 ]

@@ -1,5 +1,7 @@
 # QA Review — Quality Gate (Reexecução)
 
+> **Nota de reconciliação PO — 2026-05-28:** este review é histórico e foi superado pela Story 2.1, pelo gate `docs/qa/gates/2.1-quality-scripts-baseline.yml` e pela validação PO de 2026-05-28. O estado actual do repositório tem `npm test`, `npm run lint` e `npm run typecheck` em `package.json`, com execução PASS reportada em `docs/reviews/po-master-validation-2026-05-28.md`. Manter este ficheiro apenas como evidência histórica; não usar os blockers abaixo como estado actual sem nova reexecução de QA.
+
 ## Gate Decision
 **NEEDS WORK**
 
