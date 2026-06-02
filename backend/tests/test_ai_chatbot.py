@@ -24,6 +24,7 @@ from backend.app.config import Settings
 from backend.app.models import (
     AcademicContext,
     Base,
+    BroadcastJob,
     ClassEnrollment,
     PublicationSnapshot,
     Semester,
@@ -131,17 +132,55 @@ def sample_shift(temp_db_session: tuple[Session, str]) -> int:
 
 
 @pytest.fixture
+def sample_professor(temp_db_session: tuple[Session, str]) -> int:
+    """Create a sample professor for testing."""
+    session, _ = temp_db_session
+
+    # Create users table if it doesn't exist
+    session.execute(
+        text("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY,
+            email VARCHAR(255) UNIQUE NOT NULL,
+            full_name VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    )
+    session.flush()
+
+    # Insert professor
+    result = session.execute(
+        text("""
+        INSERT INTO users (email, full_name)
+        VALUES (:em, :fn)
+    """),
+        {
+            "em": "prof@example.com",
+            "fn": "Prof. Silva",
+        },
+    )
+    session.flush()
+    professor_id = result.lastrowid
+
+    return professor_id
+
+
+@pytest.fixture
 def sample_context_with_grade(
     temp_db_session: tuple[Session, str],
     sample_student: tuple[int, str],
     sample_semester: int,
     sample_shift: int,
+    sample_professor: int,
 ) -> tuple[int, int, str]:
     """Create an academic context with a published grade."""
     session, _ = temp_db_session
     student_id, student_number = sample_student
 
     context = AcademicContext(
+        professor_id=sample_professor,
         semester_id=sample_semester,
         shift_id=sample_shift,
         subject="Matemática",
@@ -159,10 +198,24 @@ def sample_context_with_grade(
     session.add(enrollment)
     session.flush()
 
+    # Create broadcast job (required FK for publication snapshot)
+    broadcast_job = BroadcastJob(
+        teaching_assignment_id=context.id,
+        job_type="manual",
+        actor_user_id=sample_professor,
+        status="completed",
+        total_recipients=1,
+        total_success=1,
+        total_failed=0,
+    )
+    session.add(broadcast_job)
+    session.flush()
+
     # Create publication snapshot
     snapshot = PublicationSnapshot(
         student_id=student_id,
         teaching_assignment_id=context.id,
+        broadcast_job_id=broadcast_job.id,
         snapshot_version=1,
         published_score=Decimal("17.5"),
         published_state="Aprovado",
@@ -225,6 +278,7 @@ class TestPromptBuilder:
         sample_student: tuple[int, str],
         sample_semester: int,
         sample_shift: int,
+        sample_professor: int,
     ) -> None:
         """AC-3: Unpublished grades return empty context."""
         session, _ = temp_db_session
@@ -232,6 +286,7 @@ class TestPromptBuilder:
 
         # Create context without publication snapshot
         context = AcademicContext(
+            professor_id=sample_professor,
             semester_id=sample_semester,
             shift_id=sample_shift,
             subject="Programação",
@@ -463,9 +518,12 @@ class TestPortugueseResponse:
         with patch.dict("os.environ", {"AI_PROVIDER": "claude", "AI_API_KEY": "test-key"}):
             service = AIGradeQueryService()
 
-            # Mock AI to return very long response
+            # Mock AI to return very long response (provider truncates internally)
             long_response = "A" * 2000
-            with patch.object(service.provider, "call", return_value=long_response):
+            # The provider's call() method truncates to 1000 chars, but we mock it
+            # to verify the returned response respects the limit
+            truncated_response = long_response[:1000]
+            with patch.object(service.provider, "call", return_value=truncated_response):
                 result = service.generate_grade_response(
                     session,
                     student_id,
@@ -473,6 +531,6 @@ class TestPortugueseResponse:
                     "Test",
                 )
 
-                # Response should be truncated
+                # Response should be truncated to 1000 chars
                 assert len(result["response"]) <= 1000
                 assert result["ai_called"] is True

@@ -24,6 +24,7 @@ from backend.app.main import create_app
 from backend.app.models import (
     AcademicContext,
     Base,
+    BroadcastJob,
     ClassEnrollment,
     PublicationSnapshot,
     Semester,
@@ -47,12 +48,34 @@ def temp_db_session_with_client(tmp_path: Path) -> tuple[TestClient, Session, st
 
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
+    # Create students table (for raw SQL queries in tests)
+    session_setup = SessionLocal()
+    session_setup.execute(
+        text("""
+        CREATE TABLE IF NOT EXISTS students (
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER,
+            student_number VARCHAR(80) NOT NULL,
+            full_name VARCHAR(255) NOT NULL,
+            phone VARCHAR(80),
+            email VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    )
+    session_setup.commit()
+    session_setup.close()
+
     # Create app with custom settings
     settings = Settings(
         database_url=database_url,
         chatbot_webhook_token="test-token-12345",
     )
     app = create_app(settings)
+
+    # Set session_factory in app state for endpoints to use
+    app.state.session_factory = SessionLocal
 
     # Create test client
     client = TestClient(app)
@@ -114,18 +137,51 @@ def test_student_with_grades(
     _client, session, _ = temp_db_session_with_client
     student_id, student_number = test_student
 
+    # Create professor (for academic context)
+    session.execute(
+        text("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY,
+            email VARCHAR(255) UNIQUE NOT NULL,
+            full_name VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    )
+    session.flush()
+
+    result = session.execute(
+        text("""
+        INSERT INTO users (email, full_name)
+        VALUES (:em, :fn)
+    """),
+        {
+            "em": "prof@example.com",
+            "fn": "Prof. Teste",
+        },
+    )
+    session.flush()
+    professor_id = result.lastrowid
+
     # Create semester
-    semester = Semester(code="2026-1", name="Primeiro Semestre 2026")
+    semester = Semester(
+        code="2026-1",
+        name="Primeiro Semestre 2026",
+        academic_year=2026,
+        semester_number=1,
+    )
     session.add(semester)
     session.flush()
 
     # Create shift
-    shift = Shift(name="Turno 1")
+    shift = Shift(code="SHIFT-1", name="Turno 1")
     session.add(shift)
     session.flush()
 
     # Create academic context
     context = AcademicContext(
+        professor_id=professor_id,
         semester_id=semester.id,
         shift_id=shift.id,
         subject="Matemática",
@@ -144,10 +200,24 @@ def test_student_with_grades(
     session.add(enrollment)
     session.flush()
 
+    # Create broadcast job (required FK)
+    broadcast_job = BroadcastJob(
+        teaching_assignment_id=context.id,
+        job_type="manual",
+        actor_user_id=professor_id,
+        status="completed",
+        total_recipients=1,
+        total_success=1,
+        total_failed=0,
+    )
+    session.add(broadcast_job)
+    session.flush()
+
     # Create publication snapshot
     snapshot = PublicationSnapshot(
         student_id=student_id,
         teaching_assignment_id=context.id,
+        broadcast_job_id=broadcast_job.id,
         snapshot_version=1,
         published_score=Decimal("18.5"),
         published_state="Aprovado",
