@@ -1,7 +1,8 @@
 """AI Grade Query Service (Story 6.2).
 
 Provides AI-powered responses to student questions about their grades
-using Claude or OpenAI as the configured provider.
+using Baidu QianFan ERNIE as the primary provider (free tier).
+Legacy support for Claude and OpenAI preserved.
 
 AC-1: AI model is called with student grade context.
 AC-2: Response is in Portuguese and grade-specific.
@@ -13,7 +14,6 @@ AC-6: Dry-run endpoint returns AI response without sending WhatsApp.
 from __future__ import annotations
 
 import html
-import json
 import logging
 import os
 import re
@@ -21,8 +21,9 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from backend.app.models.contexts import AcademicContext, ClassEnrollment, Semester, Shift
+from backend.app.models.contexts import AcademicContext, ClassEnrollment, Semester
 from backend.app.models.publication import PublicationSnapshot
+from backend.app.services.baidu_provider import AIProvider, BaiduProvider
 
 LOGGER = logging.getLogger("backend.ai_chatbot.service")
 
@@ -33,33 +34,15 @@ FALLBACK_MESSAGE = "Não foi possível processar o teu pedido agora. Tenta mais 
 NO_GRADES_MESSAGE = "Não tens notas publicadas ainda. Volta mais tarde para verificar."
 
 # System prompt template (Portuguese)
-SYSTEM_PROMPT_TEMPLATE = """És um assistente académico. Responde APENAS com base nos dados de notas fornecidos abaixo.
-NÃO inventes notas, estados ou datas que não estejam nos dados. Responde em Português.
-Se a pergunta não for sobre notas académicas, redireciona educadamente.
-
-Dados publicados do estudante {student_number}:
-{grades_context}
-
-Pergunta do estudante: {student_message}"""
-
-
-class AIProvider:
-    """Abstract base class for AI providers."""
-
-    def call(self, system_prompt: str, user_message: str) -> str:
-        """Call the AI provider with given prompts.
-
-        Args:
-            system_prompt: System prompt with grade context
-            user_message: User's question (sanitized)
-
-        Returns:
-            AI-generated response
-
-        Raises:
-            Exception: If API call fails or key is missing
-        """
-        raise NotImplementedError
+SYSTEM_PROMPT_TEMPLATE = (
+    "És um assistente académico. Responde APENAS com base nos dados de notas"
+    " fornecidos abaixo. NÃO inventes notas, estados ou datas que não estejam"
+    " nos dados. Responde em Português. Se a pergunta não for sobre notas"
+    " académicas, redireciona educadamente.\n\n"
+    "Dados publicados do estudante {student_number}:\n"
+    "{grades_context}\n\n"
+    "Pergunta do estudante: {student_message}"
+)
 
 
 class ClaudeProvider(AIProvider):
@@ -92,9 +75,9 @@ class ClaudeProvider(AIProvider):
             Exception: If API call fails
         """
         try:
-            from anthropic import Anthropic
+            import anthropic  # type: ignore
 
-            client = Anthropic(api_key=self.api_key)
+            client = anthropic.Anthropic(api_key=self.api_key)
             response = client.messages.create(
                 model=os.getenv("AI_MODEL", "claude-haiku-4-5-20251001"),
                 max_tokens=1000,
@@ -109,9 +92,11 @@ class ClaudeProvider(AIProvider):
 
             # Extract text from response
             if response.content and len(response.content) > 0:
-                text = response.content[0].text
-                # Truncate to 1000 chars if needed
-                return text[:1000] if len(text) > 1000 else text
+                content = response.content[0]
+                if hasattr(content, "text"):
+                    text: str = content.text
+                    # Truncate to 1000 chars if needed
+                    return text[:1000] if len(text) > 1000 else text
             return FALLBACK_MESSAGE
 
         except Exception as exc:
@@ -155,9 +140,9 @@ class OpenAIProvider(AIProvider):
             Exception: If API call fails
         """
         try:
-            from openai import OpenAI
+            import openai  # type: ignore
 
-            client = OpenAI(api_key=self.api_key)
+            client = openai.OpenAI(api_key=self.api_key)
             response = client.chat.completions.create(
                 model=os.getenv("AI_MODEL", "gpt-4o"),
                 max_tokens=1000,
@@ -192,17 +177,35 @@ class AIGradeQueryService:
     """Service for AI-powered grade query responses."""
 
     def __init__(self) -> None:
-        """Initialize the service and configure AI provider."""
-        provider_name = os.getenv("AI_PROVIDER", "claude").lower()
-        api_key = os.getenv("AI_API_KEY", "")
+        """Initialize the service and configure AI provider.
 
-        if provider_name == "claude":
+        Supports three providers:
+        - 'baidu': Baidu QianFan ERNIE (free tier, default)
+        - 'claude': Anthropic Claude (legacy)
+        - 'openai': OpenAI GPT (legacy)
+
+        If API key is missing for the configured provider, raises ValueError.
+        """
+        provider_name = os.getenv("AI_PROVIDER", "baidu").lower()
+
+        if provider_name == "baidu":
+            api_key = os.getenv("BAIDU_API_KEY", "")
+            if not api_key:
+                raise ValueError("BAIDU_API_KEY is required for baidu provider")
+            self.provider: AIProvider = BaiduProvider(api_key)
+        elif provider_name == "claude":
+            api_key = os.getenv("AI_API_KEY", "")
+            if not api_key:
+                raise ValueError("AI_API_KEY is required for claude provider")
             self.provider = ClaudeProvider(api_key)
         elif provider_name == "openai":
+            api_key = os.getenv("AI_API_KEY", "")
+            if not api_key:
+                raise ValueError("AI_API_KEY is required for openai provider")
             self.provider = OpenAIProvider(api_key)
         else:
             raise ValueError(
-                f"Unknown AI_PROVIDER: {provider_name}. Must be 'claude' or 'openai'"
+                f"Unknown AI_PROVIDER: {provider_name}. Must be 'baidu', 'claude', or 'openai'"
             )
 
     def generate_grade_response(
@@ -327,7 +330,8 @@ class AIGradeQueryService:
         AC-3: Never exposes internal grade_entries fields.
 
         Returns formatted context string like:
-        "- Matemática | Semestre 2026-1 | Turma A | Nota: 17 | Estado: Aprovado | Publicado: 2026-05-28"
+        "- Matemática | Semestre 2026-1 | Turma A | Nota: 17 | Estado: Aprovado
+        | Publicado: 2026-05-28"
         """
         try:
             from sqlalchemy import select
