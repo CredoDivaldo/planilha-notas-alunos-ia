@@ -149,8 +149,8 @@ class TestWebhookEndpoint:
 
             assert response.status_code == 200
             assert response.json()["status"] == "ok"
-            # Story 6.3: now returns "processed" (quietly sends "unknown" message)
-            assert "processed" in response.json()["message"].lower()
+            # AC-4: unknown phone returns 200 without calling AI or exposing data
+            assert "received" in response.json()["message"].lower()
 
     def test_non_message_event_ignored(
         self, client: TestClient, webhook_token: str
@@ -228,11 +228,10 @@ class TestWebhookEndpoint:
                 headers={"X-Webhook-Token": webhook_token},
             )
 
-            # Verify normalized phone was used in SQL query
+            # Verify normalized phone was used in the student lookup query (first execute call)
             mock_db.execute.assert_called()
-            call_args = mock_db.execute.call_args
-            # The phone should be normalized to "244912345678"
-            assert "244912345678" in str(call_args)
+            first_call_args = mock_db.execute.call_args_list[0]
+            assert "244912345678" in str(first_call_args)
 
     def test_malformed_payload_handling(
         self, client: TestClient, webhook_token: str

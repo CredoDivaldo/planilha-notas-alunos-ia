@@ -313,12 +313,25 @@ async def receive_webhook(
     session = get_db_session(request)
     try:
         # Query students table by normalized phone
-        from sqlalchemy import text
-
         student_row = session.execute(
             text("SELECT id, student_number, full_name FROM students WHERE phone = :phone"),
             {"phone": normalized_phone},
         ).fetchone()
+
+        # AC-4: Unknown phone — return immediately, no AI call, no data exposed
+        if student_row is None:
+            LOGGER.warning(
+                "webhook_unknown_phone",
+                extra={
+                    "normalized_phone": normalized_phone,
+                    "request_id": request_id,
+                },
+            )
+            return WebhookResponse(
+                status="ok",
+                message="Message received",
+                request_id=request_id,
+            )
 
         message_text = message.get("conversation", "")
 
@@ -331,17 +344,12 @@ async def receive_webhook(
             instance = payload_data.get("instance", "default")
 
             # AC-1 through AC-6: Process message end-to-end
-            import asyncio
-
-            # Run async pipeline
-            result = asyncio.run(
-                pipeline.process_message(
-                    session,
-                    normalized_phone,
-                    message_text,
-                    instance=instance,
-                    request_id=request_id,
-                )
+            result = await pipeline.process_message(
+                session,
+                normalized_phone,
+                message_text,
+                instance=instance,
+                request_id=request_id,
             )
 
             LOGGER.info(
