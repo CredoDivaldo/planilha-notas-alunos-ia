@@ -32,4 +32,14 @@ module.exports = [
       },
     },
   },
+  {
+    // jsdom environment globals for accessibility tests (Story 4.1)
+    files: ["tests/accessibility.test.js"],
+    languageOptions: {
+      globals: {
+        document: "readonly",
+        window: "readonly",
+      },
+    },
+  },
 ];

@@ -7,40 +7,44 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main>
+    <header>
       <h1>MVP Notas + WhatsApp</h1>
+    </header>
 
-      <section>
-        <h2>1) Upload de estudantes (CSV)</h2>
+    <main>
+      <section aria-labelledby="sec1-heading">
+        <h2 id="sec1-heading">1) Upload de estudantes (CSV)</h2>
         <form id="studentsForm">
-          <input type="file" id="studentsFile" accept=".csv" required />
-          <button type="submit">Importar estudantes</button>
+          <label for="studentsFile">Ficheiro CSV de estudantes</label>
+          <input type="file" id="studentsFile" accept=".csv" required aria-describedby="studentsStatus" />
+          <button type="submit" aria-label="Importar ficheiro CSV de estudantes">Importar estudantes</button>
         </form>
-        <p id="studentsStatus"></p>
+        <p id="studentsStatus" aria-live="polite" aria-atomic="true"></p>
       </section>
 
-      <section>
-        <h2>2) Upload de notas (CSV)</h2>
+      <section aria-labelledby="sec2-heading">
+        <h2 id="sec2-heading">2) Upload de notas (CSV)</h2>
         <form id="gradesForm">
-          <input type="file" id="gradesFile" accept=".csv" required />
-          <button type="submit">Importar notas</button>
+          <label for="gradesFile">Ficheiro CSV de notas</label>
+          <input type="file" id="gradesFile" accept=".csv" required aria-describedby="gradesStatus" />
+          <button type="submit" aria-label="Importar ficheiro CSV de notas">Importar notas</button>
         </form>
-        <p id="gradesStatus"></p>
+        <p id="gradesStatus" aria-live="polite" aria-atomic="true"></p>
       </section>
 
-      <section>
-        <h2>3) Gerar match</h2>
-        <button id="matchBtn">Gerar match</button>
-        <p id="matchStats"></p>
+      <section aria-labelledby="sec3-heading">
+        <h2 id="sec3-heading">3) Gerar match</h2>
+        <button id="matchBtn" aria-label="Gerar correspondência entre estudantes e notas" aria-describedby="matchStats">Gerar match</button>
+        <p id="matchStats" aria-live="polite" aria-atomic="true"></p>
         <div class="table-wrap">
-          <table id="matchTable">
+          <table id="matchTable" aria-label="Resultados do match entre estudantes e notas">
             <thead>
               <tr>
-                <th>Número</th>
-                <th>Nome</th>
-                <th>Turma</th>
-                <th>WhatsApp</th>
-                <th>Nota</th>
+                <th scope="col">Número</th>
+                <th scope="col">Nome</th>
+                <th scope="col">Turma</th>
+                <th scope="col">WhatsApp</th>
+                <th scope="col">Nota</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -48,33 +52,37 @@
         </div>
       </section>
 
-      <section>
-        <h2>4) Conectar WhatsApp (Evolution Lite)</h2>
-        <div class="checks">
-          <button id="createInstanceBtn" type="button">Criar instância</button>
-          <button id="connectInstanceBtn" type="button">Gerar QR de conexão</button>
-          <button id="stateInstanceBtn" type="button">Ver estado da conexão</button>
+      <section aria-labelledby="sec4-heading">
+        <h2 id="sec4-heading">4) Conectar WhatsApp (Evolution Lite)</h2>
+        <div class="checks" role="group" aria-labelledby="sec4-heading">
+          <button id="createInstanceBtn" type="button" aria-label="Criar nova instância WhatsApp">Criar instância</button>
+          <button id="connectInstanceBtn" type="button" aria-label="Gerar QR Code para conexão WhatsApp">Gerar QR de conexão</button>
+          <button id="stateInstanceBtn" type="button" aria-label="Verificar estado actual da conexão WhatsApp">Ver estado da conexão</button>
         </div>
-        <p id="evolutionStatus"></p>
-        <img id="qrImage" alt="QR Code WhatsApp" style="max-width: 280px; display:none;" />
-        <pre id="evolutionResult"></pre>
+        <p id="evolutionStatus" role="alert" aria-live="assertive" aria-atomic="true"></p>
+        <img id="qrImage" alt="QR Code WhatsApp para escanear com o telemóvel" style="max-width: 280px; display:none;" />
+        <pre id="evolutionResult" aria-live="polite" aria-atomic="true"></pre>
       </section>
 
-      <section>
-        <h2>5) Mensagem e disparo</h2>
+      <section aria-labelledby="sec5-heading">
+        <h2 id="sec5-heading">5) Mensagem e disparo</h2>
         <p>Variáveis: {{nome}}, {{numero_estudante}}, {{turma}}, {{nota}}</p>
-        <textarea id="template" rows="5">Olá {{nome}}, tua nota é {{nota}} (Turma: {{turma}}).</textarea>
+        <label for="template">Mensagem WhatsApp (use as variáveis acima)</label>
+        <textarea id="template" rows="5" aria-describedby="templateHint">Olá {{nome}}, tua nota é {{nota}} (Turma: {{turma}}).</textarea>
+        <p id="templateHint" class="visually-hidden">Use as variáveis nome, numero_estudante, turma e nota entre chavetas duplas.</p>
 
         <div class="checks">
           <label><input type="checkbox" id="confirmReal" /> Confirmo envio real para os números da lista</label>
           <label><input type="checkbox" id="dryRun" /> Simular envio (sem chamar API)</label>
         </div>
 
-        <button id="sendBtn">Disparar em massa</button>
-        <pre id="sendResult"></pre>
+        <button id="sendBtn" aria-label="Disparar envio de mensagens em massa para todos os estudantes com match">Disparar em massa</button>
+        <pre id="sendResult" aria-live="polite" aria-atomic="true"></pre>
       </section>
     </main>
 
+    <!-- API key for authentication. Operators: set window.API_KEY to your API_KEY value -->
+    <script>window.API_KEY = '';</script>
     <script src="/app.js"></script>
   </body>
 </html>
