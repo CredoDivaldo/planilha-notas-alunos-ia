@@ -16,8 +16,9 @@
         <h2 id="sec1-heading">1) Upload de estudantes (CSV)</h2>
         <form id="studentsForm">
           <label for="studentsFile">Ficheiro CSV de estudantes</label>
-          <input type="file" id="studentsFile" accept=".csv" required aria-describedby="studentsStatus" />
-          <button type="submit" aria-label="Importar ficheiro CSV de estudantes">Importar estudantes</button>
+          <input type="file" id="studentsFile" accept=".csv" required aria-describedby="studentsFileError studentsStatus" />
+          <p id="studentsFileError" class="form-error" aria-live="assertive" aria-atomic="true"></p>
+          <button type="submit" id="studentsSubmitBtn" aria-label="Importar ficheiro CSV de estudantes" disabled>Importar estudantes</button>
         </form>
         <p id="studentsStatus" aria-live="polite" aria-atomic="true"></p>
       </section>
@@ -26,8 +27,9 @@
         <h2 id="sec2-heading">2) Upload de notas (CSV)</h2>
         <form id="gradesForm">
           <label for="gradesFile">Ficheiro CSV de notas</label>
-          <input type="file" id="gradesFile" accept=".csv" required aria-describedby="gradesStatus" />
-          <button type="submit" aria-label="Importar ficheiro CSV de notas">Importar notas</button>
+          <input type="file" id="gradesFile" accept=".csv" required aria-describedby="gradesFileError gradesStatus" />
+          <p id="gradesFileError" class="form-error" aria-live="assertive" aria-atomic="true"></p>
+          <button type="submit" id="gradesSubmitBtn" aria-label="Importar ficheiro CSV de notas" disabled>Importar notas</button>
         </form>
         <p id="gradesStatus" aria-live="polite" aria-atomic="true"></p>
       </section>
@@ -68,13 +70,15 @@
         <h2 id="sec5-heading">5) Mensagem e disparo</h2>
         <p>Variáveis: {{nome}}, {{numero_estudante}}, {{turma}}, {{nota}}</p>
         <label for="template">Mensagem WhatsApp (use as variáveis acima)</label>
-        <textarea id="template" rows="5" aria-describedby="templateHint">Olá {{nome}}, tua nota é {{nota}} (Turma: {{turma}}).</textarea>
+        <textarea id="template" rows="5" aria-describedby="templateError templateHint">Olá {{nome}}, tua nota é {{nota}} (Turma: {{turma}}).</textarea>
+        <p id="templateError" class="form-error" aria-live="assertive" aria-atomic="true"></p>
         <p id="templateHint" class="visually-hidden">Use as variáveis nome, numero_estudante, turma e nota entre chavetas duplas.</p>
 
         <div class="checks">
           <label><input type="checkbox" id="confirmReal" /> Confirmo envio real para os números da lista</label>
           <label><input type="checkbox" id="dryRun" /> Simular envio (sem chamar API)</label>
         </div>
+        <p id="sendConfirmError" class="form-error" aria-live="assertive" aria-atomic="true"></p>
 
         <button id="sendBtn" aria-label="Disparar envio de mensagens em massa para todos os estudantes com match">Disparar em massa</button>
         <pre id="sendResult" aria-live="polite" aria-atomic="true"></pre>
