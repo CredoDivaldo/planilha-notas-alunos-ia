@@ -211,3 +211,70 @@ class NotificationDelivery(Base):
         onupdate=datetime.utcnow,
         nullable=False,
     )
+
+
+# ---------------------------------------------------------------------------
+# Calendar snapshot (Story 5.6)
+# ---------------------------------------------------------------------------
+
+# Valid event types for published_calendar_snapshots
+CALENDAR_EVENT_TYPE_EXAM = "exam"
+CALENDAR_EVENT_TYPE_RECURSO = "recurso"
+CALENDAR_EVENT_TYPE_PROVA = "prova"
+CALENDAR_EVENT_TYPES = (
+    CALENDAR_EVENT_TYPE_EXAM,
+    CALENDAR_EVENT_TYPE_RECURSO,
+    CALENDAR_EVENT_TYPE_PROVA,
+)
+
+
+class PublishedCalendarSnapshot(Base):
+    """Immutable, student-visible calendar event snapshot (Story 5.6, AC-1–AC-4).
+
+    Records professor-published assessment dates visible through the student portal.
+
+    Scope rules:
+    - student_id IS NULL  → class-wide event; visible to ALL enrolled students
+    - student_id IS NOT NULL → per-student event; visible ONLY to that student
+
+    Portal query filter:
+        is_published=True
+        AND academic_context_id IN <enrolled_context_ids>
+        AND (student_id IS NULL OR student_id = :authenticated_student_id)
+
+    event_type is one of: exam | recurso | prova
+    """
+
+    __tablename__ = "published_calendar_snapshots"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # FKs enforced at DB level via migration; omitted here to allow raw-DDL test fixtures.
+    academic_context_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Nullable: NULL means class-wide event
+    student_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # exam | recurso | prova
+    event_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    subject: Mapped[str] = mapped_column(String(200), nullable=False)
+    start_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    end_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    location: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    # Draft until explicitly published
+    is_published: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("0"), nullable=False
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Nullable FK to the broadcast job that triggered publication
+    broadcast_job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=text("CURRENT_TIMESTAMP"),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=text("CURRENT_TIMESTAMP"),
+        default=lambda: datetime.now(UTC),
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )

@@ -10,7 +10,12 @@ from backend.app.models.contexts import (
     Semester,
     Shift,
 )
-from backend.app.models.publication import BroadcastJob, NotificationDelivery, PublicationSnapshot
+from backend.app.models.publication import (
+    BroadcastJob,
+    NotificationDelivery,
+    PublicationSnapshot,
+    PublishedCalendarSnapshot,
+)
 
 __all__ = [
     "AcademicContext",
@@ -23,6 +28,7 @@ __all__ = [
     "GradeEntry",
     "NotificationDelivery",
     "PublicationSnapshot",
+    "PublishedCalendarSnapshot",
     "Semester",
     "Shift",
     "TimestampMixin",

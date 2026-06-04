@@ -58,7 +58,7 @@ def test_bootstrap_db_applies_initial_academic_schema(tmp_path: Path) -> None:
 
     assert EXPECTED_TABLES.issubset(table_names)
     assert journal_mode == "wal"
-    assert alembic_version == ("20260601_0004",)  # AC-8: grade context scoping migration
+    assert alembic_version == ("20260604_0005",)  # Story 5.6: published_calendar_snapshots rebuild
 
 
 def test_legacy_json_import_dry_run_reports_counts_without_mutating_files(tmp_path: Path) -> None:

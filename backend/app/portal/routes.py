@@ -294,7 +294,7 @@ async def get_context_grades(
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(exc),
+            detail="Access to the requested context is not permitted.",
         ) from exc
     except Exception as exc:
         LOGGER.exception(

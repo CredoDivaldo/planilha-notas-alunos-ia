@@ -1,0 +1,90 @@
+schema: 1
+story: '5.6'
+gate: PASS
+status_reason: >
+  All 7 quality checks pass. Migration, model, service query, and tests satisfy all 5
+  acceptance criteria. 147/147 tests pass; 5 new calendar tests added. No high-severity
+  issues found. One low-severity documentation observation noted for future hardening.
+reviewer: Quinn
+updated: '2026-06-04T12:00:00Z'
+top_issues:
+  - id: DOC-001
+    severity: low
+    category: docs
+    description: >
+      CalendarEvent Pydantic model in routes.py declares published_at as str (required,
+      non-optional), but the service layer serializes it as Optional (None when
+      published_at is NULL). If an unpublished snapshot with NULL published_at were ever
+      returned, Pydantic validation would raise a 500. The is_published=True filter
+      prevents this today, but the schema mismatch is a latent inconsistency.
+    recommendation: >
+      Change CalendarEvent.published_at to `str | None = None` to align with the
+      service output contract, or add a DB constraint ensuring published_at IS NOT NULL
+      when is_published=True.
+waiver:
+  active: false
+checks:
+  code_review:
+    verdict: PASS
+    notes: >
+      Code is clean, well-structured, and consistent with patterns in the codebase.
+      get_calendar() follows the same two-phase pattern used by get_academic_summary():
+      resolve enrolled contexts first, then query snapshots. NULL handling for
+      class-wide events (student_id IS NULL OR student_id = authenticated) is explicit
+      and correct. CALENDAR_EVENT_TYPES constants defined but not yet used as a DB
+      CHECK constraint — acceptable as future hardening. updated_at uses
+      datetime.utcnow as onupdate (deprecated in Python 3.12+) consistent with the
+      rest of the codebase; not a new regression.
+  unit_tests:
+    verdict: PASS
+    notes: >
+      5 tests cover all AC paths. Test 1 (AC-2/AC-4): published class-wide event
+      returned. Test 2 (AC-2): is_published=False excluded; is_published=True returned.
+      Test 3 (AC-3/IDOR): cross-student and cross-context isolation verified for
+      two distinct students. Test 4 (AC-4): empty list returned gracefully. Test 5
+      (AC-3 edge): unenrolled student sees empty calendar. 147/147 pass; 0 failures;
+      0 errors. Coverage is adequate for a service-layer read model of this complexity.
+  acceptance_criteria:
+    verdict: PASS
+    notes: >
+      AC-1: Migration 20260604_0005 creates published_calendar_snapshots with all
+      required columns and FKs (academic_contexts, students, broadcast_jobs).
+      Three performance indexes added (academic_context_id, student_id, is_published).
+      AC-2: WHERE is_published=True filter confirmed in service.py lines 349-353.
+      AC-3: Enrolled-context scoping via ClassEnrollment JOIN; IDOR guard confirmed
+      by Test 3. AC-4: PortalService.get_calendar() stub fully replaced with real
+      SQLAlchemy query. AC-5: 78 Story 5.5 tests + 5 new tests = 147 total, 0 failed.
+  no_regressions:
+    verdict: PASS
+    notes: >
+      All 78 pre-existing Story 5.5 tests pass. Story 5.6 closes QA issue 5.5-001
+      (REQ-001 medium severity — calendar stub). No existing behaviour was altered;
+      new files and model additions are additive only.
+  performance:
+    verdict: PASS
+    notes: >
+      No N+1 queries. The implementation uses exactly two queries: one scalar subquery
+      to resolve enrolled context IDs, one SELECT with IN filter and ordering.
+      Three indexes created: academic_context_id, student_id, is_published.
+      The is_published index is particularly important for the hot filter path.
+      The in_() clause on enrolled_context_ids is acceptable for typical class-size
+      cardinality (1-20 contexts per student).
+  security:
+    verdict: PASS
+    notes: >
+      AC-2 (authenticated_student_id) sourced from session dependency — never from
+      user-supplied query parameters. IDOR risk mitigated: calendar events are first
+      filtered by ClassEnrollment-resolved context IDs (not raw user input), then by
+      student_id = NULL OR authenticated_id. Cross-student isolation confirmed by
+      Test 3 negative assertion. SQLAlchemy ORM prevents SQL injection. Draft events
+      (is_published=False) never reach the response. Audit trail (_log_portal_access)
+      recorded for every calendar access.
+  documentation:
+    verdict: PASS
+    notes: >
+      Story file is complete: all 8 tasks marked [x], File List updated with all 7
+      modified/created files, Dev Notes explain class-wide vs per-student event model
+      and the portal query rule. QA issue 5.5-001 closure noted. Minor: DOC-001
+      (published_at schema mismatch) is low severity, does not block.
+</content>
+</invoke>

@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.academic import AuditLog
 from backend.app.models.contexts import AcademicContext, ClassEnrollment, Semester, Shift
-from backend.app.models.publication import PublicationSnapshot
+from backend.app.models.publication import PublicationSnapshot, PublishedCalendarSnapshot
 
 LOGGER = logging.getLogger("backend.portal.service")
 
@@ -147,11 +147,20 @@ class PortalService:
 
             # Populate current grade if snapshot exists (AC-6: render as-is)
             if row.snapshot_id:
+                try:
+                    payload = json.loads(row.published_payload_json) if row.published_payload_json else {}
+                except json.JSONDecodeError:
+                    LOGGER.warning(
+                        "malformed_payload_json",
+                        extra={"snapshot_id": row.snapshot_id, "request_id": request_id},
+                    )
+                    payload = {}
                 contexts_by_id[ctx_id]["current_grade"] = {
                     "snapshot_id": row.snapshot_id,
                     "snapshot_version": row.snapshot_version,
                     "score": float(row.published_score) if row.published_score else None,
                     "state": row.published_state,
+                    "formula_version": payload.get("formula_version"),
                     "published_at": row.published_at.isoformat() if row.published_at else None,
                 }
 
@@ -262,7 +271,14 @@ class PortalService:
         }
 
         if row.snapshot_id:
-            payload = json.loads(row.published_payload_json) if row.published_payload_json else {}
+            try:
+                payload = json.loads(row.published_payload_json) if row.published_payload_json else {}
+            except json.JSONDecodeError:
+                LOGGER.warning(
+                    "malformed_payload_json",
+                    extra={"snapshot_id": row.snapshot_id, "request_id": request_id},
+                )
+                payload = {}
             result["current_grade"] = {
                 "snapshot_id": row.snapshot_id,
                 "snapshot_version": row.snapshot_version,
@@ -306,8 +322,54 @@ class PortalService:
             ]
         }
         """
-        # TODO: Implement after published_calendar_snapshots table is added.
-        # For now, return placeholder.
+        # Resolve the student's enrolled academic_context_ids (AC-3: scope enforcement)
+        enrolled_context_ids_stmt = select(ClassEnrollment.academic_context_id).where(
+            ClassEnrollment.student_id == authenticated_student_id
+        )
+        enrolled_context_ids = [
+            row[0] for row in session.execute(enrolled_context_ids_stmt).fetchall()
+        ]
+
+        if not enrolled_context_ids:
+            self._log_portal_access(
+                session,
+                action=ACTION_PORTAL_READ,
+                entity_type="calendar",
+                student_id=authenticated_student_id,
+                request_id=request_id,
+                result_count=0,
+            )
+            return {"student_id": authenticated_student_id, "calendar_events": []}
+
+        # AC-2: Only is_published=True events; AC-3: scoped to enrolled contexts;
+        # Dev Notes: student_id IS NULL (class-wide) OR student_id = authenticated
+        stmt = (
+            select(PublishedCalendarSnapshot)
+            .where(
+                PublishedCalendarSnapshot.is_published == True,  # noqa: E712
+                PublishedCalendarSnapshot.academic_context_id.in_(enrolled_context_ids),
+                (
+                    (PublishedCalendarSnapshot.student_id == None)  # noqa: E711
+                    | (PublishedCalendarSnapshot.student_id == authenticated_student_id)
+                ),
+            )
+            .order_by(PublishedCalendarSnapshot.start_date.asc())
+        )
+
+        rows = session.execute(stmt).scalars().all()
+
+        calendar_events = []
+        for row in rows:
+            event: dict = {
+                "event_id": row.id,
+                "event_type": row.event_type,
+                "subject": row.subject,
+                "start_date": row.start_date.isoformat() if row.start_date else None,
+                "end_date": row.end_date.isoformat() if row.end_date else None,
+                "location": row.location,
+                "published_at": row.published_at.isoformat() if row.published_at else None,
+            }
+            calendar_events.append(event)
 
         self._log_portal_access(
             session,
@@ -315,12 +377,12 @@ class PortalService:
             entity_type="calendar",
             student_id=authenticated_student_id,
             request_id=request_id,
-            result_count=0,
+            result_count=len(calendar_events),
         )
 
         return {
             "student_id": authenticated_student_id,
-            "calendar_events": [],
+            "calendar_events": calendar_events,
         }
 
     # -----------------------------------------------------------------------
