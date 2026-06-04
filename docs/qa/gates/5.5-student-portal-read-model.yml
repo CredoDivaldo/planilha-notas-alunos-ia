@@ -1,0 +1,46 @@
+schema: 1
+story: '5.5'
+gate: CONCERNS
+status_reason: 'All AC-1/2/3/5/6 implemented and verified (142 tests passing); 3 low issues fixed post-gate (5.5-002/003/004); AC-4 calendar stub deferred to STORY-5.6.'
+reviewer: 'Quinn'
+updated: '2026-06-03T12:45:00Z'
+post_gate_fixes:
+  - id: '5.5-002'
+    status: fixed
+    fixed_in: backend/app/portal/service.py (get_academic_summary)
+    note: 'formula_version now extracted from published_payload_json in both get_academic_summary() and get_grades_by_context()'
+  - id: '5.5-003'
+    status: fixed
+    fixed_in: backend/app/portal/routes.py (get_context_grades)
+    note: '403 detail replaced with generic "Access to the requested context is not permitted."'
+  - id: '5.5-004'
+    status: fixed
+    fixed_in: backend/app/portal/service.py (both methods)
+    note: 'json.loads wrapped in try/except json.JSONDecodeError with graceful fallback to {}'
+  - id: '5.5-001'
+    status: deferred
+    deferred_to: STORY-5.6
+    note: 'published_calendar_snapshots table and real calendar query tracked in Story 5.6'
+top_issues:
+  - id: '5.5-001'
+    severity: medium
+    finding: 'AC-4 not fully implemented. get_calendar() in service.py returns a hardcoded empty list with a TODO comment. The published_calendar_snapshots table does not yet exist and no query is written. While the story notes calendar table as deferred, AC-4 is explicitly IN scope for this story: "only published calendar snapshots are visible, and draft/internal calendar events are excluded." No test covers calendar with actual data.'
+    suggested_action: 'Either (a) create published_calendar_snapshots table and implement the query, or (b) formally document this as deferred to a follow-up story and update the AC-4 acceptance criterion scope in the story file via @po. Add a negative test that verifies the empty list is returned gracefully when no calendar table exists.'
+
+  - id: '5.5-002'
+    severity: low
+    finding: 'AC-6 inconsistency between endpoints. formula_version is correctly extracted from published_payload_json in get_grades_by_context(), but the equivalent field is absent from the current_grade dict built in get_academic_summary(). Students accessing /me or /me/grades will receive current_grade without formula_version, while /me/grades/{ctx} includes it. This diverges from AC-6 which requires "display only state values already present in the published snapshot payload" consistently.'
+    suggested_action: 'In get_academic_summary(), extract formula_version from published_payload_json the same way get_grades_by_context() does. Update the corresponding test test_portal_aggregates_multiple_contexts to assert formula_version presence.'
+
+  - id: '5.5-003'
+    severity: low
+    finding: 'Minor information disclosure in 403 response. PortalAccessError message is "Student {authenticated_student_id} not enrolled in context {context_id}" and this string is passed directly to HTTPException detail and returned to the HTTP client. This exposes the internal student_id integer in an error response, which may violate least-disclosure principles for a student-facing API.'
+    suggested_action: 'Replace the detail string with a generic message such as "Access to the requested context is not permitted." Log the detailed student_id and context_id only at the LOGGER.warning level (already done) not in the HTTP response body.'
+
+  - id: '5.5-004'
+    severity: low
+    finding: 'json.loads(row.published_payload_json) in get_grades_by_context() and implicitly in get_academic_summary() has no try/except guard. If published_payload_json contains malformed JSON (e.g., truncated write or encoding error), an uncaught json.JSONDecodeError will propagate, causing a generic 500 Internal Server Error with potentially unhelpful logging. The audit log may also fail to flush if the session is mid-transaction.'
+    suggested_action: 'Wrap json.loads calls in a try/except json.JSONDecodeError block. On failure, log a warning with snapshot_id and request_id, and fall back to payload = {} so the endpoint degrades gracefully (returns current_grade without formula_version) rather than failing entirely.'
+
+waiver:
+  active: false
