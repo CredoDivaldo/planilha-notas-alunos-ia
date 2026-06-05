@@ -24,7 +24,14 @@ async function readJson(filePath, fallback = null) {
 
 async function writeJson(filePath, payload) {
   await ensureDir();
-  await fs.writeFile(filePath, JSON.stringify(payload, null, 2), "utf8");
+  const tmpPath = `${filePath}.tmp`;
+  try {
+    await fs.writeFile(tmpPath, JSON.stringify(payload, null, 2), "utf8");
+    await fs.rename(tmpPath, filePath);
+  } catch (error) {
+    await fs.rm(tmpPath, { force: true });
+    throw error;
+  }
 }
 
 async function saveStudents(students) {
