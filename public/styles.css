@@ -9,6 +9,8 @@
   --color-primary: #0d6efd;
   /* Hover/active state for primary */
   --color-primary-hover: #0b5ed7;
+  /* Secondary / neutral accent (reserved for future components) */
+  --color-secondary: #6c757d;
   /* Semantic error colour (validation errors, invalid fields) */
   --color-error: #c0392b;
   /* Semantic success colour (valid fields) */
