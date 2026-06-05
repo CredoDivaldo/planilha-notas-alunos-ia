@@ -1,6 +1,69 @@
+/* =============================================================================
+   DESIGN SYSTEM TOKENS — Story 4.4 (UX-006)
+   All CSS custom properties are defined here. Edit tokens in :root only.
+   ============================================================================= */
+
+:root {
+  /* --- Colours --------------------------------------------------------------- */
+  /* Primary brand colour (buttons, focus outlines, links) */
+  --color-primary: #0d6efd;
+  /* Hover/active state for primary */
+  --color-primary-hover: #0b5ed7;
+  /* Semantic error colour (validation errors, invalid fields) */
+  --color-error: #c0392b;
+  /* Semantic success colour (valid fields) */
+  --color-success: #27ae60;
+  /* Page background */
+  --color-background: #f4f6f8;
+  /* Card / panel surface background */
+  --color-surface: #ffffff;
+  /* Border colour for sections, tables, dividers */
+  --color-border: #dddddd;
+  /* Primary body text */
+  --color-text: #1a1a1a;
+  /* Text on dark / primary-colour backgrounds */
+  --color-text-inverse: #ffffff;
+  /* Code block background */
+  --color-code-bg: #0f172a;
+  /* Code block text */
+  --color-code-text: #e2e8f0;
+
+  /* --- Spacing --------------------------------------------------------------- */
+  /* Extra-small: icon gaps, tight offsets */
+  --space-xs: 4px;
+  /* Small: button padding block, label margins, gaps */
+  --space-sm: 8px;
+  /* Medium: section padding, element margins */
+  --space-md: 16px;
+  /* Large: page-level margins, major section gaps */
+  --space-lg: 24px;
+  /* Extra-large: generous whitespace, hero sections */
+  --space-xl: 32px;
+
+  /* --- Typography ------------------------------------------------------------ */
+  /* Base font stack */
+  --font-family-base: Arial, sans-serif;
+  /* Small text: helper text, captions */
+  --font-size-sm: 0.875rem;
+  /* Body / default text */
+  --font-size-base: 1rem;
+  /* Subheading / emphasis */
+  --font-size-lg: 1.125rem;
+  /* Section headings */
+  --font-size-xl: 1.25rem;
+  /* Normal weight */
+  --font-weight-normal: 400;
+  /* Bold / label weight */
+  --font-weight-bold: 600;
+}
+
+/* =============================================================================
+   BASE STYLES
+   ============================================================================= */
+
 body {
-  font-family: Arial, sans-serif;
-  background: #f4f6f8;
+  font-family: var(--font-family-base);
+  background: var(--color-background);
   margin: 0;
 }
 
@@ -19,17 +82,17 @@ body {
 
 main {
   max-width: 980px;
-  margin: 24px auto;
-  background: #fff;
-  padding: 20px;
+  margin: var(--space-lg) auto;
+  background: var(--color-surface);
+  padding: var(--space-md) var(--space-lg);
   border-radius: 8px;
 }
 
 section {
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
 }
 
 h1, h2 {
@@ -37,16 +100,16 @@ h1, h2 {
 }
 
 button {
-  background: #0d6efd;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
   border: 0;
   border-radius: 6px;
-  padding: 8px 12px;
+  padding: var(--space-sm) 12px;
   cursor: pointer;
 }
 
 button:hover {
-  background: #0b5ed7;
+  background: var(--color-primary-hover);
 }
 
 /* Accessibility: visible focus indicators for all interactive elements (WCAG 2.2 AA) */
@@ -55,19 +118,19 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
 a:focus-visible {
-  outline: 3px solid #0d6efd;
-  outline-offset: 2px;
+  outline: 3px solid var(--color-primary);
+  outline-offset: var(--space-xs);
 }
 
 label {
   display: block;
-  margin-bottom: 4px;
-  font-weight: 600;
+  margin-bottom: var(--space-xs);
+  font-weight: var(--font-weight-bold);
 }
 
 textarea {
   width: 100%;
-  margin: 8px 0;
+  margin: var(--space-sm) 0;
 }
 
 .table-wrap {
@@ -77,11 +140,11 @@ textarea {
 table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 8px;
+  margin-top: var(--space-sm);
 }
 
 th, td {
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   padding: 6px;
   text-align: left;
 }
@@ -89,13 +152,13 @@ th, td {
 .checks {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin: 8px 0;
+  gap: var(--space-sm);
+  margin: var(--space-sm) 0;
 }
 
 pre {
-  background: #0f172a;
-  color: #e2e8f0;
+  background: var(--color-code-bg);
+  color: var(--color-code-text);
   padding: 10px;
   border-radius: 6px;
   white-space: pre-wrap;
@@ -103,20 +166,20 @@ pre {
 
 /* Form validation feedback — Story 4.2 */
 .form-error {
-  color: var(--color-error, #c0392b);
-  font-size: 0.875rem;
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
   margin-top: 0.25rem;
   margin-bottom: 0;
   min-height: 1.25rem; /* prevent layout shift when error appears/disappears */
 }
 
 .field-invalid {
-  border: 2px solid var(--color-error, #c0392b);
-  outline-color: var(--color-error, #c0392b);
+  border: 2px solid var(--color-error);
+  outline-color: var(--color-error);
 }
 
 .field-valid {
-  border: 2px solid var(--color-success, #27ae60);
+  border: 2px solid var(--color-success);
 }
 
 button:disabled {
@@ -125,5 +188,5 @@ button:disabled {
 }
 
 button:disabled:hover {
-  background: #0d6efd; /* override hover so disabled buttons don't change colour */
+  background: var(--color-primary); /* override hover so disabled buttons don't change colour */
 }
