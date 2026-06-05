@@ -1,7 +1,7 @@
 # Epic 3: Security Hardening
 
 **Epic ID:** EPIC-3
-**Status:** Draft
+**Status:** Done
 **Created:** 2026-05-02
 **Owner:** @pm (Morgan)
 
