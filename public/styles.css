@@ -192,3 +192,63 @@ button:disabled {
 button:disabled:hover {
   background: var(--color-primary); /* override hover so disabled buttons don't change colour */
 }
+
+/* =============================================================================
+   RESPONSIVE DESIGN — Story 4.5 (UX-007)
+   Breakpoints: Mobile (≤767px), Tablet (768px–1023px), Desktop (≥1024px base)
+   All spacing values reference design tokens from Story 4.4.
+   ============================================================================= */
+
+/* --- Mobile: up to 767px --------------------------------------------------- */
+@media (max-width: 767px) {
+  /* Reduce outer margin and padding so content fills the narrow viewport */
+  main {
+    margin: var(--space-sm);
+    padding: var(--space-sm);
+    border-radius: 0;
+  }
+
+  /* Give the header lateral padding so the title doesn't touch the screen edge */
+  header {
+    padding: var(--space-sm) var(--space-sm) 0;
+  }
+
+  /* Stack section content with tighter spacing */
+  section {
+    padding: var(--space-sm);
+    margin-bottom: var(--space-sm);
+  }
+
+  /* Buttons should fill the full width in mobile for easier tapping */
+  button {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* File inputs also fill full width */
+  input[type="file"] {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* QR image: override inline style max-width so it never overflows on 320px */
+  #qrImage {
+    max-width: 100% !important;
+    height: auto;
+  }
+
+  /* Wrap buttons in the checks group on mobile */
+  .checks {
+    flex-wrap: wrap;
+  }
+}
+
+/* --- Tablet: 768px to 1023px ----------------------------------------------- */
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* Allow main to grow but cap with a comfortable margin */
+  main {
+    max-width: 100%;
+    margin: var(--space-md) auto;
+    padding: var(--space-md);
+  }
+}
