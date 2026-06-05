@@ -286,6 +286,48 @@ dialog#confirmModal p {
   background: #5a6268;
 }
 
+/* =============================================================================
+   STATE GATING — Story 4.7
+   Visual indicators for locked/unlocked workflow sections.
+   ============================================================================= */
+
+/**
+ * Locked section: reduced opacity signals unavailability.
+ * pointer-events none prevents accidental interaction.
+ * Transition provides a smooth visual feedback when state changes.
+ */
+.section-locked {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  position: relative;
+}
+
+/**
+ * Unlocked section: fully opaque with pointer events restored.
+ */
+.section-unlocked {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.25s ease;
+}
+
+/**
+ * Lock reason text: visually hidden but available to screen readers.
+ * Inherits .visually-hidden styles; stored separately for clarity.
+ */
+.lock-reason {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* --- Tablet: 768px to 1023px ----------------------------------------------- */
 @media (min-width: 768px) and (max-width: 1023px) {
   /* Allow main to grow but cap with a comfortable margin */

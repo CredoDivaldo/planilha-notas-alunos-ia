@@ -12,7 +12,8 @@
     </header>
 
     <main>
-      <section aria-labelledby="sec1-heading">
+      <section id="sec1" aria-labelledby="sec1-heading" aria-describedby="sec1-lock-reason">
+        <p id="sec1-lock-reason" class="lock-reason visually-hidden">Ligue o WhatsApp primeiro (Secção 4).</p>
         <h2 id="sec1-heading">1) Upload de estudantes (CSV)</h2>
         <form id="studentsForm">
           <label for="studentsFile">Ficheiro CSV de estudantes</label>
@@ -23,7 +24,8 @@
         <p id="studentsStatus" aria-live="polite" aria-atomic="true"></p>
       </section>
 
-      <section aria-labelledby="sec2-heading">
+      <section id="sec2" aria-labelledby="sec2-heading" aria-describedby="sec2-lock-reason">
+        <p id="sec2-lock-reason" class="lock-reason visually-hidden">Ligue o WhatsApp primeiro (Secção 4).</p>
         <h2 id="sec2-heading">2) Upload de notas (CSV)</h2>
         <form id="gradesForm">
           <label for="gradesFile">Ficheiro CSV de notas</label>
@@ -34,7 +36,8 @@
         <p id="gradesStatus" aria-live="polite" aria-atomic="true"></p>
       </section>
 
-      <section aria-labelledby="sec3-heading">
+      <section id="sec3" aria-labelledby="sec3-heading" aria-describedby="sec3-lock-reason">
+        <p id="sec3-lock-reason" class="lock-reason visually-hidden">Ligue o WhatsApp primeiro (Secção 4).</p>
         <h2 id="sec3-heading">3) Gerar match</h2>
         <button id="matchBtn" aria-label="Gerar correspondência entre estudantes e notas" aria-describedby="matchStats">Gerar match</button>
         <p id="matchStats" aria-live="polite" aria-atomic="true"></p>
@@ -66,7 +69,8 @@
         <pre id="evolutionResult" aria-live="polite" aria-atomic="true"></pre>
       </section>
 
-      <section aria-labelledby="sec5-heading">
+      <section id="sec5" aria-labelledby="sec5-heading" aria-describedby="sec5-lock-reason">
+        <p id="sec5-lock-reason" class="lock-reason visually-hidden">Importe as notas e gere o match primeiro (Secções 1–3).</p>
         <h2 id="sec5-heading">5) Mensagem e disparo</h2>
         <p>Variáveis: {{nome}}, {{numero_estudante}}, {{turma}}, {{nota}}</p>
         <label for="template">Mensagem WhatsApp (use as variáveis acima)</label>

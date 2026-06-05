@@ -55,4 +55,27 @@ module.exports = [
       },
     },
   },
+  {
+    // jsdom environment globals for confirmation-modal tests (Story 4.6)
+    files: ["tests/public/confirmation-modal.test.js"],
+    languageOptions: {
+      globals: {
+        document: "readonly",
+        window: "readonly",
+        Event: "readonly",
+        MouseEvent: "readonly",
+        KeyboardEvent: "readonly",
+      },
+    },
+  },
+  {
+    // jsdom environment globals for state-gating tests (Story 4.7)
+    files: ["tests/public/state-gating.test.js"],
+    languageOptions: {
+      globals: {
+        document: "readonly",
+        test: "readonly",
+      },
+    },
+  },
 ];

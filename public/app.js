@@ -1,3 +1,91 @@
+// ---------------------------------------------------------------------------
+// State Gating — Story 4.7
+// Tracks workflow prerequisites. Only advances (false → true), never resets.
+// ---------------------------------------------------------------------------
+
+/**
+ * Application workflow state. All flags start false and are set to true
+ * permanently once the prerequisite is met (session-scoped, no persistence).
+ *
+ * @type {{ instanceCreated: boolean, connected: boolean, matchGenerated: boolean }}
+ */
+const appState = {
+  instanceCreated: false,
+  connected: false,
+  matchGenerated: false,
+};
+
+/**
+ * Apply or remove the section-locked / section-unlocked visual state for a
+ * section and its interactive children.
+ *
+ * @param {HTMLElement} section - The <section> element
+ * @param {boolean} locked - true = lock; false = unlock
+ * @param {string[]} interactiveIds - IDs of interactive elements to disable
+ */
+function setSectionLocked(section, locked, interactiveIds) {
+  if (!section) return;
+
+  if (locked) {
+    section.classList.add("section-locked");
+    section.classList.remove("section-unlocked");
+  } else {
+    section.classList.remove("section-locked");
+    section.classList.add("section-unlocked");
+  }
+
+  interactiveIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (locked) {
+      el.disabled = true;
+      el.setAttribute("aria-disabled", "true");
+    } else {
+      // Only re-enable if the element has no independent disabled logic
+      // (file inputs manage their own submit-button state via validateFileInput)
+      if (!el.dataset.gatingOnly) {
+        el.disabled = false;
+      }
+      el.setAttribute("aria-disabled", "false");
+    }
+  });
+}
+
+/**
+ * Re-evaluate all section gate states based on current appState.
+ * Called after each appState mutation.
+ */
+function updateGating() {
+  const sec1 = document.getElementById("sec1");
+  const sec2 = document.getElementById("sec2");
+  const sec3 = document.getElementById("sec3");
+  const sec5 = document.getElementById("sec5");
+
+  // Sections 1, 2, 3 require WhatsApp connected
+  const sec1Locked = !appState.connected;
+  const sec2Locked = !appState.connected;
+  const sec3Locked = !appState.connected;
+
+  // Section 5 requires connected + match generated
+  const sec5Locked = !appState.connected || !appState.matchGenerated;
+
+  // Sections 1 & 2: file inputs + submit buttons
+  // Submit buttons keep data-gating-only so validateFileInput still controls them
+  setSectionLocked(sec1, sec1Locked, ["studentsFile", "studentsSubmitBtn"]);
+  setSectionLocked(sec2, sec2Locked, ["gradesFile", "gradesSubmitBtn"]);
+
+  // Section 3: match button
+  setSectionLocked(sec3, sec3Locked, ["matchBtn"]);
+
+  // Section 5: send button, template, checkboxes
+  setSectionLocked(sec5, sec5Locked, [
+    "sendBtn",
+    "template",
+    "confirmReal",
+    "dryRun",
+  ]);
+}
+
 const studentsForm = document.getElementById("studentsForm");
 const gradesForm = document.getElementById("gradesForm");
 const matchBtn = document.getElementById("matchBtn");
@@ -89,6 +177,9 @@ function validateFileInput(inputId, errorId, buttonId) {
 // ---------------------------------------------------------------------------
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Apply initial gating state (all locked until prerequisites met) — Story 4.7
+  updateGating();
+
   // Ensure submit buttons start disabled (AC-3)
   const studentsBtn = document.getElementById("studentsSubmitBtn");
   const gradesBtn = document.getElementById("gradesSubmitBtn");
@@ -213,6 +304,12 @@ matchBtn.addEventListener("click", async () => {
 
   matchStats.textContent = `Total notas: ${payload.stats.total_grades} | Matched: ${payload.stats.matched} | Sem match: ${payload.stats.unmatched} | WhatsApp inválido: ${payload.stats.invalidPhones}`;
 
+  // Story 4.7: mark match generated when there is at least one matched result
+  if (payload.matched && payload.matched.length > 0) {
+    appState.matchGenerated = true;
+    updateGating();
+  }
+
   payload.matched.forEach((item) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -283,6 +380,9 @@ function stopPolling(reason, message) {
 
   if (reason === "connected") {
     qrImage.style.display = "none";
+    // Story 4.7: mark WhatsApp connected and unlock dependent sections
+    appState.connected = true;
+    updateGating();
   }
 }
 
@@ -303,6 +403,9 @@ async function startPolling(intervalMs = 5000, maxIterations = 24) {
     if (initialState?.instance?.state === "open") {
       evolutionStatus.textContent = "Ligado ao WhatsApp.";
       qrImage.style.display = "none";
+      // Story 4.7: mark connected on early detection and update gating
+      appState.connected = true;
+      updateGating();
       return; // Already connected — no need to poll
     }
   } catch (_err) {
@@ -350,6 +453,9 @@ createInstanceBtn.addEventListener("click", async () => {
   try {
     evolutionStatus.textContent = "A criar instância...";
     const payload = await callEvolution("/api/evolution/instance/create", "POST");
+    // Story 4.7: mark instance created and update gating
+    appState.instanceCreated = true;
+    updateGating();
     setQrFromPayload(payload);
     await startPolling();
   } catch (error) {
