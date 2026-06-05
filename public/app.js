@@ -131,6 +131,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   if (confirmRealEl) confirmRealEl.addEventListener("change", clearConfirmError);
   if (dryRunEl) dryRunEl.addEventListener("change", clearConfirmError);
+
+  // T5: Cleanup polling when the page is unloaded (AC-6)
+  window.addEventListener("beforeunload", () => stopPolling("unload"));
 });
 
 // ---------------------------------------------------------------------------
@@ -245,39 +248,110 @@ function setQrFromPayload(payload) {
   return false;
 }
 
-async function waitForQr(maxAttempts = 20, delayMs = 1500) {
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    evolutionStatus.textContent = `A aguardar QR... tentativa ${attempt}/${maxAttempts}`;
+// ---------------------------------------------------------------------------
+// QR Polling — Story 4.3 (UX-005)
+// ---------------------------------------------------------------------------
 
-    const statePayload = await callEvolution("/api/evolution/instance/state", "GET");
-    const state = statePayload?.instance?.state;
+/** @type {number|null} Active interval ID; null when polling is stopped. */
+let pollingIntervalId = null;
 
-    if (state === "open") {
-      evolutionStatus.textContent = "Instância conectada (estado open).";
-      return;
-    }
-
-    const connectPayload = await callEvolution("/api/evolution/instance/connect", "GET");
-    if (setQrFromPayload(connectPayload)) {
-      evolutionStatus.textContent = "QR gerado. Escaneia no WhatsApp.";
-      return;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
+/**
+ * Stop the active polling interval and update the status message.
+ * Safe to call when no polling is running (no-op).
+ *
+ * @param {"connected"|"error"|"timeout"|"unload"} reason - Why polling stopped
+ * @param {string} [message] - Custom status message (overrides default)
+ */
+function stopPolling(reason, message) {
+  if (pollingIntervalId !== null) {
+    clearInterval(pollingIntervalId);
+    pollingIntervalId = null;
   }
 
-  evolutionStatus.textContent = "Sem QR após várias tentativas. Verifica logs da Evolution e tenta novamente.";
+  if (reason === "unload") return; // page is closing — no DOM updates needed
+
+  const defaultMessages = {
+    connected: "Ligado ao WhatsApp.",
+    timeout: "Tempo esgotado. Sem ligação após 2 minutos. Tenta novamente.",
+    error: message || "Erro de rede. Polling interrompido.",
+  };
+
+  const statusText = message || defaultMessages[reason] || "";
+  if (statusText) {
+    evolutionStatus.textContent = statusText;
+  }
+
+  if (reason === "connected") {
+    qrImage.style.display = "none";
+  }
+}
+
+/**
+ * Start interval-based polling for WhatsApp connection state.
+ * Cancels any previous polling before starting a new one.
+ *
+ * @param {number} [intervalMs=5000] - Polling interval in milliseconds
+ * @param {number} [maxIterations=24] - Max ticks before timeout (24×5s = 120s)
+ */
+async function startPolling(intervalMs = 5000, maxIterations = 24) {
+  // Cancel any existing polling before starting (AC-6)
+  stopPolling("unload");
+
+  // T2: Fetch initial state before polling starts (AC-8)
+  try {
+    const initialState = await callEvolution("/api/evolution/instance/state", "GET");
+    if (initialState?.instance?.state === "open") {
+      evolutionStatus.textContent = "Ligado ao WhatsApp.";
+      qrImage.style.display = "none";
+      return; // Already connected — no need to poll
+    }
+  } catch (_err) {
+    // Non-fatal: if initial fetch fails, start polling anyway
+  }
+
+  let iteration = 0;
+  let lastQrBase64 = qrImage.src || null;
+
+  pollingIntervalId = setInterval(async () => {
+    iteration += 1;
+
+    // Timeout check (AC-7)
+    if (iteration > maxIterations) {
+      stopPolling("timeout");
+      return;
+    }
+
+    evolutionStatus.textContent = `A verificar ligação... (tentativa ${iteration}/${maxIterations})`;
+
+    try {
+      // Check connection state (AC-2)
+      const statePayload = await callEvolution("/api/evolution/instance/state", "GET");
+      if (statePayload?.instance?.state === "open") {
+        stopPolling("connected");
+        return;
+      }
+
+      // Try to refresh QR if still pending (AC-5)
+      const connectPayload = await callEvolution("/api/evolution/instance/connect", "GET");
+      const newBase64 = connectPayload?.qrcode?.base64 || connectPayload?.base64;
+      if (newBase64 && newBase64 !== lastQrBase64) {
+        qrImage.src = newBase64;
+        qrImage.style.display = "block";
+        lastQrBase64 = newBase64;
+      }
+    } catch (err) {
+      // AC-3: network/HTTP error stops polling immediately
+      stopPolling("error", `Erro: ${err.message}`);
+    }
+  }, intervalMs);
 }
 
 createInstanceBtn.addEventListener("click", async () => {
   try {
     evolutionStatus.textContent = "A criar instância...";
     const payload = await callEvolution("/api/evolution/instance/create", "POST");
-    if (setQrFromPayload(payload)) {
-      evolutionStatus.textContent = "QR gerado no create. Escaneia no WhatsApp.";
-      return;
-    }
-    await waitForQr();
+    setQrFromPayload(payload);
+    await startPolling();
   } catch (error) {
     evolutionStatus.textContent = `Erro: ${error.message}`;
   }
@@ -287,11 +361,8 @@ connectInstanceBtn.addEventListener("click", async () => {
   try {
     evolutionStatus.textContent = "A solicitar QR...";
     const payload = await callEvolution("/api/evolution/instance/connect", "GET");
-    if (setQrFromPayload(payload)) {
-      evolutionStatus.textContent = "QR gerado. Escaneia no WhatsApp.";
-      return;
-    }
-    await waitForQr();
+    setQrFromPayload(payload);
+    await startPolling();
   } catch (error) {
     evolutionStatus.textContent = `Erro: ${error.message}`;
   }

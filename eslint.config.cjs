@@ -42,4 +42,17 @@ module.exports = [
       },
     },
   },
+  {
+    // jsdom environment globals for form-validation and polling tests (Stories 4.2, 4.3)
+    files: ["tests/form-validation.test.js", "tests/public/polling.test.js"],
+    languageOptions: {
+      globals: {
+        document: "readonly",
+        window: "readonly",
+        File: "readonly",
+        clearInterval: "readonly",
+        setInterval: "readonly",
+      },
+    },
+  },
 ];
