@@ -1,0 +1,105 @@
+---
+# UX Research State — Planilha de Notas IA (Complete Project)
+# Updated: 2026-06-03 by Uma (UX-Design-Expert)
+
+workflow_type: greenfield
+current_phase: research
+research_status: complete
+research_scope: full_project
+
+# Date & Timeline
+research_date: "2026-06-03"
+research_hours: 2
+research_method: "prd_audit + persona_synthesis + journey_mapping + design_specification"
+
+# Artifacts Created
+artifacts:
+  - research-summary.md (executive overview)
+  - personas.md (4 personas: professor, estudante, delegado, coordenador)
+  - user-journeys.md (3 journeys covering all workflows)
+  - design-insights.md (9 interfaces + design patterns)
+  - .state.yaml (this file)
+
+# Research Coverage
+personas_created: 4
+  - Prof. Carlos (Desktop, 5 disciplinas, operacional)
+  - Ana (Mobile, estudante, consultor)
+  - João (Desktop, delegado, ajudante)
+  - Mariana (coordenadora, futuro)
+
+user_journeys_mapped: 3
+  - Journey 1: Professor workflow (contexto → estudantes → notas → publicação)
+  - Journey 2: Estudante workflow (login → portal → consulta)
+  - Journey 3: Delegado workflow (ajuda com limitações)
+
+# Design Scope
+interfaces_identified: 9
+  1: Login unificado (FR13)
+  2: Dashboard professor (FR2, FR3)
+  3: Criar contexto académico (FR3, FR4)
+  4: Gestão de estudantes (FR4, FR14)
+  5: Upload & edição notas (FR5, FR6)
+  6: Publicação/Broadcast (FR9, FR10)
+  7: Portal estudante (FR12)
+  8: Auditoria (FR16)
+  9: Painel delegado (FR14, FR15)
+
+key_insights: 5
+  - Confirmação explícita em publicações (FR9)
+  - Permissões sempre visíveis (FR14-FR15)
+  - Validação com relatório (FR4-FR6)
+  - Rastreabilidade completa (FR16)
+  - Mobile para estudante, desktop para professor
+
+# Requisitos Mapeados
+fr_coverage:
+  FR1: "Fluxo MVP preservado ✅"
+  FR2: "Gestão de contextos académicos (interface 2-3)"
+  FR3: "Múltiplos contextos professor (interface 2-3)"
+  FR4: "Cadastro estudantes (interface 4)"
+  FR5: "Importação CSV notas (interface 5)"
+  FR6: "Edição manual notas (interface 5)"
+  FR7: "Cálculo (backend ready, sem UI)"
+  FR8: "Dados internos vs publicados (interface 6)"
+  FR9: "Publicação por broadcast (interface 6) 🔴 CRÍTICO"
+  FR10: "Novo broadcast se alterações (interface 6)"
+  FR11: "WhatsApp como canal (backend ready)"
+  FR12: "Portal estudante (interface 7)"
+  FR13: "Login + primeira troca senha (interface 1)"
+  FR14: "Permissões delegado (interface 4, 9)"
+  FR15: "Bloqueio ações sensíveis (interface 9)"
+  FR16: "Auditoria (interface 8)"
+
+# Design Principles
+design_principles:
+  - explicit_confirmation: "FR9 — publicação exige confirmação clara"
+  - visible_permissions: "FR14-15 — delegado sempre vê limites"
+  - validation_with_report: "FR4-6 — preview antes de persistir"
+  - complete_traceability: "FR16 — auditoria sempre visível"
+  - device_optimization: "Ana mobile, Carlos desktop"
+
+# Quality Gates (Design Readiness)
+design_ready_for_wireframe: true
+persona_confidence: "high (baseadas em PRD, não fictícias)"
+journey_coverage: "completa (professor + estudante + delegado)"
+prd_alignment: "100% (todos FR mapeados a interfaces)"
+
+# Blocking Issues / Risks
+no_blocking_issues: true
+risks: []
+
+# Next Steps
+next_command: "*wireframe low"
+next_phase: "Phase 2 — Low-fidelity Wireframing"
+wireframe_scope:
+  - 9 interfaces principais
+  - User flow diagrams
+  - State diagrams (rascunho vs publicado)
+  - Error scenarios
+
+# Timeline Estimate
+wireframe_estimated_hours: 3-4
+specification_estimated_hours: 4-6
+total_ux_estimated_hours: 10-12
+
+---

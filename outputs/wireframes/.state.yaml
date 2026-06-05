@@ -1,0 +1,74 @@
+---
+# UX Wireframing State — Planilha de Notas IA
+# Updated: 2026-06-03 by Uma (UX-Design-Expert)
+
+workflow_type: greenfield
+current_phase: wireframing
+wireframing_status: complete
+fidelity: low-fidelity
+
+# Timeline
+wireframing_date: "2026-06-03"
+wireframing_hours: 1.5
+wireframing_method: "ascii_text_based_rapid"
+
+# Artifacts
+wireframes_created: 9
+artifact_files:
+  - 001-login-unificado.md
+  - 002-dashboard-professor.md
+  - 003-criar-contexto-academico.md
+  - 004-gestor-estudantes.md
+  - 005-upload-notas.md
+  - 006-publicacao-broadcast.md
+  - 007-portal-estudante.md
+  - 008-auditoria.md
+  - 009-painel-delegado.md
+  - README.md
+
+# Coverage
+interfaces_designed: 9
+personas_covered:
+  - Professor (Carlos)
+  - Estudante (Ana)
+  - Delegado (João)
+
+fr_coverage: "100% (FR1-FR16)"
+critical_wireframes:
+  - "006: Publicação/Broadcast (FR9) 🔴"
+  - "001: Login com primeira troca (FR13)"
+  - "004-005: Uploads com validação (FR4-6)"
+
+# Design Decisions
+design_patterns:
+  - explicit_confirmation: "FR9 — Publicação exige botão vermelho"
+  - visible_permissions: "FR14-15 — Delegado sempre vê limites"
+  - validation_with_report: "FR4-6 — Preview antes de persistir"
+  - mobile_first_for_student: "FR12 — Ana acessa primariamente mobile"
+  - desktop_first_for_professor: "FR2-3 — Carlos usa primariamente desktop"
+  - complete_traceability: "FR16 — Auditoria de todas operações"
+
+# Quality Gates
+all_wireframes_mapped: true
+all_fr_covered: true
+critical_flows_included: true
+design_consistency: high
+prd_alignment: 100%
+
+# Next Steps
+next_phase: "Phase 3 — Mid-Fidelity Mockups & Design System"
+next_command: "*document"
+
+# Timeline Estimate
+design_system_estimated_hours: 2-3
+mid_fi_mockups_estimated_hours: 4-6
+specification_detailed_estimated_hours: 4-6
+total_design_estimated_hours: 14-18
+
+# Status
+status: complete
+ready_for_development: true
+ready_for_user_testing: true
+handoff_ready: "pending design system"
+
+---
