@@ -243,6 +243,49 @@ button:disabled:hover {
   }
 }
 
+/* =============================================================================
+   CONFIRMATION MODAL — Story 4.6 (UX-008)
+   Uses <dialog> native element; backdrop provided by ::backdrop pseudo-element.
+   ============================================================================= */
+
+dialog#confirmModal {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: var(--space-lg);
+  max-width: 480px;
+  width: calc(100% - var(--space-xl));
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+dialog#confirmModal::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+dialog#confirmModal h2 {
+  margin-top: 0;
+  font-size: var(--font-size-xl);
+}
+
+dialog#confirmModal p {
+  margin-bottom: var(--space-lg);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.modal-actions button#confirmModalCancel {
+  background: var(--color-secondary);
+}
+
+.modal-actions button#confirmModalCancel:hover {
+  background: #5a6268;
+}
+
 /* --- Tablet: 768px to 1023px ----------------------------------------------- */
 @media (min-width: 768px) and (max-width: 1023px) {
   /* Allow main to grow but cap with a comfortable margin */

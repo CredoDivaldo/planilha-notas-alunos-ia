@@ -85,6 +85,20 @@
       </section>
     </main>
 
+    <!-- Confirmation modal — Story 4.6 (UX-008) -->
+    <dialog
+      id="confirmModal"
+      aria-labelledby="confirmModalTitle"
+      aria-modal="true"
+    >
+      <h2 id="confirmModalTitle">Confirmar envio</h2>
+      <p id="confirmModalMessage"></p>
+      <div class="modal-actions">
+        <button id="confirmModalCancel" type="button">Cancelar</button>
+        <button id="confirmModalConfirm" type="button">Confirmar envio</button>
+      </div>
+    </dialog>
+
     <!-- API key for authentication. Operators: set window.API_KEY to your API_KEY value -->
     <script>window.API_KEY = '';</script>
     <script src="/app.js"></script>

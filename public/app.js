@@ -379,6 +379,82 @@ stateInstanceBtn.addEventListener("click", async () => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Confirmation modal — Story 4.6 (UX-008)
+// ---------------------------------------------------------------------------
+
+/**
+ * Show a confirmation modal and return a Promise that resolves to true
+ * (user confirmed) or false (user cancelled / pressed Escape / clicked backdrop).
+ *
+ * Relies on the native <dialog> element's .showModal() API.
+ *
+ * @param {string} message - Descriptive text to show inside the modal
+ * @returns {Promise<boolean>}
+ */
+function showConfirmModal(message) {
+  const modal = document.getElementById("confirmModal");
+  const msgEl = document.getElementById("confirmModalMessage");
+  const confirmBtn = document.getElementById("confirmModalConfirm");
+  const cancelBtn = document.getElementById("confirmModalCancel");
+
+  msgEl.textContent = message;
+  modal.showModal();
+
+  // Focus trap: cycle between Cancel and Confirm buttons only (AC4)
+  const focusableEls = [cancelBtn, confirmBtn];
+
+  function trapFocus(event) {
+    if (event.key !== "Tab") return;
+    event.preventDefault();
+    const currentIndex = focusableEls.indexOf(document.activeElement);
+    const nextIndex = event.shiftKey
+      ? (currentIndex - 1 + focusableEls.length) % focusableEls.length
+      : (currentIndex + 1) % focusableEls.length;
+    focusableEls[nextIndex].focus();
+  }
+
+  modal.addEventListener("keydown", trapFocus);
+
+  return new Promise((resolve) => {
+    function cleanup(result) {
+      modal.removeEventListener("keydown", trapFocus);
+      modal.removeEventListener("click", handleBackdropClick);
+      confirmBtn.removeEventListener("click", onConfirm);
+      cancelBtn.removeEventListener("click", onCancel);
+      modal.removeEventListener("cancel", onNativeCancel);
+      modal.close();
+      // Return focus to the trigger button (AC5)
+      sendBtn.focus();
+      resolve(result);
+    }
+
+    // Close on backdrop click: event.target is the <dialog> itself when clicking
+    // outside the modal box (AC5)
+    function handleBackdropClick(event) {
+      if (event.target === modal) {
+        cleanup(false);
+      }
+    }
+
+    function onConfirm() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    // Native <dialog> cancel event fires on Escape key (AC5)
+    function onNativeCancel(event) {
+      event.preventDefault(); // prevent browser from closing before we resolve
+      cleanup(false);
+    }
+
+    modal.addEventListener("click", handleBackdropClick);
+    confirmBtn.addEventListener("click", onConfirm);
+    cancelBtn.addEventListener("click", onCancel);
+    modal.addEventListener("cancel", onNativeCancel);
+
+    // Initial focus on Cancelar (safer default for a destructive action)
+    cancelBtn.focus();
+  });
+}
+
 sendBtn.addEventListener("click", async () => {
   const dryRun = document.getElementById("dryRun").checked;
   const confirmReal = document.getElementById("confirmReal").checked;
@@ -413,6 +489,12 @@ sendBtn.addEventListener("click", async () => {
   }
 
   if (hasError) return;
+
+  // AC1: Show confirmation modal before executing bulk send (Story 4.6)
+  const confirmed = await showConfirmModal(
+    "Confirmas o envio de mensagens WhatsApp para todos os estudantes com match?"
+  );
+  if (!confirmed) return;
 
   sendResult.textContent = "A enviar...";
 
