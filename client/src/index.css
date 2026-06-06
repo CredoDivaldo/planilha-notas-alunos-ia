@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  /* Planilha Notas — Design Tokens */
+  --color-primary: #0D6EFD;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #475569;
+  --color-secondary-foreground: #ffffff;
+  --color-accent: #14B8A6;
+  --color-success: #15803D;
+  --color-warning: #B45309;
+  --color-destructive: #B91C1C;
+
+  /* Neutrals */
+  --color-background: #F8FAFC;
+  --color-foreground: #0F172A;
+  --color-muted: #CBD5E1;
+  --color-muted-foreground: #334155;
+  --color-border: #E2E8F0;
+  --color-card: #ffffff;
+  --color-card-foreground: #0F172A;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #0F172A;
+  --color-input: #E2E8F0;
+  --color-ring: #0D6EFD;
+
+  /* Spacing scale (base 4px) */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  --spacing-3xl: 64px;
+
+  /* Typography */
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Radius */
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Focus visible ring — WCAG AA */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}

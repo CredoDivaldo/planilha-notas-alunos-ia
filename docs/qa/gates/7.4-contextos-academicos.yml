@@ -1,0 +1,39 @@
+storyId: "7.4"
+storyName: "Contextos Académicos (Tela 04)"
+verdict: CONCERNS
+checkedAt: "2026-06-06"
+checkedBy: "@qa (Quinn)"
+issues:
+  - severity: low
+    category: code
+    description: >
+      Focus trap em ContextModal.tsx captura a lista de elementos focusáveis (querySelectorAll)
+      uma única vez no useEffect de abertura do modal. Se o utilizador adicionar linhas de
+      componentes de avaliação enquanto o modal está aberto, os novos inputs não ficam incluídos
+      no ciclo Tab/Shift+Tab até o modal fechar e reabrir.
+    recommendation: >
+      Mover o querySelectorAll para dentro do handler handleKeyDown (chamado em cada keypress)
+      para recalcular a lista de focusáveis dinamicamente. Alternativa: usar uma biblioteca de
+      focus-trap (e.g. focus-trap-react) que faz isso automaticamente.
+
+  - severity: low
+    category: code
+    description: >
+      O fluxo de edição (PUT /academic-contexts/{id}) não tem fallback mock quando a API
+      está indisponível, ao contrário do fluxo de criação. Numa sessão sem backend, editar
+      um contexto exibe o backendError no modal e não actualiza a tabela localmente.
+    recommendation: >
+      Adicionar fallback mock no bloco catch do edit (semelhante ao create), ou documentar
+      explicitamente que o modo edit requer backend activo. Consistência com o comportamento
+      do create é preferível para demos offline.
+
+  - severity: medium
+    category: tests
+    description: >
+      Sem testes unitários ou de integração. vitest não está configurado no projecto (concern
+      herdado de 7.1/7.2). A lógica crítica de validação de pesos (isWeightValid, hasComponents),
+      focus trap, e filtragem useMemo não tem cobertura automatizada.
+    recommendation: >
+      Configurar vitest + React Testing Library numa story de infra dedicada (ou como task de
+      7.5/7.6). Priorizar testes para: (1) validação de pesos 100%, (2) filtros client-side,
+      (3) modal submit com dados válidos/inválidos.

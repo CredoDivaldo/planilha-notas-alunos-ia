@@ -1,0 +1,67 @@
+schema: 1
+story: '7.2'
+gate: PASS
+status_reason: >
+  All 15 acceptance criteria verified against implementation. Build and lint pass (0 errors,
+  153 modules). Two non-blocking concerns carried forward: unit tests (vitest not configured,
+  inherited from 7.1) and localStorage token storage (intentional MVP decision). One new
+  low-severity code pattern noted (navigate during render). No high-severity issues found.
+reviewer: Quinn
+updated: '2026-06-06T08:00:00Z'
+checks:
+  code_review: PASS
+  unit_tests: CONCERNS
+  acceptance_criteria: PASS
+  no_regressions: PASS
+  performance: PASS
+  security: CONCERNS
+  documentation: PASS
+top_issues:
+  - severity: low
+    category: code
+    description: >
+      AC15 guard calls navigate() synchronously during render (not inside useEffect). This is
+      a React anti-pattern that can trigger "Cannot update a component while rendering" warnings
+      in React Strict Mode. Functional in production but may produce console noise during
+      development.
+    recommendation: >
+      Wrap the navigate() call in a useEffect with [isAuthenticated, requiresPasswordChange,
+      currentRole] dependency array, returning null unconditionally from render. This is a
+      follow-up cleanup item — does not block Story 7.2 delivery.
+  - severity: low
+    category: code
+    description: >
+      Tab URL update uses window.history.replaceState directly instead of React Router's
+      useSearchParams hook. Functional, but bypasses React Router's state tracking and
+      may cause edge-case desyncs if other components read location.search via React Router.
+    recommendation: >
+      Refactor to use useSearchParams from react-router-dom for idiomatic URL management.
+      Low priority for MVP.
+  - severity: medium
+    category: tests
+    description: >
+      T10 incomplete — vitest not configured. Unit tests for client-side validation logic,
+      role-based redirect, and loading state cannot run. Carried forward from 7.1 gate.
+    recommendation: >
+      Configure vitest + @testing-library/react in a follow-up story. LoginPage has clear
+      testable units: canSubmit logic, handleSubmit error branches, canChangePassword guard.
+  - severity: medium
+    category: security
+    description: >
+      Password requirements (min 8 chars, uppercase) are validated client-side only. Backend
+      enforcement is not visible from the frontend code. If the backend does not mirror these
+      rules, a malformed password could be accepted server-side.
+    recommendation: >
+      Confirm POST /auth/change-password on the backend enforces the same password policy.
+      Backend validation is mandatory — client-side is enhancement only. Document backend
+      enforcement in Dev Notes if not already present.
+  - severity: medium
+    category: security
+    description: >
+      Auth token stored in localStorage (XSS-accessible). Intentional MVP design choice
+      carried from 7.1 gate. apiFetch reads token from localStorage directly rather than
+      via AuthContext.
+    recommendation: >
+      Carry forward from 7.1: consider migrating to httpOnly cookies post-MVP.
+waiver:
+  active: false
