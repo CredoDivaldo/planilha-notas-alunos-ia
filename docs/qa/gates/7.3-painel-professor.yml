@@ -1,0 +1,145 @@
+storyId: "7.3"
+storyName: "Painel Operacional do Professor (Tela 01)"
+verdict: CONCERNS
+checkedAt: "2026-06-06"
+checkedBy: "@qa (Quinn)"
+sprint: 2
+points: 5
+buildStatus: PASS
+lintStatus: PASS
+
+checks:
+  - id: check-1
+    name: Code review
+    result: CONCERNS
+    severity: low
+    details: >
+      useReducer with PanelState is an appropriate and idiomatic choice for a 5-step state machine.
+      The stepReducer is clean and deterministic — transitions are pure functions (completeStep,
+      errorStep). The setTimeout(0) deferral in the Step 4 QR countdown useEffect is a valid
+      workaround to avoid "Cannot update a component while rendering a different component"
+      React 18 warnings — it is not ideal (a ref flag would be cleaner) but is safe and well-scoped
+      with proper cleanup. Minor concern: the eslint-disable-next-line react-hooks/exhaustive-deps
+      comment on the QR effect is justified (intentional dependency on status only) but could be
+      replaced by a custom hook to avoid future drift. Overall patterns are correct.
+
+  - id: check-2
+    name: Unit tests
+    result: CONCERNS
+    severity: medium
+    details: >
+      WAIVER applied (inherited from Stories 7.1–7.4). vitest is not configured for this project.
+      State gating logic (stepReducer, completeStep, errorStep) is pure and highly testable —
+      zero coverage is a known concern. The waiver is accepted per team decision but should be
+      resolved in a dedicated testing setup story.
+
+  - id: check-3
+    name: Acceptance criteria
+    result: CONCERNS
+    severity: low
+    details: >
+      16/17 ACs are fully implemented and verified in code.
+      AC concern (non-blocking): AC11 specifies "polling a cada 5s para verificar estado (mock:
+      auto-conecta após 8s)". The 5s polling interval is documented in UI text but no actual
+      setInterval at 5s runs for WhatsApp connection polling — the auto-connect is a one-shot
+      setTimeout(8000). The sidebar WhatsApp polling runs at 30s (correct per AC16). This is
+      a minor fidelity gap vs the AC wording for Step 4 sub-step polling, classified as low
+      severity because the mock behaviour (auto-connect at 8s) is functionally equivalent and
+      avoids unnecessary API calls.
+
+  - id: check-4
+    name: No regressions
+    result: CONCERNS
+    severity: low
+    details: >
+      All 8 new files are additive. AppHeader and FileDropzone are reused without modification
+      (confirmed by file review). Router correctly registers /painel → ProfessorDashboardPage.
+      Minor concern: AppHeader nav links /notas, /calendario, and /publicar have no registered
+      Route entries in router/index.tsx — clicking them redirects to "/" via catch-all. This
+      pre-existing issue (stubs for Stories 7.5/7.7/7.8) does not constitute a regression
+      introduced by this story, but nav links currently produce silent redirects.
+      DashboardLayout (T02) was listed in Dev Notes inventory but is not present in client/src/layouts/
+      — the page uses inline layout instead. This is an acceptable deviation (no functional impact).
+
+  - id: check-5
+    name: Performance
+    result: PASS
+    details: >
+      All setInterval instances have corresponding clearInterval in useEffect cleanup functions
+      (countdownRef in DashboardPage, pollingRef in QuickStatsSidebar). The setTimeout(0) init
+      timers also have clearTimeout in cleanup. sessionStorage reads are bounded (2 keys:
+      active_context_id, painel_step_states). The QR countdown updates state at 1Hz max —
+      no unbounded re-render risk. QuickStatsSidebar polling at 30s is appropriate. No
+      performance concerns identified.
+
+  - id: check-6
+    name: Security
+    result: PASS
+    details: >
+      All authenticated endpoints use Authorization Bearer token from localStorage (getAuthToken()
+      helper, also used via apiFetch). multipart/form-data uploads (Steps 1 and 2) correctly
+      attach the Authorization header without setting Content-Type (letting the browser set
+      the multipart boundary automatically). JSON endpoints use apiFetch which sets
+      Content-Type: application/json. No user-controlled HTML is injected into the DOM —
+      broadcastMessage is bound to a textarea value (React escapes it). No XSS vectors identified.
+      Checkbox gate on Envio Real confirmation prevents accidental destructive actions.
+
+  - id: check-7
+    name: Documentation
+    result: CONCERNS
+    severity: low
+    details: >
+      Story file is updated with all 15 Tasks [x] and all 17 ACs [x]. File List is correct.
+      Change Log has entries for @sm, @po, and @dev. Two accessibility gaps vs story spec not
+      documented as known deviations: (1) StepCard div has no role="region" or aria-labelledby
+      (story spec requires it); (2) TableHead elements have no scope="col" attribute (shadcn
+      TableHead uses ...props spread but callers do not pass scope). These are minor a11y
+      deviations — story does not explicitly mark them as waivers.
+
+issues:
+  - severity: low
+    category: accessibility
+    description: >
+      StepCard renders as <div> without role="region" or aria-labelledby. Story spec
+      (Dev Notes > Acessibilidade) requires role="region" + aria-labelledby pointing
+      to the step title. aria-current="step" is present on the outer div but role is missing.
+    recommendation: >
+      Add role="region" to the StepCard root div and an id to the title span.
+      Add aria-labelledby={`step-${stepNumber}-title`} to the root div.
+
+  - severity: low
+    category: accessibility
+    description: >
+      TableHead elements in the Step 3 match table (and the "Ver todos" dialog table) do
+      not have scope="col". Story spec specifies <th scope="col"> in all columns.
+    recommendation: >
+      Pass scope="col" to each TableHead: <TableHead scope="col">. shadcn TableHead
+      supports ...props spread so this works without component changes.
+
+  - severity: low
+    category: requirements
+    description: >
+      AC11 specifies polling every 5s for WhatsApp connection status during Step 4.
+      Implementation uses a one-shot setTimeout(8000) for auto-connect mock but no
+      5s polling interval. Functionally equivalent for the mock scenario.
+    recommendation: >
+      Add a 5s setInterval (cleared when connected) to match AC11 literal wording,
+      or update AC11 wording to reflect the implemented approach.
+
+  - severity: low
+    category: code
+    description: >
+      Router (router/index.tsx) is missing routes for /notas, /calendario, and /publicar.
+      Clicking these AppHeader nav links silently redirects to "/" via catch-all.
+      Pre-existing issue — not introduced by Story 7.3 — but warrants tracking.
+    recommendation: >
+      Register stub routes for /notas, /calendario, /publicar in router/index.tsx,
+      pointing to the pages being built in Stories 7.5, 7.7, 7.8.
+
+verdict_rationale: >
+  Build PASS, Lint PASS. 16/17 ACs confirmed in code (AC11 has minor fidelity gap).
+  All functional flows are correctly implemented: 5-step state machine, fallback mocks,
+  sessionStorage persistence, aria-live on StatCards, confirmation modal with checkbox
+  guard, broadcast integration, sidebar polling with cleanup. The 4 issues identified
+  are all LOW severity and non-blocking. No HIGH or CRITICAL findings. Verdict: CONCERNS
+  (approved with observations).
