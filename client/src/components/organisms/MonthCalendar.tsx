@@ -1,5 +1,6 @@
 // MonthCalendar — monthly grid with EventDots, month navigation, tooltip on event click
 // T5 — reusable component (Story 7.6, Story 7.8)
+// Story 7.8 — adapted: added allowEdit and onEventClick props (backward-compatible)
 
 import { useState } from 'react'
 import { EventDot } from '@/components/molecules/EventDot'
@@ -8,6 +9,12 @@ import { eventColorTextClass } from '@/components/molecules/EventDot'
 
 interface MonthCalendarProps {
   events: CalendarEvent[]
+  /** Enable click-to-select events for edit/detail panel. default: false */
+  allowEdit?: boolean
+  /** Callback when an event dot is clicked (requires allowEdit=true or will also fire for read-only) */
+  onEventClick?: (event: CalendarEvent) => void
+  /** Currently selected event id, controlled from parent when allowEdit=true */
+  selectedEventId?: string | null
 }
 
 const WEEKDAY_LABELS = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D']
@@ -30,21 +37,29 @@ function getFirstWeekday(year: number, month: number): number {
   return (d + 6) % 7
 }
 
-export function MonthCalendar({ events }: MonthCalendarProps) {
+export function MonthCalendar({
+  events,
+  allowEdit = false,
+  onEventClick,
+  selectedEventId,
+}: MonthCalendarProps) {
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
-  const [activeEvent, setActiveEvent] = useState<CalendarEvent | null>(null)
+  // Internal active event used only when no external onEventClick provided (Story 7.6 compat)
+  const [internalActiveEvent, setInternalActiveEvent] = useState<CalendarEvent | null>(null)
+
+  const activeEvent = onEventClick ? null : internalActiveEvent
 
   const prevMonth = () => {
     if (month === 0) { setYear(y => y - 1); setMonth(11) }
     else setMonth(m => m - 1)
-    setActiveEvent(null)
+    setInternalActiveEvent(null)
   }
   const nextMonth = () => {
     if (month === 11) { setYear(y => y + 1); setMonth(0) }
     else setMonth(m => m + 1)
-    setActiveEvent(null)
+    setInternalActiveEvent(null)
   }
 
   const daysInMonth = getDaysInMonth(year, month)
@@ -124,18 +139,32 @@ export function MonthCalendar({ events }: MonthCalendarProps) {
               </span>
               {dayEvents.length > 0 && (
                 <div className="flex flex-wrap justify-center gap-0.5">
-                  {dayEvents.slice(0, 3).map((ev) => (
-                    <button
-                      key={ev.id}
-                      type="button"
-                      title={[ev.title, ev.time, ev.location].filter(Boolean).join(' · ')}
-                      aria-label={`${dateStr} - ${ev.title}`}
-                      onClick={() => setActiveEvent(prev => prev?.id === ev.id ? null : ev)}
-                      className="focus:outline-none"
-                    >
-                      <EventDot event={ev} showTooltip={false} />
-                    </button>
-                  ))}
+                  {dayEvents.slice(0, 3).map((ev) => {
+                    const isSelected = selectedEventId === ev.id
+                    return (
+                      <button
+                        key={ev.id}
+                        type="button"
+                        title={[ev.title, ev.time, ev.location].filter(Boolean).join(' · ')}
+                        aria-label={`${dateStr} - ${ev.title}`}
+                        aria-pressed={isSelected}
+                        onClick={() => {
+                          if (onEventClick) {
+                            onEventClick(ev)
+                          } else {
+                            setInternalActiveEvent(prev => prev?.id === ev.id ? null : ev)
+                          }
+                        }}
+                        className={[
+                          'focus:outline-none',
+                          (allowEdit || onEventClick) ? 'cursor-pointer' : '',
+                          isSelected ? 'ring-2 ring-offset-1 ring-current rounded-full' : '',
+                        ].join(' ')}
+                      >
+                        <EventDot event={ev} showTooltip={false} />
+                      </button>
+                    )
+                  })}
                   {dayEvents.length > 3 && (
                     <span className="text-[9px] text-slate-400">+{dayEvents.length - 3}</span>
                   )}
