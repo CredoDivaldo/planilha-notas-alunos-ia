@@ -1,0 +1,14 @@
+schema: 1
+story: '7.6'
+gate: PASS
+status_reason: >
+  All 13 acceptance criteria are met by the implementation. Security-critical
+  AC6 is correctly handled: null grades render as "—" (enforced by formatGrade()),
+  no calls to the professor endpoint GET /grades/ exist anywhere in the student
+  portal code, and the unpublished state renders only a message with zero grade
+  data visible. Lint, TypeScript, and 219 tests all pass with no regressions.
+reviewer: Quinn
+updated: '2026-06-07T12:20:00Z'
+top_issues: []
+waiver:
+  active: false

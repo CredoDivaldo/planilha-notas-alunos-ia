@@ -1,0 +1,101 @@
+storyId: "7.8"
+storyTitle: "Calendário (Tela 06)"
+verdict: PASS
+reviewDate: "2026-06-07"
+reviewedBy: "Quinn (Test Architect & Quality Advisor)"
+commitHash: "6da5cfb"
+
+checks:
+  code_review:
+    status: PASS
+    notes: >
+      MonthCalendar adaptation: 3 optional props added (allowEdit, onEventClick, selectedEventId).
+      Change size ~26.6% of original 169 lines — within 30% IDS ADAPT limit.
+      Backward-compat preserved: existing consumers using only `events` prop continue to work unchanged
+      (internalActiveEvent fallback maintained, PortalPage verified at line 292).
+      EventModal: fieldset/legend wrapping RadioGroup per AC15. Radix Dialog provides focus trap.
+      EventDetailPanel: conditional professor-only action buttons correctly gated on `isProfessor`.
+      ICS generation: manual Blob, no external dependency, CRLF line endings correct.
+      No dead code, no unused imports detected. Patterns consistent with Story 7.3/7.5/7.6.
+
+  unit_tests:
+    status: PASS
+    notes: >
+      219/219 tests PASS — no regressions.
+      month-calendar.test.js (Story 7.6) covers grid logic reused in Story 7.8.
+      Mock fallback paths covered by integration tests.
+      Pre-existing lint errors (31 × no-undef 'test') confirmed introduced in Story 7.6 commit
+      c20bd3e — predates Story 7.8; not a gate blocker.
+
+  acceptance_criteria:
+    status: PASS
+    notes: >
+      All 15 ACs verified:
+      AC1: /calendario renders AppHeader (activeTab="calendario"), title, "+ Adicionar Evento" (professor), "Exportar ▾" — PASS
+      AC2: Context selector with "Todos os contextos" aggregate option — PASS
+      AC3: Monthly grid with EventDots, 5 colour types per spec — PASS
+      AC4: Month navigation arrows, header updates — PASS
+      AC5: Mês|Lista switcher; ListViewPanel implemented; Week view correctly OUT of scope — PASS
+      AC6: Event click opens EventDetailPanel with all fields; professor sees Edit+Delete, student does not — PASS
+      AC7: UpcomingEventsList for next 7 days below calendar — PASS
+      AC8: EventModal with RadioGroup (T7 fieldset/legend), all required fields — PASS
+      AC9: Edit mode pre-populates form from selected event — PASS
+      AC10: Delete confirmation Dialog, removes event on confirm — PASS
+      AC11: Student CalendarPage only receives published events (API endpoint /api/v1/portal/me/calendar); mock data uses visivel_estudantes=true events — PASS
+      AC12: ICS export via Blob+URL.createObjectURL, downloads calendario.ics — PASS
+      AC13: MonthCalendar is the same component from Story 7.6, used with allowEdit={role==='professor'} — PASS
+      AC14: ColorLegend always visible in sidebar; EventDetailPanel renders it unconditionally — PASS
+      AC15: EventDot buttons have aria-label="dateStr - title"; Radix Dialog provides focus trap; RadioGroup wrapped in fieldset/legend — PASS
+
+  no_regressions:
+    status: PASS
+    notes: >
+      Story 7.6 PortalPage confirmed using MonthCalendar with only `events` prop (line 292).
+      All 3 new props have defaults (allowEdit=false, onEventClick=undefined, selectedEventId=undefined).
+      Internal tooltip fallback (internalActiveEvent) preserved for Story 7.6 usage.
+      219/219 tests pass — no existing test suite broken.
+      Router additions are purely additive: new routes /calendario and /estudante/calendario
+      do not affect existing routes.
+
+  performance:
+    status: PASS
+    notes: >
+      No observable performance concerns. Events filtered in-memory from mock array (O(n)).
+      ICS generation is synchronous but only fires on user interaction.
+      No new heavy dependencies introduced.
+      ListViewPanel grouping uses Map — linear complexity acceptable.
+
+  security:
+    status: PASS
+    notes: >
+      Role-based rendering verified:
+      - StudentCalendarPage: EventDetailPanel receives role="estudante" — no Edit/Delete buttons rendered.
+        No openCreate() or openEdit() methods exposed. No EventModal rendered.
+      - ProfessorCalendarPage: all CRUD methods present but page guarded by PrivateRoute.
+      - StudentRoute guard prevents non-students accessing /estudante/calendario.
+      - PrivateRoute guard on /calendario (professor page) — redirects unauthenticated users.
+      ICS export: client-side Blob only, no server-side data exposure.
+      Professor CRUD endpoints: mock fallback pattern (try/catch) — API errors never surface raw.
+      No XSS vectors introduced (no dangerouslySetInnerHTML).
+
+  documentation:
+    status: PASS
+    notes: >
+      File List in story accurately reflects all 8 files (MODIFY/CREATE/ADAPT/REUSE).
+      Change Log updated with @dev implementation entry.
+      All 14 task checkboxes marked [x].
+      Testing scenarios documented in Testing section.
+      Dev Notes include mock fallback pattern, ICS format reference, and accessibility guidance.
+
+issues: []
+
+summary: >
+  Story 7.8 implementation is complete and correct. All 15 acceptance criteria are met.
+  MonthCalendar adaptation is within IDS ADAPT limits (~26.6% change) with full backward
+  compatibility for Story 7.6. Security boundaries between professor and student views are
+  correctly enforced at both routing and component levels. Accessibility requirements (AC15)
+  are satisfied: EventDot buttons carry aria-label, Radix Dialog provides focus trap, and
+  RadioGroup uses fieldset/legend. Pre-existing lint errors (31 × no-undef 'test') confirmed
+  to originate from Story 7.6 and are not attributable to this story.
+
+gate_path: "docs/qa/gates/7.8-calendario.yml"

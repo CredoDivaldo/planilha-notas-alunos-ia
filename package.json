@@ -12,6 +12,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "quality": "npm run test && npm run lint && npm run typecheck",
     "prepare": "husky",
+    "client:dev": "npm run dev --prefix client",
+    "client:build": "npm run build --prefix client",
+    "client:install": "npm install --prefix client",
     "evolution:up": "docker compose -f docker-compose.evolution.yml up -d",
     "evolution:down": "docker compose -f docker-compose.evolution.yml down",
     "evolution:logs": "docker compose -f docker-compose.evolution.yml logs -f evolution_api"

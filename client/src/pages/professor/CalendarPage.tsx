@@ -223,7 +223,7 @@ export default function CalendarPage() {
   // Filtered events by context
   const filteredEvents = selectedContextId === 'todos'
     ? events
-    : events.filter((ev) => {
+    : events.filter(() => {
         // Events don't carry context_id in CalendarEvent type — show all in mock
         return true
       })
