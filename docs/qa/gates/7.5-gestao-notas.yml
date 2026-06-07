@@ -1,0 +1,103 @@
+storyId: "7.5"
+storyTitle: "Gestão de Notas (Tela 05)"
+verdict: CONCERNS
+reviewedAt: "2026-06-07"
+reviewer: "@qa (Quinn)"
+checks:
+  code_review: concerns
+  unit_tests: waived
+  acceptance_criteria: concerns
+  no_regressions: pass
+  performance: pass
+  security: pass
+  documentation: pass
+
+issues:
+  - severity: medium
+    category: code
+    description: >
+      handleGradeUpdate em GradesPage.tsx silencia todos os erros com .catch(() => {}).
+      Quando PATCH /grades/{id} falha em produção, a Promise resolvida faz com que o
+      try/catch em GradeTable.confirmEdit() nunca entre no catch — o cellStatus nunca
+      transita para 'error' e nenhuma mensagem de erro inline é exibida. O requisito AC5
+      ("estado error em falha") fica inatingível em produção.
+    recommendation: >
+      Remover o .catch(() => {}) de handleGradeUpdate e deixar o erro propagar.
+      O bloco catch de GradeTable.confirmEdit() irá capturá-lo correctamente e definir
+      cellStatus[key] = 'error' + cellError[key] = mensagem. Em modo mock/demo,
+      a lógica de fallback pode ser movida para dentro do próprio GradeTable ou
+      para um middleware de apiFetch.
+
+  - severity: low
+    category: code
+    description: >
+      useState(() => { loadData() }) em GradesPage.tsx é um abuso do API de lazy initializer
+      do React. A lazy initializer serve para computar o estado inicial de forma barata — não
+      para disparar side effects assíncronos. Em React StrictMode (activo em main.tsx), o
+      comportamento é imprevisível: o initializer corre uma vez (React desdup. state init),
+      mas a semântica correcta de "executar uma vez no mount" pertence a useEffect(() => {
+      loadData() }, [loadData]). O padrão actual passa nos testes de build/lint apenas porque
+      o ESLint não analisa o corpo do lazy initializer como side effect.
+    recommendation: >
+      Substituir useState(() => { loadData() }) por useEffect(() => { loadData() }, [loadData]).
+      Mover loadData para fora do useCallback ou garantir que a dependência [loadData] esteja
+      correcta. Esta é a forma idiomática e StrictMode-safe de disparar data fetching no mount.
+
+  - severity: low
+    category: code
+    description: >
+      filteredRows em GradeTable.tsx é recalculado em cada render via cálculo inline (sem
+      useMemo). Com turmas de 60+ alunos e 5+ componentes, cada keystroke no SearchBar
+      dispara o filtro + sort + getRowBadgeLabel + calcNotaFinal para todos os rows.
+      Embora não seja bloqueante para a story actual (mock com 6 alunos), representa uma
+      degradação de performance previsível em produção.
+    recommendation: >
+      Envolver filteredRows em useMemo([rows, filterText, filterStatus, sortBy, contextItem])
+      — padrão já usado no resto do codebase (GradesPage.tsx stats, incompleteCount).
+
+  - severity: low
+    category: code
+    description: >
+      O botão "💾 Guardar alterações" está hardcoded como disabled={true} e aria-disabled="true"
+      sem lógica de estado. AC2 especifica "desactivado quando não há modificações pendentes",
+      o que implica que o botão deveria activar-se quando há edições confirmadas mas não
+      guardadas em batch. A implementação actual resolveu isto tornando cada edição
+      uma gravação imediata (PATCH individual), o que é coerente — mas o botão permanece
+      sempre desactivado mesmo depois de edições, o que pode confundir o utilizador.
+    recommendation: >
+      Documentar na story (Dev Notes) que a abordagem é PATCH imediato por célula, e o botão
+      "Guardar alterações" foi mantido na UI para coerência visual com o wireframe mas é
+      intencionalmente inoperante. Alternativa: remover o botão ou substituir por um indicador
+      de "Todas as alterações guardadas".
+
+  - severity: low
+    category: code
+    description: >
+      O botão "🧮 Recalcular" executa apenas showStatus('Notas finais recalculadas', 'success')
+      sem recalcular efectivamente nenhum valor. O cálculo de Nota Final é automático via
+      calcNotaFinal (AC6 satisfeito), mas o botão emite feedback falso — sugere ao utilizador
+      que algo foi recalculado quando nenhuma operação foi executada.
+    recommendation: >
+      Ou (a) remover o onClick fictício e disparar um reload real dos dados via loadData(),
+      ou (b) documentar explicitamente que "Recalcular" força um reload da API e implementar
+      essa lógica.
+
+  - severity: medium
+    category: tests
+    description: >
+      Sem testes unitários ou de integração. vitest não está configurado no projecto (concern
+      herdado de stories 7.1–7.4). A lógica crítica de calcNotaFinal, getRowBadgeLabel,
+      confirmEdit (validação 0–20), e filtros client-side não tem cobertura automatizada.
+      Em particular, o bug de AC5 (error state swallowed) não teria sido introduzido se
+      existissem testes para o fluxo de PATCH com erro.
+    recommendation: >
+      Configurar vitest + React Testing Library numa story de infra dedicada (tech debt).
+      Priorizar: (1) calcNotaFinal/getRowBadgeLabel, (2) confirmEdit validação e error path,
+      (3) filtros useMemo.
+
+notes:
+  - "Build: PASS (built in 847ms). Lint: PASS (0 erros)."
+  - "15/15 ACs marcados como implementados. AC5 tem implementação parcialmente defeituosa (ver issue medium acima)."
+  - "WCAG AA: scope=col/row presentes, aria-label em inputs de edição, aria-modal no dialog CSV, focus trap implementado."
+  - "Waiver de unit tests herdado de stories anteriores 7.1–7.4 mantido (vitest não configurado)."
+  - "Veredicto CONCERNS (não FAIL): o bug de AC5 afecta o error state mas a funcionalidade core de edição e gravação funciona correctamente."

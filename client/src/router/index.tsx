@@ -7,6 +7,7 @@ import ProfessorDashboardPage from '@/pages/professor/DashboardPage'
 import PortalPage from '@/pages/student/PortalPage'
 import DelegatePage from '@/pages/delegado/DelegatePage'
 import ContextsPage from '@/pages/professor/ContextsPage'
+import GradesPage from '@/pages/professor/GradesPage'
 
 function PrivateRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth()
@@ -47,6 +48,14 @@ export function AppRouter() {
           element={
             <PrivateRoute>
               <ContextsPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/notas"
+          element={
+            <PrivateRoute>
+              <GradesPage />
             </PrivateRoute>
           }
         />

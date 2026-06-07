@@ -41,3 +41,23 @@ export interface ContextItem {
   delegado: Delegado | null
   components: GradeComponent[]
 }
+
+export interface GradeValue {
+  gradeId: string
+  value: number | null
+}
+
+export interface StudentRow {
+  studentId: string
+  studentNumber: string
+  studentName: string
+  components: Record<string, GradeValue>
+  published: boolean
+}
+
+export interface ImportHistoryEntry {
+  id: string
+  componentName: string
+  timestamp: string
+  count: number
+}

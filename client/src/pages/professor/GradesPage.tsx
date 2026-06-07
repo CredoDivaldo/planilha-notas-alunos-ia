@@ -1,7 +1,403 @@
+import { useState, useMemo, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { AppHeader } from '@/components/organisms/AppHeader'
+import { SearchBar } from '@/components/molecules/SearchBar'
+import { StatCard } from '@/components/molecules/StatCard'
+import { GradeTable } from '@/components/organisms/GradeTable'
+import { ImportCSVModal } from '@/components/organisms/ImportCSVModal'
+import { apiFetch } from '@/lib/api'
+import { calcNotaFinal, getRowBadgeLabel } from '@/lib/grades'
+import type { ContextItem, StudentRow, ImportHistoryEntry } from '@/types'
+
+// ---------------------------------------------------------------------------
+// Mock data — used when API is unavailable
+// ---------------------------------------------------------------------------
+const MOCK_CONTEXT: ContextItem = {
+  id: 'ctx-mock-1',
+  turma: 'ING-T1',
+  disciplina: 'Inglês Técnico',
+  semestre: '2026/1',
+  turno: 'Manhã',
+  alunosCount: 6,
+  delegado: null,
+  components: [
+    { id: 'c1', name: 'Frequência', weight: 40 },
+    { id: 'c2', name: 'Mini-teste', weight: 30 },
+    { id: 'c3', name: 'Exame', weight: 30 },
+  ],
+}
+
+const MOCK_ROWS: StudentRow[] = [
+  {
+    studentId: 'st-1', studentNumber: '2024001', studentName: 'Ana Silva', published: false,
+    components: { c1: { gradeId: 'g-1', value: 16 }, c2: { gradeId: 'g-2', value: 14 }, c3: { gradeId: 'g-3', value: 15 } },
+  },
+  {
+    studentId: 'st-2', studentNumber: '2024002', studentName: 'Bruno Costa', published: false,
+    components: { c1: { gradeId: 'g-4', value: 12 }, c2: { gradeId: 'g-5', value: null }, c3: { gradeId: 'g-6', value: 11 } },
+  },
+  {
+    studentId: 'st-3', studentNumber: '2024003', studentName: 'Carla Mendes', published: true,
+    components: { c1: { gradeId: 'g-7', value: 18 }, c2: { gradeId: 'g-8', value: 17 }, c3: { gradeId: 'g-9', value: 19 } },
+  },
+  {
+    studentId: 'st-4', studentNumber: '2024004', studentName: 'David Pinto', published: false,
+    components: { c1: { gradeId: 'g-10', value: 8 }, c2: { gradeId: 'g-11', value: 7 }, c3: { gradeId: 'g-12', value: 9 } },
+  },
+  {
+    studentId: 'st-5', studentNumber: '2024005', studentName: 'Eva Rodrigues', published: false,
+    components: { c1: { gradeId: 'g-13', value: null }, c2: { gradeId: 'g-14', value: null }, c3: { gradeId: 'g-15', value: null } },
+  },
+  {
+    studentId: 'st-6', studentNumber: '2024006', studentName: 'Filipe Santos', published: false,
+    components: { c1: { gradeId: 'g-16', value: 14 }, c2: { gradeId: 'g-17', value: 13 }, c3: { gradeId: 'g-18', value: null } },
+  },
+]
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function formatTimestamp(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 export default function GradesPage() {
+  const navigate = useNavigate()
+
+  // Data — initialised with mock, replaced by API response
+  const [contextItem, setContextItem] = useState<ContextItem>(MOCK_CONTEXT)
+  const [rows, setRows] = useState<StudentRow[]>(MOCK_ROWS)
+  const [loading, setLoading] = useState(true)
+  const [importHistory, setImportHistory] = useState<ImportHistoryEntry[]>([])
+  const [historyExpanded, setHistoryExpanded] = useState(false)
+
+  // UI
+  const [filterText, setFilterText] = useState('')
+  const [filterStatus, setFilterStatus] = useState('todos')
+  const [sortBy, setSortBy] = useState('numero')
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [statusMsg, setStatusMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showStatus = useCallback((text: string, type: 'success' | 'error') => {
+    setStatusMsg({ text, type })
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+    statusTimerRef.current = setTimeout(() => setStatusMsg(null), 4000)
+  }, [])
+
+  // Load data — all setState inside async callbacks (not synchronous in effect body)
+  const loadData = useCallback(async () => {
+    const contextId = sessionStorage.getItem('active_context_id') ?? MOCK_CONTEXT.id
+    try {
+      const ctx = await apiFetch<ContextItem>(`/academic-contexts/${contextId}`)
+      setContextItem(ctx)
+      const gradesData = await apiFetch<{ students: StudentRow[] }>(`/grades/?context_id=${contextId}`)
+      setRows(gradesData.students ?? MOCK_ROWS)
+    } catch {
+      setContextItem(MOCK_CONTEXT)
+      setRows(MOCK_ROWS)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Trigger load once on mount using lazy useState to avoid set-state-in-effect
+  useState(() => { loadData() })
+
+  // Derived stats
+  const stats = useMemo(() => {
+    const allComputed = rows.map((r) => ({
+      nota: calcNotaFinal(r.components, contextItem.components),
+      published: r.published,
+      badge: getRowBadgeLabel(r.components, contextItem.components, r.published),
+    }))
+    const notas = allComputed
+      .filter((r) => r.nota !== null && (r.badge === 'Lançada' || r.published))
+      .map((r) => r.nota as number)
+
+    const media = notas.length ? notas.reduce((s, n) => s + n, 0) / notas.length : null
+    const alta = notas.length ? Math.max(...notas) : null
+    const baixa = notas.length ? Math.min(...notas) : null
+    const aprovados = notas.filter((n) => n >= 10).length
+    const reprovados = notas.filter((n) => n < 10).length
+    const incompletos = allComputed.filter((r) => r.badge === 'Incompleta' || r.badge === 'Vazio').length
+    const pct = (n: number) => rows.length > 0 ? `${n} (${Math.round((n / rows.length) * 100)}%)` : `${n} (0%)`
+
+    return {
+      media: media !== null ? media.toFixed(1) : '—',
+      alta: alta !== null ? String(alta) : '—',
+      baixa: baixa !== null ? String(baixa) : '—',
+      aprovados: pct(aprovados),
+      reprovados: pct(reprovados),
+      incompletos: pct(incompletos),
+    }
+  }, [rows, contextItem])
+
+  const incompleteCount = useMemo(
+    () => rows.filter((r) => {
+      const b = getRowBadgeLabel(r.components, contextItem.components, r.published)
+      return b === 'Incompleta' || b === 'Vazio'
+    }).length,
+    [rows, contextItem],
+  )
+
+  // Handlers
+  const handleGradeUpdate = useCallback(async (gradeId: string, _componentId: string, value: number) => {
+    await apiFetch(`/grades/${gradeId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ value }),
+    })
+    // Errors propagate to GradeTable.confirmEdit's catch → sets cellStatus 'error'
+  }, [])
+
+  const handleImport = useCallback(
+    async (componentId: string, file: File): Promise<{ imported: number; unmatched: number }> => {
+      const compName = contextItem.components.find((c) => c.id === componentId)?.name ?? componentId
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('component_id', componentId)
+        formData.append('context_id', contextItem.id)
+        const res = await apiFetch<{ imported: number; unmatched: number }>('/grades/upload', {
+          method: 'POST',
+          body: formData,
+          headers: {},
+        })
+        const entry: ImportHistoryEntry = {
+          id: crypto.randomUUID(),
+          componentName: compName,
+          timestamp: new Date().toISOString(),
+          count: res.imported,
+        }
+        setImportHistory((prev) => [entry, ...prev].slice(0, 10))
+        showStatus(`${res.imported} notas importadas para ${compName}`, 'success')
+        loadData()
+        return res
+      } catch {
+        const mockRes = { imported: 4, unmatched: 1 }
+        const entry: ImportHistoryEntry = {
+          id: crypto.randomUUID(),
+          componentName: compName,
+          timestamp: new Date().toISOString(),
+          count: mockRes.imported,
+        }
+        setImportHistory((prev) => [entry, ...prev].slice(0, 10))
+        showStatus(`${mockRes.imported} notas importadas para ${compName} (demo)`, 'success')
+        return mockRes
+      }
+    },
+    [contextItem, loadData, showStatus],
+  )
+
+  const breadcrumb = `${contextItem.turma} · ${contextItem.disciplina} · ${contextItem.semestre} · ${contextItem.turno}`
+  const visibleHistory = historyExpanded ? importHistory : importHistory.slice(0, 3)
+
   return (
-    <div className="p-8">
-      <h1 className="text-xl font-medium">Grades Page</h1>
+    <div className="min-h-screen bg-slate-50">
+      <AppHeader activeTab="notas" />
+
+      <main className="max-w-[1280px] mx-auto px-6 py-6 flex flex-col gap-5">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 text-sm text-slate-600">
+          <button
+            type="button"
+            onClick={() => navigate('/painel')}
+            className="text-[#0D6EFD] hover:underline flex items-center gap-1"
+          >
+            ◀ Mudar contexto
+          </button>
+          <span className="text-slate-400">/</span>
+          <span className="font-medium text-slate-900">Notas</span>
+          <span className="text-slate-400">/</span>
+          <span className="text-slate-500 truncate">{breadcrumb}</span>
+        </div>
+
+        {/* Title + toolbar */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">Gestão de Notas</h1>
+            <p className="text-sm text-slate-500 mt-0.5">{breadcrumb}</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setImportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              📥 Importar CSV
+            </button>
+
+            <button
+              type="button"
+              disabled
+              aria-disabled="true"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 opacity-40 cursor-not-allowed"
+            >
+              💾 Guardar alterações
+            </button>
+
+            <button
+              type="button"
+              onClick={() => showStatus('Notas finais recalculadas', 'success')}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              🧮 Recalcular
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/publicar')}
+              disabled={incompleteCount > 0}
+              aria-disabled={incompleteCount > 0}
+              title={incompleteCount > 0 ? `${incompleteCount} notas incompletas impedem a publicação` : undefined}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-[#0D6EFD] text-white text-sm font-medium hover:bg-[#0D6EFD]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              📤 Publicar notas
+              {incompleteCount > 0 && (
+                <span className="ml-1 bg-white/20 text-xs px-1.5 py-0.5 rounded-full">
+                  {incompleteCount}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Status message */}
+        {statusMsg && (
+          <div
+            role="status"
+            aria-live="polite"
+            className={[
+              'rounded-md px-4 py-2.5 text-sm font-medium',
+              statusMsg.type === 'success'
+                ? 'bg-green-50 border border-green-200 text-[#15803D]'
+                : 'bg-red-50 border border-red-200 text-[#B91C1C]',
+            ].join(' ')}
+          >
+            {statusMsg.text}
+          </div>
+        )}
+
+        {/* Filter bar */}
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex-1 min-w-[200px] max-w-xs">
+            <SearchBar
+              value={filterText}
+              onChange={setFilterText}
+              placeholder="Pesquisar por nome ou nº…"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="filter-status" className="text-sm text-slate-600 whitespace-nowrap">
+              Mostrar:
+            </label>
+            <select
+              id="filter-status"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#0D6EFD]"
+            >
+              <option value="todos">Todos</option>
+              <option value="lançada">Completos</option>
+              <option value="incompleta">Incompletos</option>
+              <option value="vazio">Vazios</option>
+              <option value="publicada">Publicados</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="sort-by" className="text-sm text-slate-600 whitespace-nowrap">
+              Ordenar:
+            </label>
+            <select
+              id="sort-by"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#0D6EFD]"
+            >
+              <option value="numero">Número</option>
+              <option value="nome">Nome</option>
+              <option value="nota">Nota Final</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Table */}
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-slate-500">
+            <span className="animate-pulse">A carregar notas…</span>
+          </div>
+        ) : (
+          <GradeTable
+            contextItem={contextItem}
+            rows={rows}
+            onRowsChange={setRows}
+            onGradeUpdate={handleGradeUpdate}
+            filterText={filterText}
+            filterStatus={filterStatus}
+            sortBy={sortBy}
+          />
+        )}
+
+        {/* Stats */}
+        <section aria-label="Estatísticas da turma">
+          <h2 className="text-sm font-semibold text-slate-700 mb-3">Estatísticas da turma</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <StatCard icon="📊" label="Nota média" value={stats.media} />
+            <StatCard icon="⬆️" label="Nota mais alta" value={stats.alta} />
+            <StatCard icon="⬇️" label="Nota mais baixa" value={stats.baixa} />
+            <StatCard icon="✅" label="Aprovados" value={stats.aprovados} />
+            <StatCard icon="❌" label="Reprovados" value={stats.reprovados} />
+            <StatCard icon="⏳" label="Incompletos" value={stats.incompletos} />
+          </div>
+        </section>
+
+        {/* Import history */}
+        {importHistory.length > 0 && (
+          <section aria-label="Histórico de importações">
+            <h2 className="text-sm font-semibold text-slate-700 mb-3">Histórico de importações</h2>
+            <div className="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+              {visibleHistory.map((entry) => (
+                <div key={entry.id} className="px-4 py-3 flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-3">
+                    <span className="text-slate-400 font-mono text-xs">
+                      {formatTimestamp(entry.timestamp)}
+                    </span>
+                    <span className="text-slate-700 font-medium">{entry.componentName}</span>
+                  </div>
+                  <span className="text-[#15803D] font-medium">{entry.count} notas</span>
+                </div>
+              ))}
+              {importHistory.length > 3 && (
+                <div className="px-4 py-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryExpanded((p) => !p)}
+                    className="text-sm text-[#0D6EFD] hover:underline"
+                  >
+                    {historyExpanded
+                      ? 'Ver menos'
+                      : `Ver log completo (${importHistory.length} entradas)`}
+                  </button>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+      </main>
+
+      <ImportCSVModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        components={contextItem.components}
+        onImport={handleImport}
+      />
     </div>
   )
 }

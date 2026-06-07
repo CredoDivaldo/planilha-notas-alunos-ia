@@ -1,7 +1,7 @@
 interface StatCardProps {
   icon: string
   label: string
-  value: number
+  value: string | number
 }
 
 export function StatCard({ icon, label, value }: StatCardProps) {
