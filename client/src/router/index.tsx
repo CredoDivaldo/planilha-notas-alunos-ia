@@ -14,6 +14,17 @@ function PrivateRoute({ children }: { children: ReactNode }) {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
 }
 
+function StudentRoute({ children }: { children: ReactNode }) {
+  const { isAuthenticated, role } = useAuth()
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (role !== null && role !== 'estudante') {
+    if (role === 'professor') return <Navigate to="/painel" replace />
+    if (role === 'delegado') return <Navigate to="/delegado" replace />
+    return <Navigate to="/" replace />
+  }
+  return <>{children}</>
+}
+
 export function AppRouter() {
   return (
     <BrowserRouter>
@@ -38,9 +49,9 @@ export function AppRouter() {
         <Route
           path="/portal"
           element={
-            <PrivateRoute>
+            <StudentRoute>
               <PortalPage />
-            </PrivateRoute>
+            </StudentRoute>
           }
         />
         <Route
