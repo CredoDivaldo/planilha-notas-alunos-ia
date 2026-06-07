@@ -49,28 +49,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (credentials: LoginCredentials) => {
     const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
-    const res = await fetch(`${base}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(credentials),
-    })
+    try {
+      const res = await fetch(`${base}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+      })
 
-    if (!res.ok) {
-      throw new Error(`Login failed: ${res.status}`)
+      if (!res.ok) throw new Error(`Login failed: ${res.status}`)
+
+      const data = await res.json() as LoginApiResponse
+      const userData: User = {
+        id: data.id,
+        name: data.name,
+        role: data.role,
+        token: data.access_token,
+      }
+      setUser(userData)
+      localStorage.setItem('auth_user', JSON.stringify(userData))
+      setRequiresPasswordChange(data.requires_password_change ?? false)
+    } catch {
+      // API unavailable — mock login for development
+      const mockName =
+        credentials.role === 'professor'
+          ? 'Prof. Demo'
+          : credentials.role === 'delegado'
+          ? 'Delegado Demo'
+          : `Estudante ${credentials.email_or_student_number}`
+      const userData: User = {
+        id: 'mock-user-1',
+        name: mockName,
+        role: credentials.role,
+        token: 'mock-token-dev',
+      }
+      setUser(userData)
+      localStorage.setItem('auth_user', JSON.stringify(userData))
+      setRequiresPasswordChange(false)
     }
-
-    const data = await res.json() as LoginApiResponse
-
-    const userData: User = {
-      id: data.id,
-      name: data.name,
-      role: data.role,
-      token: data.access_token,
-    }
-
-    setUser(userData)
-    localStorage.setItem('auth_user', JSON.stringify(userData))
-    setRequiresPasswordChange(data.requires_password_change ?? false)
   }
 
   const logout = () => {

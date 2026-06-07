@@ -17,6 +17,17 @@ function PrivateRoute({ children }: { children: ReactNode }) {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
 }
 
+function DelegateRoute({ children }: { children: ReactNode }) {
+  const { isAuthenticated, role } = useAuth()
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (role !== null && role !== 'delegado') {
+    if (role === 'professor') return <Navigate to="/painel" replace />
+    if (role === 'estudante') return <Navigate to="/portal" replace />
+    return <Navigate to="/" replace />
+  }
+  return <>{children}</>
+}
+
 function StudentRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, role } = useAuth()
   if (!isAuthenticated) return <Navigate to="/login" replace />
@@ -76,9 +87,9 @@ export function AppRouter() {
         <Route
           path="/delegado"
           element={
-            <PrivateRoute>
+            <DelegateRoute>
               <DelegatePage />
-            </PrivateRoute>
+            </DelegateRoute>
           }
         />
         <Route
