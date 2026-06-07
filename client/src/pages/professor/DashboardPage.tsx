@@ -1,4 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '@/components/organisms/AppHeader'
 import { ContextBar } from '@/components/molecules/ContextBar'
 import { FileDropzone } from '@/components/molecules/FileDropzone'
@@ -166,6 +167,8 @@ function MatchStatusBadge({ status }: { status: MatchResult['status'] }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function ProfessorDashboardPage() {
+  const navigate = useNavigate()
+
   // Step state
   const [steps, dispatch] = useReducer(stepReducer, undefined, loadState)
 
@@ -786,13 +789,25 @@ export default function ProfessorDashboardPage() {
                     )}
                   </div>
 
-                  <Button
-                    onClick={handleBroadcastClick}
-                    disabled={broadcastLoading}
-                    className="bg-[#0D6EFD] hover:bg-[#0D6EFD]/90 text-white self-start"
-                  >
-                    {broadcastLoading ? '⏳ A enviar…' : '🚀 Disparar'}
-                  </Button>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Button
+                      onClick={handleBroadcastClick}
+                      disabled={broadcastLoading}
+                      className="bg-[#0D6EFD] hover:bg-[#0D6EFD]/90 text-white self-start"
+                    >
+                      {broadcastLoading ? '⏳ A enviar…' : '🚀 Disparar'}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ctxId = sessionStorage.getItem('active_context_id') ?? ''
+                        navigate(`/publicar${ctxId ? `?context=${ctxId}` : ''}`)
+                      }}
+                      className="text-sm text-[#0D6EFD] hover:underline"
+                    >
+                      ⑤ Usar Assistente de Publicação →
+                    </button>
+                  </div>
                 </div>
               )}
             </StepCard>

@@ -8,6 +8,7 @@ import PortalPage from '@/pages/student/PortalPage'
 import DelegatePage from '@/pages/delegado/DelegatePage'
 import ContextsPage from '@/pages/professor/ContextsPage'
 import GradesPage from '@/pages/professor/GradesPage'
+import PublishPage from '@/pages/professor/PublishPage'
 
 function PrivateRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth()
@@ -75,6 +76,14 @@ export function AppRouter() {
           element={
             <PrivateRoute>
               <DelegatePage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/publicar"
+          element={
+            <PrivateRoute>
+              <PublishPage />
             </PrivateRoute>
           }
         />

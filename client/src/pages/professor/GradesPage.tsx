@@ -251,11 +251,9 @@ export default function GradesPage() {
 
             <button
               type="button"
-              onClick={() => navigate('/publicar')}
-              disabled={incompleteCount > 0}
-              aria-disabled={incompleteCount > 0}
-              title={incompleteCount > 0 ? `${incompleteCount} notas incompletas impedem a publicação` : undefined}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-[#0D6EFD] text-white text-sm font-medium hover:bg-[#0D6EFD]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={() => navigate(`/publicar?context=${contextItem.id}`)}
+              title={incompleteCount > 0 ? `${incompleteCount} notas incompletas — serão excluídas da publicação` : undefined}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-[#0D6EFD] text-white text-sm font-medium hover:bg-[#0D6EFD]/90 transition-colors"
             >
               📤 Publicar notas
               {incompleteCount > 0 && (
