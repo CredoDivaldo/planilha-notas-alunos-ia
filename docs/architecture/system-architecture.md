@@ -191,9 +191,9 @@ O projecto é um MVP monolítico Node.js/Express com frontend estático (HTML/CS
 - `public/`: UI única com 5 passos operacionais (upload → match → conexão → disparo).
 
 ## 4) Fluxos Funcionais Existentes
-1. Upload estudantes: `POST /api/students/upload` → parse/normaliza → grava `data/students.json`.
-2. Upload notas: `POST /api/grades/upload` → parse/normaliza → grava `data/grades-last-upload.json`.
-3. Match: `POST /api/match/generate` → `buildMatch` → grava `data/match-last.json`.
+1. Upload estudantes: `POST /api/v1/students/upload` (FastAPI) → parse/normaliza → grava em `legacy_students` (SQLite via SQLAlchemy).
+2. Upload notas: `POST /api/v1/grades/upload` (FastAPI) → parse/normaliza → grava em `legacy_grades` (SQLite via SQLAlchemy).
+3. Match: `POST /api/v1/match/generate` (FastAPI) → `buildMatch` → devolve match em memória (sem persistência intermédia em JSON desde o cutover da Story 8.4).
 4. Evolution: create/connect/state via `/api/evolution/instance/*`.
 5. Envio em massa: `POST /api/send/bulk` com `template` e `dryRun`.
 
@@ -277,12 +277,10 @@ Integração de infraestrutura por Docker Compose:
 **Effort:** 2h
 **Recommendation:** Add error states, loading indicators
 
-#### TD-009: No Database (JSON Files)
-**Location:** `data/*.json`
-**Issue:** JSON files not suitable for concurrent access, querying
-**Impact:** Scalability limit; data integrity risks
-**Effort:** 4h (if migration needed)
-**Recommendation:** Evaluate SQLite or Supabase for production
+#### TD-009: No Database (JSON Files) — RESOLVED in Story 8.4
+**Location (resolvido):** `data/*.json` → `legacy/data/*.json` (movido em Story 8.4)
+**Issue (resolvido):** JSON files not suitable for concurrent access, querying
+**Resolution:** cutover para SQLite via SQLAlchemy em `backend/app/app.sqlite3` — produção lê exclusivamente do DB. O subcommand `python -m backend.app.cli migrate-legacy-csv <dir>` re-importa CSVs de demo a partir de `legacy/fixtures/` para o DB.
 
 #### TD-010: Test Coverage Limited
 **Location:** `tests/critical-flow.test.js`

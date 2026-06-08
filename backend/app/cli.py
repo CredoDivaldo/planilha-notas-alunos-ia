@@ -18,6 +18,15 @@ from backend.app.models import (
     AcademicContext,
     ClassEnrollment,
     GradeEntry,
+    LegacyGrade,
+    LegacyStudent,
+    LegacyUpload,
+    UPLOAD_STATUS_OK,
+)
+from backend.app.services.legacy_import import (
+    parse_csv,
+    validate_grades_csv,
+    validate_students_csv,
 )
 
 LOGGER = logging.getLogger("backend.cli")
@@ -172,6 +181,210 @@ def inspect_legacy_json(source_dir: Path) -> dict[str, Any]:
     }
     LOGGER.info("legacy_import_dry_run_completed", extra=report)
     return report
+
+
+def migrate_legacy_csv(
+    database_url: str,
+    csv_dir: Path,
+    context_id: int | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Story 8.4 — re-import demo CSVs from a directory into the DB.
+
+    Globs ``<csv_dir>/*.csv``, classifies each file as students vs grades by
+    filename (``students``/``alunos`` → students, ``grades``/``notas`` → grades),
+    then re-uses the same parse + validate + bulk-insert pipeline that the
+    FastAPI ``/api/v1/students/upload`` and ``/api/v1/grades/upload`` routers
+    run (see ``backend.app.routers.ingest``).
+
+    Idempotent: re-running on the same dir with the same ``context_id`` will
+    upsert the same rows, not duplicate them.
+
+    In ``dry_run`` mode the parser/validator is exercised end-to-end and the
+    per-file report is populated, but no ``INSERT`` is issued and no session
+    commit happens. This makes the subcommand safe to call against a
+    partially-provisioned DB (e.g. before ``bootstrap-db`` ran) and against
+    in-memory SQLite for smoke tests.
+    """
+    if not csv_dir.exists() or not csv_dir.is_dir():
+        return {
+            "status": "error",
+            "message": f"CSV directory not found: {csv_dir}",
+            "files_processed": 0,
+            "rows_imported": 0,
+            "rejected_rows": 0,
+        }
+
+    engine = build_engine(database_url)
+    files_processed = 0
+    rows_imported = 0
+    rejected_rows = 0
+    file_reports: list[dict[str, Any]] = []
+
+    try:
+        with Session(engine) as session:
+            for csv_path in sorted(csv_dir.glob("*.csv")):
+                filename = csv_path.name
+                lower = filename.lower()
+                if "student" in lower or "aluno" in lower:
+                    kind = "students"
+                elif "grade" in lower or "nota" in lower:
+                    kind = "grades"
+                else:
+                    # Skip files we cannot classify
+                    file_reports.append({
+                        "file": filename,
+                        "status": "skipped",
+                        "reason": "filename does not match students/grades pattern",
+                    })
+                    continue
+
+                text = csv_path.read_text(encoding="utf-8")
+                parsed = parse_csv(text)
+
+                if kind == "students":
+                    validation = validate_students_csv(parsed.headers, parsed.rows)
+                else:
+                    validation = validate_grades_csv(parsed.headers, parsed.rows)
+
+                if not validation.valid:
+                    rejected_rows += 1
+                    file_reports.append({
+                        "file": filename,
+                        "kind": kind,
+                        "status": "invalid",
+                        "error": validation.error,
+                    })
+                    continue
+
+                # Build the per-row insert payload, mirroring the router logic.
+                persisted = 0
+                for raw in parsed.rows:
+                    if kind == "students":
+                        identifier = (raw.get("numero_estudante")
+                                      or raw.get("numero")
+                                      or raw.get("numeroAluno")
+                                      or raw.get("id")
+                                      or "").strip()
+                        name = (raw.get("nome") or raw.get("aluno") or "").strip()
+                        if not identifier or not name:
+                            rejected_rows += 1
+                            continue
+                        if not dry_run:
+                            # Idempotent: remove any prior row for this tuple.
+                            q = session.query(LegacyStudent).filter(
+                                LegacyStudent.student_number == identifier
+                            )
+                            if context_id is not None:
+                                q = q.filter(
+                                    LegacyStudent.academic_context_id == context_id
+                                )
+                            else:
+                                q = q.filter(
+                                    LegacyStudent.academic_context_id.is_(None)
+                                )
+                            q.delete(synchronize_session=False)
+                            session.add(
+                                LegacyStudent(
+                                    academic_context_id=context_id,
+                                    student_number=identifier,
+                                    name=name,
+                                    turma=(raw.get("turma") or None),
+                                    whatsapp=(raw.get("whatsapp")
+                                              or raw.get("telefone")
+                                              or raw.get("phone")
+                                              or None),
+                                    raw_row_json=json.dumps(raw, ensure_ascii=False),
+                                )
+                            )
+                    else:  # grades
+                        identifier = (raw.get("numero_estudante")
+                                      or raw.get("numero")
+                                      or raw.get("numeroAluno")
+                                      or raw.get("id")
+                                      or "").strip()
+                        value = (raw.get("nota")
+                                 or raw.get("media")
+                                 or raw.get("valor")
+                                 or raw.get("grade")
+                                 or "").strip()
+                        if not identifier or not value:
+                            rejected_rows += 1
+                            continue
+                        if not dry_run:
+                            if context_id is not None:
+                                session.query(LegacyGrade).filter(
+                                    LegacyGrade.academic_context_id == context_id,
+                                    LegacyGrade.student_number == identifier,
+                                ).delete(synchronize_session=False)
+                            session.add(
+                                LegacyGrade(
+                                    academic_context_id=context_id,
+                                    student_number=identifier,
+                                    name=(raw.get("nome") or raw.get("aluno") or None),
+                                    turma=(raw.get("turma") or None),
+                                    subject=(raw.get("disciplina")
+                                             or raw.get("subject")
+                                             or raw.get("materia")
+                                             or None),
+                                    value=value,
+                                    raw_row_json=json.dumps(raw, ensure_ascii=False),
+                                )
+                            )
+                    persisted += 1
+
+                if not dry_run:
+                    session.add(
+                        LegacyUpload(
+                            kind=kind,
+                            academic_context_id=context_id,
+                            filename=filename,
+                            status=UPLOAD_STATUS_OK,
+                            rows_received=len(parsed.rows),
+                            rows_persisted=persisted,
+                        )
+                    )
+
+                files_processed += 1
+                rows_imported += persisted
+                file_reports.append({
+                    "file": filename,
+                    "kind": kind,
+                    "status": "imported" if not dry_run else "dry_run",
+                    "rows_persisted": persisted,
+                })
+
+            if not dry_run:
+                session.commit()
+                LOGGER.info("migrate_legacy_csv_completed", extra={
+                    "source_dir": str(csv_dir),
+                    "files_processed": files_processed,
+                    "rows_imported": rows_imported,
+                    "rejected_rows": rejected_rows,
+                    "dry_run": False,
+                })
+            else:
+                session.rollback()
+                LOGGER.info("migrate_legacy_csv_dry_run_completed", extra={
+                    "source_dir": str(csv_dir),
+                    "files_processed": files_processed,
+                    "rows_imported": rows_imported,
+                    "rejected_rows": rejected_rows,
+                    "dry_run": True,
+                })
+    finally:
+        engine.dispose()
+
+    return {
+        "status": "success" if rejected_rows == 0 else "partial",
+        "source_dir": str(csv_dir),
+        "context_id": context_id,
+        "dry_run": dry_run,
+        "files_processed": files_processed,
+        "rows_imported": rows_imported,
+        "rejected_rows": rejected_rows,
+        "files": file_reports,
+    }
 
 
 def bootstrap_academic_contexts(
@@ -526,6 +739,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true", help="Preview without persisting"
     )
 
+    migrate_csv = subparsers.add_parser(
+        "migrate-legacy-csv",
+        help="Re-import demo CSVs from a directory into the DB (Story 8.4)",
+    )
+    migrate_csv.add_argument("csv_dir", help="Directory containing legacy demo CSVs")
+    migrate_csv.add_argument("--database-url", default=DEFAULT_DATABASE_URL)
+    migrate_csv.add_argument(
+        "--context-id", type=int, help="Optional academic context ID to bind rows to"
+    )
+    migrate_csv.add_argument(
+        "--dry-run", action="store_true", help="Preview without persisting"
+    )
+
     return parser
 
 
@@ -563,6 +789,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         _json_print(import_context_rosters(
             args.database_url,
             Path(args.csv_path),
+            args.context_id,
+            args.dry_run,
+        ))
+        return 0
+
+    if args.command == "migrate-legacy-csv":
+        _json_print(migrate_legacy_csv(
+            args.database_url,
+            Path(args.csv_dir),
             args.context_id,
             args.dry_run,
         ))

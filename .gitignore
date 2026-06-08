@@ -47,3 +47,14 @@ academic.db
 academic.db-*
 *.sqlite3
 *.sqlite3-*
+
+# Legacy data — kept for reference, not read by production code (Story 8.4).
+# `data/*.json` is ignored so future accidental copies don't get tracked.
+# `legacy/data/*.json` files are intentionally tracked for historical reference.
+data/*.json
+
+# Runtime DB — production reads via SQLAlchemy / SQLite at backend/app/app.sqlite3
+backend/app/app.sqlite3
+
+# Vite build output (kept in public/app/ for legacy static serving during cutover)
+public/app/
