@@ -10,6 +10,14 @@ from backend.app.models.contexts import (
     Semester,
     Shift,
 )
+from backend.app.models.legacy_roster import (
+    LegacyGrade,
+    LegacyStudent,
+    LegacyUpload,
+    UPLOAD_STATUS_OK,
+    UPLOAD_STATUSES,
+    UPLOAD_STATUS_FAILED,
+)
 from backend.app.models.publication import (
     BroadcastJob,
     NotificationDelivery,
@@ -26,10 +34,16 @@ __all__ = [
     "ClassEnrollment",
     "ContextSubjectConfiguration",
     "GradeEntry",
+    "LegacyGrade",
+    "LegacyStudent",
+    "LegacyUpload",
     "NotificationDelivery",
     "PublicationSnapshot",
     "PublishedCalendarSnapshot",
     "Semester",
     "Shift",
     "TimestampMixin",
+    "UPLOAD_STATUS_OK",
+    "UPLOAD_STATUS_FAILED",
+    "UPLOAD_STATUSES",
 ]

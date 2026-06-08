@@ -14,6 +14,7 @@ from backend.app.config import Settings, get_settings
 from backend.app.database import build_engine, ensure_sqlite_directory, inspect_sqlite_runtime
 from backend.app.portal.routes import router as portal_router
 from backend.app.routers.chatbot import router as chatbot_router
+from backend.app.routers.ingest import router as ingest_router
 
 LOGGER = logging.getLogger("backend.app")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
@@ -90,6 +91,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Register chatbot router (Story 6.1+: WhatsApp webhook)
     app.include_router(chatbot_router)
+
+    # Register ingest router (Story 8.1: legacy CSV upload endpoints)
+    app.include_router(ingest_router)
 
     @app.get(f"{resolved_settings.api_prefix}/health", response_model=HealthResponse)
     async def health(request: Request) -> HealthResponse:
