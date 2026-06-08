@@ -265,26 +265,29 @@ export default function ProfessorDashboardPage() {
       const token = getAuthToken()
       const base = getApiBase()
       const contextId = sessionStorage.getItem('active_context_id') ?? ''
-      const url = `${base}/students/upload${contextId ? `?context_id=${contextId}` : ''}`
+      const url = `${base}/api/v1/students/upload${contextId ? `?context_id=${contextId}` : ''}`
       const res = await fetch(url, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
       })
-      if (!res.ok) throw new Error(`Upload falhou: ${res.status}`)
+      if (!res.ok) {
+        // Surface FastAPI's sanitized detail message directly to the user
+        let detail = `Upload falhou: ${res.status}`
+        try {
+          const body = (await res.json()) as { detail?: string }
+          if (body?.detail) detail = body.detail
+        } catch {
+          // body wasn't JSON — keep the status-only message
+        }
+        throw new Error(detail)
+      }
       const data = await res.json() as { count: number }
       setStats((prev) => ({ ...prev, estudantes: data.count }))
       dispatch({ type: 'COMPLETE', index: 0 })
-    } catch {
-      // Fallback mock
-      try {
-        const mockData = { count: 42 }
-        setStats((prev) => ({ ...prev, estudantes: mockData.count }))
-        dispatch({ type: 'COMPLETE', index: 0 })
-      } catch {
-        setStep1Error('Erro ao importar estudantes.')
-        dispatch({ type: 'ERROR', index: 0 })
-      }
+    } catch (err) {
+      setStep1Error(err instanceof Error ? err.message : 'Erro ao importar estudantes.')
+      dispatch({ type: 'ERROR', index: 0 })
     } finally {
       setStep1Loading(false)
     }
@@ -301,21 +304,29 @@ export default function ProfessorDashboardPage() {
       const token = getAuthToken()
       const base = getApiBase()
       const contextId = sessionStorage.getItem('active_context_id') ?? ''
-      const url = `${base}/grades/upload${contextId ? `?context_id=${contextId}` : ''}`
+      const url = `${base}/api/v1/grades/upload${contextId ? `?context_id=${contextId}` : ''}`
       const res = await fetch(url, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
       })
-      if (!res.ok) throw new Error(`Upload falhou: ${res.status}`)
+      if (!res.ok) {
+        // Surface FastAPI's sanitized detail message directly to the user
+        let detail = `Upload falhou: ${res.status}`
+        try {
+          const body = (await res.json()) as { detail?: string }
+          if (body?.detail) detail = body.detail
+        } catch {
+          // body wasn't JSON — keep the status-only message
+        }
+        throw new Error(detail)
+      }
       const data = await res.json() as { count: number }
       setStats((prev) => ({ ...prev, notas: data.count }))
       dispatch({ type: 'COMPLETE', index: 1 })
-    } catch {
-      // Fallback mock
-      const mockData = { count: 38 }
-      setStats((prev) => ({ ...prev, notas: mockData.count }))
-      dispatch({ type: 'COMPLETE', index: 1 })
+    } catch (err) {
+      setStep2Error(err instanceof Error ? err.message : 'Erro ao importar notas.')
+      dispatch({ type: 'ERROR', index: 1 })
     } finally {
       setStep2Loading(false)
     }
