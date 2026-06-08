@@ -15,6 +15,7 @@ from backend.app.database import build_engine, ensure_sqlite_directory, inspect_
 from backend.app.portal.routes import router as portal_router
 from backend.app.routers.chatbot import router as chatbot_router
 from backend.app.routers.ingest import router as ingest_router
+from backend.app.routers.professor import router as professor_router
 
 LOGGER = logging.getLogger("backend.app")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
@@ -94,6 +95,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Register ingest router (Story 8.1: legacy CSV upload endpoints)
     app.include_router(ingest_router)
+
+    # Register professor router (Story 8.2: match / broadcast / WhatsApp)
+    app.include_router(professor_router)
 
     @app.get(f"{resolved_settings.api_prefix}/health", response_model=HealthResponse)
     async def health(request: Request) -> HealthResponse:

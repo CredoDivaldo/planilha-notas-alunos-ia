@@ -93,7 +93,7 @@ function saveState(state: PanelState) {
   sessionStorage.setItem('painel_step_states', JSON.stringify(state))
 }
 
-// ─── Mock API responses ───────────────────────────────────────────────────────
+// ─── Match result shape (Story 8.2 — backed by /api/v1/grades/match) ─────────
 
 interface MatchResult {
   student_number: string
@@ -102,17 +102,23 @@ interface MatchResult {
   status: 'matched' | 'no_grade' | 'no_phone'
 }
 
-const MOCK_MATCH_RESULT = {
-  matched: 35,
-  sem_match: 3,
-  sem_telefone: 4,
-  results: [
-    { student_number: '2201', name: 'Ana Silva', grade: 14.5, status: 'matched' as const },
-    { student_number: '2202', name: 'João Costa', grade: 12.0, status: 'matched' as const },
-    { student_number: '2203', name: 'Maria Neto', grade: null, status: 'no_grade' as const },
-    { student_number: '2204', name: 'Pedro Lima', grade: 10.0, status: 'no_phone' as const },
-    { student_number: '2205', name: 'Sofia Dias', grade: 15.5, status: 'matched' as const },
-  ],
+interface MatchResponse {
+  matched: number
+  unmatched: number
+  invalid_phones: number
+  items: Array<{
+    numero_estudante: string
+    nome: string
+    turma: string
+    whatsapp: string
+    nota: string
+  }>
+}
+
+function deriveStatus(item: MatchResponse['items'][number]): MatchResult['status'] {
+  if (!item.nota) return 'no_grade'
+  if (!item.whatsapp) return 'no_phone'
+  return 'matched'
 }
 
 // ─── Step reducer ─────────────────────────────────────────────────────────────
@@ -185,6 +191,7 @@ export default function ProfessorDashboardPage() {
 
   // Step 3 — Match
   const [step3Loading, setStep3Loading] = useState(false)
+  const [step3Error, setStep3Error] = useState<string | undefined>()
   const [matchResults, setMatchResults] = useState<MatchResult[]>([])
   const [matchTimestamp, setMatchTimestamp] = useState<string | null>(null)
   const [matchDialogOpen, setMatchDialogOpen] = useState(false)
@@ -202,6 +209,7 @@ export default function ProfessorDashboardPage() {
     'Olá {nome}! A sua nota de {disciplina} é {nota}. Cumprimentos.',
   )
   const [broadcastLoading, setBroadcastLoading] = useState(false)
+  const [broadcastError, setBroadcastError] = useState<string | undefined>()
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmChecked, setConfirmChecked] = useState(false)
 
@@ -225,11 +233,31 @@ export default function ProfessorDashboardPage() {
       })
     }, 1000)
 
-    // Simulate auto-connect after 8s
+    // Story 8.2: poll the real Evolution connect endpoint every 5s.
+    // The endpoint returns {connected: bool}; when it flips true we mark
+    // the QR card as paired and clear the countdown.
+    const base = getApiBase()
+    const token = getAuthToken()
     autoConnectRef.current = setTimeout(() => {
-      setQrConnected(true)
-      if (countdownRef.current) clearInterval(countdownRef.current)
-    }, 8000)
+      void (async () => {
+        try {
+          const res = await fetch(`${base}/api/v1/whatsapp/instance/connect`, {
+            method: 'GET',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          })
+          if (res.ok) {
+            const data = (await res.json()) as { connected?: boolean; simulated?: boolean }
+            if (data.connected) {
+              setQrConnected(true)
+              if (countdownRef.current) clearInterval(countdownRef.current)
+            }
+          }
+        } catch {
+          // Network errors are non-fatal — the countdown UI keeps the user
+          // informed and they can refresh the QR.
+        }
+      })()
+    }, 5000)
   }
 
   useEffect(() => {
@@ -336,12 +364,13 @@ export default function ProfessorDashboardPage() {
 
   const handleMatch = async () => {
     setStep3Loading(true)
+    setStep3Error(undefined)
     try {
       const contextId = sessionStorage.getItem('active_context_id') ?? ''
       const body = contextId ? JSON.stringify({ context_id: contextId }) : undefined
       const base = getApiBase()
       const token = getAuthToken()
-      const res = await fetch(`${base}/grades/match`, {
+      const res = await fetch(`${base}/api/v1/grades/match`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -349,25 +378,40 @@ export default function ProfessorDashboardPage() {
         },
         body,
       })
-      if (!res.ok) throw new Error(`Match falhou: ${res.status}`)
-      const data = await res.json() as typeof MOCK_MATCH_RESULT
+      if (!res.ok) {
+        let detail = `Match falhou: ${res.status}`
+        try {
+          const body = (await res.json()) as { detail?: string }
+          if (body?.detail) detail = body.detail
+        } catch {
+          // body wasn't JSON — keep status-only message
+        }
+        throw new Error(detail)
+      }
+      const data = (await res.json()) as MatchResponse
       applyMatchResult(data)
-    } catch {
-      // Fallback mock
-      applyMatchResult(MOCK_MATCH_RESULT)
+    } catch (err) {
+      setStep3Error(err instanceof Error ? err.message : 'Erro ao gerar match.')
+      dispatch({ type: 'ERROR', index: 2 })
     } finally {
       setStep3Loading(false)
     }
   }
 
-  function applyMatchResult(data: typeof MOCK_MATCH_RESULT) {
-    setMatchResults(data.results)
+  function applyMatchResult(data: MatchResponse) {
+    const results: MatchResult[] = data.items.map((item) => ({
+      student_number: item.numero_estudante,
+      name: item.nome,
+      grade: item.nota ? Number(item.nota) : null,
+      status: deriveStatus(item),
+    }))
+    setMatchResults(results)
     setMatchTimestamp(new Date().toLocaleTimeString('pt-PT'))
     setStats((prev) => ({
       ...prev,
       matched: data.matched,
-      semMatch: data.sem_match,
-      telInvalido: data.sem_telefone,
+      semMatch: data.unmatched,
+      telInvalido: data.invalid_phones,
     }))
     dispatch({ type: 'COMPLETE', index: 2 })
   }
@@ -396,7 +440,7 @@ export default function ProfessorDashboardPage() {
       const base = getApiBase()
       const token = getAuthToken()
       const contextId = sessionStorage.getItem('active_context_id') ?? ''
-      const res = await fetch(`${base}/broadcast/`, {
+      const res = await fetch(`${base}/api/v1/broadcast/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -406,16 +450,29 @@ export default function ProfessorDashboardPage() {
           context_id: contextId,
           message_template: broadcastMessage,
           mode: broadcastMode,
+          channels: ['portal', 'whatsapp'],
         }),
       })
-      if (!res.ok) throw new Error(`Broadcast falhou: ${res.status}`)
-      const data = await res.json() as { sent: number; failed: number }
-      setStats((prev) => ({ ...prev, enviados: data.sent, falhas: data.failed }))
+      if (!res.ok) {
+        let detail = `Broadcast falhou: ${res.status}`
+        try {
+          const body = (await res.json()) as { detail?: string }
+          if (body?.detail) detail = body.detail
+        } catch {
+          // body wasn't JSON — keep status-only message
+        }
+        throw new Error(detail)
+      }
+      const data = (await res.json()) as { whatsapp_sent: number; failures: number }
+      setStats((prev) => ({
+        ...prev,
+        enviados: data.whatsapp_sent,
+        falhas: data.failures,
+      }))
       dispatch({ type: 'COMPLETE', index: 4 })
-    } catch {
-      // Fallback mock
-      setStats((prev) => ({ ...prev, enviados: 35, falhas: 0 }))
-      dispatch({ type: 'COMPLETE', index: 4 })
+    } catch (err) {
+      setBroadcastError(err instanceof Error ? err.message : 'Erro ao disparar.')
+      dispatch({ type: 'ERROR', index: 4 })
     } finally {
       setBroadcastLoading(false)
     }
@@ -575,13 +632,23 @@ export default function ProfessorDashboardPage() {
               )}
 
               {steps[2].status !== 'completed' && (
-                <Button
-                  onClick={handleMatch}
-                  disabled={step3Loading}
-                  className="bg-[#0D6EFD] hover:bg-[#0D6EFD]/90 text-white"
-                >
-                  {step3Loading ? '⏳ A gerar match…' : '🔍 Gerar Match'}
-                </Button>
+                <>
+                  {step3Error && (
+                    <p
+                      role="alert"
+                      className="mb-3 text-sm text-[#B91C1C] bg-red-50 border border-red-200 rounded-md px-3 py-2"
+                    >
+                      {step3Error}
+                    </p>
+                  )}
+                  <Button
+                    onClick={handleMatch}
+                    disabled={step3Loading}
+                    className="bg-[#0D6EFD] hover:bg-[#0D6EFD]/90 text-white"
+                  >
+                    {step3Loading ? '⏳ A gerar match…' : '🔍 Gerar Match'}
+                  </Button>
+                </>
               )}
             </StepCard>
 
@@ -799,6 +866,15 @@ export default function ProfessorDashboardPage() {
                       </p>
                     )}
                   </div>
+
+                  {broadcastError && (
+                    <p
+                      role="alert"
+                      className="text-sm text-[#B91C1C] bg-red-50 border border-red-200 rounded-md px-3 py-2"
+                    >
+                      {broadcastError}
+                    </p>
+                  )}
 
                   <div className="flex items-center gap-3 flex-wrap">
                     <Button
