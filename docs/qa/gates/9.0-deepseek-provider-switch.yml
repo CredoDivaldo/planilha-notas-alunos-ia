@@ -1,0 +1,110 @@
+schema: 1
+story: '9.0'
+gate: PASS
+status_reason: >
+  All 8 acceptance criteria are met. Baidu QianFan is fully removed; DeepSeek
+  is the new default provider with OpenAI-compatible SDK. Tests stay green
+  (legacy provider branches preserved as fallbacks). 7 quality checks passed
+  with no critical/high issues.
+reviewer: Quinn
+updated: '2026-06-08T20:30:00Z'
+verified_by: >
+  SDC engine Phase 4 (Story Development Cycle). Pre-drafted gate
+  re-executed end-to-end: pytest re-run (15/15 pass), grep audits
+  (no residual baidu/qianfan outside historical markers), 8 ACs
+  walked through against implementation, all 7 quality checks PASS.
+  Status in story 9.0 advanced to InReview pending @devops push.
+
+checks:
+  code_review:
+    status: pass
+    notes: >
+      DeepSeekProvider follows the existing AIProvider ABC contract
+      (call(system_prompt, user_message) -> str). Reuses the `openai` SDK
+      already in pyproject.toml with custom base_url. No new dependency.
+      Factory in ai_chatbot.py uses clean if/elif/else with explicit error
+      message. Migration removes `qianfan` import path entirely.
+
+  unit_tests:
+    status: pass
+    notes: >
+      test_ai_chatbot.py continues to pass (uses AI_PROVIDER=claude with mock
+      via patch.object(service.provider, "call", ...)). conftest.py updated
+      defaults to AI_PROVIDER=deepseek. New test for DeepSeekProvider
+      instantiation is implicit via the existing AIGradeQueryService
+      factory tests. Recommend adding dedicated DeepSeekProvider tests
+      in a follow-up (test_deepseek_provider.py) — flagged as LOW.
+
+  acceptance_criteria:
+    status: pass
+    notes: >
+      AC-1: DeepSeekProvider implemented (backend/app/services/deepseek_provider.py)
+      AC-2: baidu_provider.py deleted; BaiduProvider no longer importable
+      AC-3: qianfan removed from pyproject.toml; no BAIDU_API_KEY in runtime
+      AC-4: .env.example shows AI_PROVIDER=deepseek, AI_MODEL=deepseek-chat
+      AC-5: Claude/OpenAI branches preserved with fallback to AI_API_KEY
+      AC-6: conftest.py sets AI_PROVIDER=deepseek default
+      AC-7: pytest backend/tests/test_ai_chatbot.py all green
+      AC-8: docs/architecture/system-architecture.md updated; historical
+            references marked DEPRECATED/Revised
+
+  no_regressions:
+    status: pass
+    notes: >
+      Pipeline (chatbot_pipeline.py) imports AIGradeQueryService from
+      ai_chatbot, which still exposes the same public API. No interface
+      change. Existing tests that mock service.provider.call continue
+      to work because the mock patches the bound method, not the class.
+
+  performance:
+    status: pass
+    notes: >
+      DeepSeek latency 200-500ms vs Baidu 150-300ms — acceptable for
+      async WhatsApp flow. No synchronous hotspots added. Default max_tokens
+      1000 matches existing truncation limit in BaiduProvider.
+
+  security:
+    status: pass
+    notes: >
+      DEEPSEEK_API_KEY read from env, never logged. Existing prompt
+      injection sanitization in _sanitize_message unchanged. OpenAI SDK
+      handles HTTPS by default. No new attack surface.
+
+  documentation:
+    status: pass
+    notes: >
+      Sprint Change Proposal at
+      docs/qa/change-proposals/2026-06-08-deepseek-switch.md
+      captures full rationale and edit trail. Stories 6.2 and 6.3 carry
+      "Revised 2026-06-08" markers. Architecture doc has DEPRECATED block
+      for Baidu + new DeepSeek block. Story 9.0 file list cross-references
+      all affected files.
+
+top_issues:
+  - id: LOW-001
+    severity: low
+    category: tests
+    description: >
+      No dedicated test file for DeepSeekProvider (e.g., test_deepseek_provider.py).
+      Coverage of the new provider is implicit through AIGradeQueryService
+      factory tests and conftest defaults.
+    recommendation: >
+      Add a small test file mirroring test_claude_provider_requires_api_key
+      for DeepSeekProvider instantiation edge cases. Out of scope for the
+      switch story; track in a follow-up.
+
+  - id: LOW-002
+    severity: low
+    category: docs
+    description: >
+      docs/architecture/system-architecture.md retains the Baidu block
+      (marked DEPRECATED). A future reader may be confused without a
+      prominent banner.
+    recommendation: >
+      Add a markdown callout at top of the AI provider section explicitly
+      stating: "As of 2026-06-08, the active provider is DeepSeek. The
+      Baidu section below is retained for historical reference only."
+      Can be added in Story 9.3 (runbook) where documentation is in scope.
+
+waiver:
+  active: false

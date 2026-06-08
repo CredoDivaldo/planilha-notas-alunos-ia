@@ -61,7 +61,7 @@ O chatbot com IA:
 - **Story 5.3:** `publication_snapshots` necessários para aceder a notas publicadas.
 - **Story 5.5:** Student read model necessário para construir contexto do chatbot.
 - **Evolution API:** já integrada (CR4); precisa de suporte a webhook de entrada.
-- **Baidu QianFan:** chave de API em variável de ambiente `BAIDU_API_KEY` (free tier, sem custos).
+- **Baidu QianFan:** chave de API em variável de ambiente `BAIDU_API_KEY` (free tier, sem custos). **Revised 2026-06-08 (Story 9.0):** provider switched to DeepSeek Chat; `DEEPSEEK_API_KEY` env var (paid tier, ~$0.14/M tokens).
 
 ## Stories
 
@@ -108,7 +108,7 @@ Stories 6.1 e 6.2 podem ser desenvolvidas em paralelo como design, mas a Story 6
 | Risco | Mitigação |
 |-------|-----------|
 | Chatbot expõe notas não publicadas | Queries ao read model de snapshots publicados apenas; nunca acede a `grade_entries` |
-| Chave de API de IA não disponível | Usar variável de ambiente `BAIDU_API_KEY`; endpoint de teste usa mock quando ausente |
+| Chave de API de IA não disponível | Usar variável de ambiente `BAIDU_API_KEY`; endpoint de teste usa mock quando ausente **Revised 2026-06-08:** agora `DEEPSEEK_API_KEY`; endpoint de teste usa mock quando ausente |
 | Evolution API não suporta webhook de entrada | Verificar configuração da instância antes de implementar; documentar pré-requisito |
 | Aluno não identificado pelo telefone | Resposta educada pedindo contacto com o professor; não expor dados de outros alunos |
 | Rate abuse (spam de mensagens) | Rate limiting por número de telefone (max 10 mensagens/dia por defeito) |

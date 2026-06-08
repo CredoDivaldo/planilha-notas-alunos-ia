@@ -1,8 +1,8 @@
-"""AI Grade Query Service (Story 6.2).
+"""AI Grade Query Service (Stories 6.2, 9.0).
 
 Provides AI-powered responses to student questions about their grades
-using Baidu QianFan ERNIE as the primary provider (free tier).
-Legacy support for Claude and OpenAI preserved.
+using DeepSeek as the primary provider (Story 9.0 switch).
+Legacy support for Claude and OpenAI preserved as fallbacks.
 
 AC-1: AI model is called with student grade context.
 AC-2: Response is in Portuguese and grade-specific.
@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.contexts import AcademicContext, ClassEnrollment, Semester
 from backend.app.models.publication import PublicationSnapshot
-from backend.app.services.baidu_provider import AIProvider, BaiduProvider
+from backend.app.services.deepseek_provider import AIProvider, DeepSeekProvider
 
 LOGGER = logging.getLogger("backend.ai_chatbot.service")
 
@@ -180,32 +180,33 @@ class AIGradeQueryService:
         """Initialize the service and configure AI provider.
 
         Supports three providers:
-        - 'baidu': Baidu QianFan ERNIE (free tier, default)
-        - 'claude': Anthropic Claude (legacy)
-        - 'openai': OpenAI GPT (legacy)
+        - 'deepseek': DeepSeek Chat (default, primary — Story 9.0)
+        - 'claude': Anthropic Claude (legacy fallback)
+        - 'openai': OpenAI GPT (legacy fallback)
 
         If API key is missing for the configured provider, raises ValueError.
         """
-        provider_name = os.getenv("AI_PROVIDER", "baidu").lower()
+        provider_name = os.getenv("AI_PROVIDER", "deepseek").lower()
 
-        if provider_name == "baidu":
-            api_key = os.getenv("BAIDU_API_KEY", "")
+        if provider_name == "deepseek":
+            api_key = os.getenv("DEEPSEEK_API_KEY", "")
             if not api_key:
-                raise ValueError("BAIDU_API_KEY is required for baidu provider")
-            self.provider: AIProvider = BaiduProvider(api_key)
+                raise ValueError("DEEPSEEK_API_KEY is required for deepseek provider")
+            self.provider: AIProvider = DeepSeekProvider(api_key)
         elif provider_name == "claude":
-            api_key = os.getenv("AI_API_KEY", "")
+            api_key = os.getenv("ANTHROPIC_API_KEY", "") or os.getenv("AI_API_KEY", "")
             if not api_key:
-                raise ValueError("AI_API_KEY is required for claude provider")
+                raise ValueError("ANTHROPIC_API_KEY is required for claude provider")
             self.provider = ClaudeProvider(api_key)
         elif provider_name == "openai":
-            api_key = os.getenv("AI_API_KEY", "")
+            api_key = os.getenv("OPENAI_API_KEY", "") or os.getenv("AI_API_KEY", "")
             if not api_key:
-                raise ValueError("AI_API_KEY is required for openai provider")
+                raise ValueError("OPENAI_API_KEY is required for openai provider")
             self.provider = OpenAIProvider(api_key)
         else:
             raise ValueError(
-                f"Unknown AI_PROVIDER: {provider_name}. Must be 'baidu', 'claude', or 'openai'"
+                f"Unknown AI_PROVIDER: {provider_name}. "
+                "Must be 'deepseek', 'claude', or 'openai'"
             )
 
     def generate_grade_response(

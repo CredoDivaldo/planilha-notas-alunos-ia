@@ -97,13 +97,13 @@ O produto deixa de ser um MVP de upload e disparo por WhatsApp e passa a ser uma
 **Overview:**
 Respostas de IA do chatbot são geradas via API externa, configurável sem alterações de código.
 
-**Provider Padrão: Baidu QianFan**
+**Provider Padrão: Baidu QianFan** (DEPRECATED 2026-06-08 — switched to DeepSeek in Story 9.0)
 - Free tier: 100K tokens/mês (suficiente para MVP)
 - Linguagens: Suporte excelente para Português + Chinês
 - Latência: 150-300ms (aceitável para fluxo assíncrono WhatsApp)
 - Confiabilidade: 99.5% SLA (free tier)
 
-**Configuration (Variáveis de Ambiente):**
+**Configuration (Variáveis de Ambiente) — Baidu (DEPRECATED):**
 
 | Variável | Exemplo | Notas |
 |----------|---------|-------|
@@ -115,6 +115,30 @@ Respostas de IA do chatbot são geradas via API externa, configurável sem alter
 - ✅ Qualidade nativa em Português
 - ✅ Sem dependências complexas de SDK externas
 - ✅ Setup rápido para contas internacionais
+
+---
+
+**Provider Padrão: DeepSeek Chat** (Story 9.0 — current, 2026-06-08)
+- API: OpenAI-compatible, base URL `https://api.deepseek.com`
+- Custo: ~$0.14/M tokens (chat), ~$0.28/M tokens (output) — acessível para MVP
+- Linguagens: Suporte robusto para Português (modelo deepseek-chat treinado em PT)
+- Latência: 200-500ms (aceitável para fluxo assíncrono WhatsApp)
+- SDK: reutiliza `openai` Python client (já em `pyproject.toml`); zero deps novas
+
+**Configuration (Variáveis de Ambiente) — DeepSeek (current):**
+
+| Variável | Exemplo | Notas |
+|----------|---------|-------|
+| `DEEPSEEK_API_KEY` | `sk-xxx` | Obrigatório (https://platform.deepseek.com/api_keys) |
+| `AI_MODEL` | `deepseek-chat` | Default; OpenAI-compatible model ID |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | Opcional, default OK |
+
+**Vantagens da DeepSeek:**
+- ✅ Custo muito baixo (~$0.14/M tokens)
+- ✅ Suporte multilingual forte, incluindo Português
+- ✅ Compatibilidade OpenAI (reutiliza SDK já no projecto)
+- ✅ Sem mudanças estruturais — drop-in via `AIProvider` ABC
+- ✅ Tráfego de produção real (não free-tier instável)
 
 **Características de Segurança:**
 - System prompt restringe respostas a contexto de notas publicadas apenas

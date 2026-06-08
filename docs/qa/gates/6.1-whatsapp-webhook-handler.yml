@@ -83,6 +83,11 @@ checks:
       AI_PROVIDER, AI_MODEL, BAIDU_API_KEY with generation hint for token.
       Module-level docstring in chatbot.py maps ACs to implementation.
       Dev Notes in story include webhook payload structure and normalisation rules.
+      [Sync 2026-06-08] BAIDU_API_KEY replaced by DEEPSEEK_API_KEY in
+      .env.example; AI_PROVIDER default switched to deepseek. Gate verdict
+      unchanged — this is a configuration sync, not a behaviour change in
+      Story 6.1 scope. See docs/qa/change-proposals/2026-06-08-deepseek-switch.md
+      and Story 9.0 gate for the actual provider-switch QA evidence.
 
 top_issues:
   - id: MNT-001
