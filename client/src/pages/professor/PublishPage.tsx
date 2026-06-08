@@ -338,21 +338,13 @@ export default function PublishPage() {
           reason: f.reason,
         })),
       })
-    } catch {
-      // Mock success response
-      setPublishResult({
-        portalPublished: effectiveRecipients.length,
-        whatsappSent: channels.has('whatsapp') ? effectiveRecipients.length - 1 : 0,
-        failures: channels.has('whatsapp') ? 1 : 0,
-        failureList: channels.has('whatsapp')
-          ? [{
-              studentId: 'st-mock',
-              studentName: 'Filipe Santos',
-              studentNumber: '2024006',
-              reason: 'Número inválido',
-            }]
-          : [],
-      })
+    } catch (err) {
+      // Story 8.2: surface FastAPI's sanitised error to the user — no mock
+      // fallback. The dashboard disables the publish action when matched=0
+      // so the network call should normally succeed.
+      setPublishError(
+        err instanceof Error ? err.message : 'Erro ao publicar notas.',
+      )
     } finally {
       setPublishing(false)
     }
@@ -398,10 +390,9 @@ export default function PublishPage() {
             }
           : prev,
       )
-    } catch {
-      // Mock: clear failures on resend
-      setPublishResult((prev) =>
-        prev ? { ...prev, failures: 0, failureList: [] } : prev,
+    } catch (err) {
+      setPublishError(
+        err instanceof Error ? err.message : 'Erro ao reenviar notificações.',
       )
     } finally {
       setResending(false)

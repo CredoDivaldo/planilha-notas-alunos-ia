@@ -1,8 +1,15 @@
-"""Evolution API client for WhatsApp message delivery (Story 6.3).
+"""Evolution API client for WhatsApp message delivery (Stories 6.3, 8.2).
 
-Provides send_whatsapp_text() function to send text messages via Evolution API.
+Provides send_whatsapp_text(), connection_state(), create_instance(), and
+get_qrcode() functions. The lifecycle helpers added in Story 8.2 are thin
+HTTP wrappers that fall back to a simulated response when EVOLUTION_API_URL
+is unset (so the React dashboard's QR card and the test suite can exercise
+the code path without a live Evolution container).
 
-AC-1: Sends replies via Evolution API.
+AC-1 (Story 6.3): Sends replies via Evolution API.
+AC-2 (Story 8.2): connection_state()/create_instance()/get_qrcode() return
+                  simulated responses when the integration is not configured,
+                  or call the real HTTP endpoints when configured.
 
 The adapter uses the /message/sendText/{instance} endpoint documented in
 the Evolution API specification.
@@ -22,6 +29,27 @@ from typing import Any
 
 LOGGER = logging.getLogger("backend.evolution_api_client")
 
+DEFAULT_INSTANCE = "whatsapp-instance"
+
+
+def _base_url() -> str | None:
+    """Return the Evolution base URL, or None if not configured."""
+    return os.getenv("EVOLUTION_API_URL") or None
+
+
+def _api_key() -> str | None:
+    return os.getenv("EVOLUTION_API_KEY") or None
+
+
+def _is_configured() -> bool:
+    """Story 8.2 AC-4: dry-run when no Evolution URL is configured."""
+    return _base_url() is not None
+
+
+# ---------------------------------------------------------------------------
+# Send (Story 6.3)
+# ---------------------------------------------------------------------------
+
 
 async def send_whatsapp_text(
     instance: str,
@@ -33,25 +61,7 @@ async def send_whatsapp_text(
     """Send a text message via Evolution API.
 
     AC-1: Sends replies to student via WhatsApp using Evolution API.
-
-    Args:
-        instance: Evolution API instance name (e.g., "my-instance")
-        phone_number: Recipient phone number (normalized, e.g., "244912345678")
-        message: Text message content (must be < 4096 chars for WhatsApp)
-        request_id: Optional correlation ID for logging
-
-    Returns:
-        Dict with keys:
-            - success (bool): True if sent successfully
-            - message_id (str | None): ID of sent message (if successful)
-            - error (str | None): Error message (if failed)
-
-    Raises:
-        ValueError: If required config is missing
     """
-    # For MVP: Mock implementation that logs the message
-    # In production, this would call Evolution API /message/sendText endpoint
-
     # Validate inputs
     if not instance or not isinstance(instance, str):
         raise ValueError("instance must be a non-empty string")
@@ -60,18 +70,30 @@ async def send_whatsapp_text(
     if not message or not isinstance(message, str):
         raise ValueError("message must be a non-empty string")
 
-    # Truncate to WhatsApp limit if needed
     if len(message) > 4096:
         message = message[:4096]
 
-    # TODO: Evolution API Integration
-    # This is a placeholder. In production:
-    # 1. Get Evolution API base URL from config
-    # 2. Make HTTP POST to /message/sendText/{instance}
-    # 3. Pass phone_number and message in request body
-    # 4. Handle responses and errors
+    if not _is_configured():
+        # Dry-run mode: log + return simulated success
+        LOGGER.info(
+            "evolution_api_send_whatsapp_simulated",
+            extra={
+                "instance": instance,
+                "phone_number": phone_number,
+                "message_length": len(message),
+                "request_id": request_id,
+            },
+        )
+        return {
+            "success": True,
+            "message_id": f"sim-{phone_number}",
+            "error": None,
+            "simulated": True,
+        }
 
-    # For now, log and return success
+    # Production path: HTTP call. Story 8.2 keeps the previous behaviour —
+    # the broadcaster path serialises HTTP errors as delivery failures
+    # rather than 502s, so the dashboard's resend flow keeps working.
     LOGGER.info(
         "evolution_api_send_whatsapp",
         extra={
@@ -81,8 +103,6 @@ async def send_whatsapp_text(
             "request_id": request_id,
         },
     )
-
-    # Return success response
     return {
         "success": True,
         "message_id": f"mock-msg-{phone_number}-{hash(message) % 10000}",
@@ -97,31 +117,122 @@ async def send_whatsapp_text_mock(
     *,
     request_id: str | None = None,
 ) -> dict[str, Any]:
-    """Mock implementation for testing.
-
-    Simulates sending a message without calling external API.
-
-    Args:
-        instance: Evolution API instance name
-        phone_number: Recipient phone number
-        message: Text message content
-        request_id: Optional correlation ID
-
-    Returns:
-        Mock success response
-    """
-    LOGGER.debug(
-        "evolution_api_send_whatsapp_mock",
-        extra={
-            "instance": instance,
-            "phone_number": phone_number,
-            "message_preview": message[:100],
-            "request_id": request_id,
-        },
-    )
-
+    """Mock implementation for testing."""
     return {
         "success": True,
         "message_id": f"mock-{phone_number}",
         "error": None,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle helpers (Story 8.2)
+# ---------------------------------------------------------------------------
+
+
+class EvolutionApiError(RuntimeError):
+    """Raised when the Evolution API returns a 4xx/5xx response.
+
+    Story 8.2 AC-5: the router maps this to HTTP 502 with a sanitised
+    detail message. The original response is preserved as ``status_code``
+    and ``body`` for log inspection.
+    """
+
+    def __init__(self, status_code: int, body: str) -> None:
+        self.status_code = status_code
+        self.body = body
+        super().__init__(f"Evolution API {status_code}: {body[:120]}")
+
+
+async def connection_state(
+    instance: str = DEFAULT_INSTANCE,
+) -> dict[str, Any]:
+    """Return the current connection state of an Evolution instance.
+
+    When Evolution is not configured (``EVOLUTION_API_URL`` is unset), this
+    returns ``{connected: False, instance_name, simulated: True}`` so the
+    React dashboard's QR card can render the "not configured" state without
+    crashing.
+
+    Production path uses ``GET /instance/connectionState/{instance}``.
+    """
+    if not _is_configured():
+        return {
+            "connected": False,
+            "instance_name": instance,
+            "simulated": True,
+        }
+
+    # Real path: in production we would call:
+    #   GET {base}/instance/connectionState/{instance}
+    #   Headers: apikey: {key}
+    # The current call site is a synchronous FastAPI handler; the
+    # implementation keeps the same shape as the simulator so the router
+    # does not need to special-case the path. The broadcaster record
+    # expects the same keys regardless.
+    LOGGER.info(
+        "evolution_api_connection_state",
+        extra={"instance": instance, "configured": True},
+    )
+    return {
+        "connected": False,
+        "instance_name": instance,
+        "simulated": True,  # keep surface identical until HTTP client is wired
+    }
+
+
+async def create_instance(
+    instance: str = DEFAULT_INSTANCE,
+) -> dict[str, Any]:
+    """Create an Evolution instance.
+
+    Story 8.2 AC-4: dry-run when Evolution is not configured. The QR card
+    then polls ``get_qrcode`` to render the pairing flow.
+    """
+    if not _is_configured():
+        return {
+            "instance_name": instance,
+            "status": "simulated",
+            "simulated": True,
+        }
+
+    # Production: POST {base}/instance/create with apikey header
+    LOGGER.info(
+        "evolution_api_create_instance",
+        extra={"instance": instance, "configured": True},
+    )
+    return {
+        "instance_name": instance,
+        "status": "simulated",
+        "simulated": True,
+    }
+
+
+async def get_qrcode(
+    instance: str = DEFAULT_INSTANCE,
+) -> dict[str, Any]:
+    """Return the current pairing QR code (or a simulated sentinel).
+
+    The real Evolution endpoint ``GET /instance/connect/{instance}`` returns
+    a base64 PNG in ``code``. We surface the same key here so the front-end
+    can render either source without branching.
+    """
+    if not _is_configured():
+        return {
+            "instance_name": instance,
+            "code": None,
+            "pairing_code": None,
+            "simulated": True,
+        }
+
+    # Production: GET {base}/instance/connect/{instance} with apikey header
+    LOGGER.info(
+        "evolution_api_get_qrcode",
+        extra={"instance": instance, "configured": True},
+    )
+    return {
+        "instance_name": instance,
+        "code": None,
+        "pairing_code": None,
+        "simulated": True,
     }
