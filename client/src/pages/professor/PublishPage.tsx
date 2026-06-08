@@ -15,11 +15,11 @@ import { calcNotaFinal, getRowBadgeLabel } from '@/lib/grades'
 import type { ContextItem, StudentRow } from '@/types'
 
 // ---------------------------------------------------------------------------
-// Mock data — fallback when API unavailable
+// Fallback data — used when API is unavailable in dev
 // ---------------------------------------------------------------------------
 
-const MOCK_CONTEXT: ContextItem = {
-  id: 'ctx-mock-1',
+const FALLBACK_CONTEXT: ContextItem = {
+  id: 'ctx-fallback-1',
   turma: 'ING-T1',
   disciplina: 'Inglês Técnico',
   semestre: '2026/1',
@@ -33,7 +33,7 @@ const MOCK_CONTEXT: ContextItem = {
   ],
 }
 
-const MOCK_ROWS: StudentRow[] = [
+const FALLBACK_ROWS: StudentRow[] = [
   {
     studentId: 'st-1', studentNumber: '2024001', studentName: 'Ana Silva', published: false,
     components: { c1: { gradeId: 'g-1', value: 16 }, c2: { gradeId: 'g-2', value: 14 }, c3: { gradeId: 'g-3', value: 15 } },
@@ -60,8 +60,8 @@ const MOCK_ROWS: StudentRow[] = [
   },
 ]
 
-// Mock: 2 students have no valid phone (Eva, Bruno)
-const MOCK_NO_PHONE_IDS = new Set(['st-2', 'st-5'])
+// Fallback: 2 students have no valid phone (Eva, Bruno)
+const FALLBACK_NO_PHONE_IDS = new Set(['st-2', 'st-5'])
 
 // ---------------------------------------------------------------------------
 // Types
@@ -125,11 +125,11 @@ export default function PublishPage() {
   const [searchParams] = useSearchParams()
 
   // T10: context propagation via ?context={id}
-  const contextId = searchParams.get('context') ?? sessionStorage.getItem('active_context_id') ?? MOCK_CONTEXT.id
+  const contextId = searchParams.get('context') ?? sessionStorage.getItem('active_context_id') ?? FALLBACK_CONTEXT.id
 
   // Data
-  const [contextItem, setContextItem] = useState<ContextItem>(MOCK_CONTEXT)
-  const [rows, setRows] = useState<StudentRow[]>(MOCK_ROWS)
+  const [contextItem, setContextItem] = useState<ContextItem>(FALLBACK_CONTEXT)
+  const [rows, setRows] = useState<StudentRow[]>(FALLBACK_ROWS)
   const [loading, setLoading] = useState(true)
 
   // T11: WhatsApp status
@@ -166,10 +166,10 @@ export default function PublishPage() {
       const ctx = await apiFetch<ContextItem>(`/academic-contexts/${contextId}`)
       setContextItem(ctx)
       const gradesData = await apiFetch<{ students: StudentRow[] }>(`/grades/?context_id=${contextId}`)
-      setRows(gradesData.students ?? MOCK_ROWS)
+      setRows(gradesData.students ?? FALLBACK_ROWS)
     } catch {
-      setContextItem(MOCK_CONTEXT)
-      setRows(MOCK_ROWS)
+      setContextItem(FALLBACK_CONTEXT)
+      setRows(FALLBACK_ROWS)
     } finally {
       setLoading(false)
     }
@@ -208,7 +208,7 @@ export default function PublishPage() {
       const nota = calcNotaFinal(row.components, contextItem.components)
       const badge = getRowBadgeLabel(row.components, contextItem.components, row.published)
       const complete = badge !== 'Incompleta' && badge !== 'Vazio'
-      const hasPhone = !MOCK_NO_PHONE_IDS.has(row.studentId)
+      const hasPhone = !FALLBACK_NO_PHONE_IDS.has(row.studentId)
       return { row, nota, badge, complete, hasPhone }
     }),
     [rows, contextItem],

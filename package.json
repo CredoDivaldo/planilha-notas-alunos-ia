@@ -7,7 +7,7 @@
     "dev": "concurrently -n backend,client -c blue,green \"npm run dev --prefix backend\" \"npm run dev --prefix client\"",
     "dev:backend": "npm run dev --prefix backend",
     "dev:client": "npm run dev --prefix client",
-    "test": "jest --runInBand",
+    "test": "echo 'See backend pytest (pytest backend/tests/) and client e2e (npm run e2e)'",
     "lint": "eslint \"tests/**/*.js\"",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "quality": "npm run test && npm run lint && npm run typecheck",
@@ -17,10 +17,12 @@
     "client:install": "npm install --prefix client",
     "evolution:up": "docker compose -f docker-compose.evolution.yml up -d",
     "evolution:down": "docker compose -f docker-compose.evolution.yml down",
-    "evolution:logs": "docker compose -f docker-compose.evolution.yml logs -f evolution_api"
+    "evolution:logs": "docker compose -f docker-compose.evolution.yml logs -f evolution_api",
+    "e2e": "playwright test --config=client/playwright.config.ts"
   },
   "dependencies": {},
   "devDependencies": {
+    "@playwright/test": "^1.49.0",
     "@types/node": "^22.15.21",
     "concurrently": "^9.1.0",
     "eslint": "^9.26.0",

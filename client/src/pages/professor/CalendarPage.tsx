@@ -20,9 +20,9 @@ import { apiFetch } from '@/lib/api'
 import type { CalendarEvent, EventType } from '@/components/molecules/EventDot'
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Fallback data (used when backend is unreachable in dev; not test fixtures)
 // ---------------------------------------------------------------------------
-const MOCK_EVENTS: CalendarEvent[] = [
+const FALLBACK_EVENTS: CalendarEvent[] = [
   {
     id: 'ev-1',
     date: new Date().toISOString().slice(0, 10),
@@ -56,7 +56,7 @@ const MOCK_EVENTS: CalendarEvent[] = [
   },
 ]
 
-const MOCK_CONTEXTS: ContextOption[] = [
+const FALLBACK_CONTEXTS: ContextOption[] = [
   { id: 'ctx-1', label: 'ING-T1 · Inglês Técnico · 2026/1' },
   { id: 'ctx-2', label: 'MAT-T2 · Matemática · 2026/1' },
 ]
@@ -197,7 +197,7 @@ function ListViewPanel({ events }: { events: CalendarEvent[] }) {
 // ---------------------------------------------------------------------------
 export default function CalendarPage() {
   // Data
-  const [events, setEvents] = useState<CalendarEvent[]>(MOCK_EVENTS)
+  const [events, setEvents] = useState<CalendarEvent[]>(FALLBACK_EVENTS)
   const [selectedContextId, setSelectedContextId] = useState<string>('todos')
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
 
@@ -216,8 +216,8 @@ export default function CalendarPage() {
   // Load events — mock fallback
   useState(() => {
     apiFetch<{ events: CalendarEvent[] }>('/api/v1/calendar/events')
-      .then((d) => setEvents(d.events ?? MOCK_EVENTS))
-      .catch(() => setEvents(MOCK_EVENTS))
+      .then((d) => setEvents(d.events ?? FALLBACK_EVENTS))
+      .catch(() => setEvents(FALLBACK_EVENTS))
   })
 
   // Filtered events by context
@@ -362,7 +362,7 @@ export default function CalendarPage() {
             className="border border-slate-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#0D6EFD]"
           >
             <option value="todos">Todos os contextos</option>
-            {MOCK_CONTEXTS.map((ctx) => (
+            {FALLBACK_CONTEXTS.map((ctx) => (
               <option key={ctx.id} value={ctx.id}>{ctx.label}</option>
             ))}
           </select>
@@ -426,7 +426,7 @@ export default function CalendarPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         event={editingEvent}
-        contexts={MOCK_CONTEXTS}
+        contexts={FALLBACK_CONTEXTS}
         onSave={handleSave}
       />
 

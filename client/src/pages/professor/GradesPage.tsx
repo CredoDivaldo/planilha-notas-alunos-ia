@@ -10,10 +10,10 @@ import { calcNotaFinal, getRowBadgeLabel } from '@/lib/grades'
 import type { ContextItem, StudentRow, ImportHistoryEntry } from '@/types'
 
 // ---------------------------------------------------------------------------
-// Mock data — used when API is unavailable
+// Fallback data — used when API is unavailable in dev
 // ---------------------------------------------------------------------------
-const MOCK_CONTEXT: ContextItem = {
-  id: 'ctx-mock-1',
+const FALLBACK_CONTEXT: ContextItem = {
+  id: 'ctx-fallback-1',
   turma: 'ING-T1',
   disciplina: 'Inglês Técnico',
   semestre: '2026/1',
@@ -27,7 +27,7 @@ const MOCK_CONTEXT: ContextItem = {
   ],
 }
 
-const MOCK_ROWS: StudentRow[] = [
+const FALLBACK_ROWS: StudentRow[] = [
   {
     studentId: 'st-1', studentNumber: '2024001', studentName: 'Ana Silva', published: false,
     components: { c1: { gradeId: 'g-1', value: 16 }, c2: { gradeId: 'g-2', value: 14 }, c3: { gradeId: 'g-3', value: 15 } },
@@ -69,8 +69,8 @@ export default function GradesPage() {
   const navigate = useNavigate()
 
   // Data — initialised with mock, replaced by API response
-  const [contextItem, setContextItem] = useState<ContextItem>(MOCK_CONTEXT)
-  const [rows, setRows] = useState<StudentRow[]>(MOCK_ROWS)
+  const [contextItem, setContextItem] = useState<ContextItem>(FALLBACK_CONTEXT)
+  const [rows, setRows] = useState<StudentRow[]>(FALLBACK_ROWS)
   const [loading, setLoading] = useState(true)
   const [importHistory, setImportHistory] = useState<ImportHistoryEntry[]>([])
   const [historyExpanded, setHistoryExpanded] = useState(false)
@@ -91,15 +91,15 @@ export default function GradesPage() {
 
   // Load data — all setState inside async callbacks (not synchronous in effect body)
   const loadData = useCallback(async () => {
-    const contextId = sessionStorage.getItem('active_context_id') ?? MOCK_CONTEXT.id
+    const contextId = sessionStorage.getItem('active_context_id') ?? FALLBACK_CONTEXT.id
     try {
       const ctx = await apiFetch<ContextItem>(`/academic-contexts/${contextId}`)
       setContextItem(ctx)
       const gradesData = await apiFetch<{ students: StudentRow[] }>(`/grades/?context_id=${contextId}`)
-      setRows(gradesData.students ?? MOCK_ROWS)
+      setRows(gradesData.students ?? FALLBACK_ROWS)
     } catch {
-      setContextItem(MOCK_CONTEXT)
-      setRows(MOCK_ROWS)
+      setContextItem(FALLBACK_CONTEXT)
+      setRows(FALLBACK_ROWS)
     } finally {
       setLoading(false)
     }

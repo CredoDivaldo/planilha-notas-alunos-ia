@@ -30,7 +30,7 @@ import {
 import { apiFetch } from '@/lib/api'
 import type { ContextItem } from '@/types'
 
-const MOCK_CONTEXTS: ContextItem[] = [
+const FALLBACK_CONTEXTS: ContextItem[] = [
   {
     id: '1',
     turma: 'ING-T1',
@@ -123,7 +123,7 @@ export default function ContextsPage() {
   useEffect(() => {
     apiFetch<ContextItem[]>('/academic-contexts/')
       .then(setContexts)
-      .catch(() => setContexts(MOCK_CONTEXTS))
+      .catch(() => setContexts(FALLBACK_CONTEXTS))
       .finally(() => setLoading(false))
   }, [])
 
