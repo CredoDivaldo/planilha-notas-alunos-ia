@@ -15,7 +15,7 @@ O objectivo é orientar desenvolvimento assistido por IA sem quebrar o fluxo MVP
 - **Finalidade principal:** MVP local para importar estudantes e notas por CSV, gerar correspondência e enviar mensagens WhatsApp por Evolution API.
 - **Stack actual:** Node.js, Express 4, JavaScript CommonJS, frontend estático em `public/`, Jest, Supertest, ESLint flat config e TypeScript checker por `tsc --noEmit`.
 - **Estilo de arquitectura:** monólito local com separação simples entre rotas (`src/routes`), serviços (`src/services`) e UI estática (`public`).
-- **Persistência actual:** ficheiros JSON em `data/`, nomeadamente `students.json`, `grades-last-upload.json` e `match-last.json`.
+- **Persistência actual:** DB-backed via SQLAlchemy / SQLite em `backend/app/app.sqlite3` (Story 8.4 cutover). Os ficheiros JSON legados em `legacy/data/*.json` são mantidos apenas como referência histórica e já não são lidos pelo código de produção.
 - **Integração externa actual:** Evolution API via HTTP, configurada por `EVOLUTION_BASE_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE` e `EVOLUTION_INTEGRATION`.
 - **Execução actual:** `npm run dev` ou `npm start`; Docker Compose apenas para Evolution API.
 
@@ -298,7 +298,7 @@ O objectivo é orientar desenvolvimento assistido por IA sem quebrar o fluxo MVP
 - **Tabelas modificadas:** nenhuma tabela existente, porque não há DB aplicacional actual.
 - **Índices iniciais:** `students.student_number`, `users.username`, chaves de contexto em `teaching_assignments`, chaves de leitura em `publication_snapshots(student_id, is_current)` e `notification_deliveries(broadcast_job_id, status)`.
 - **Bootstrap:** comando Python dedicado deve criar DB limpo, aplicar migrações e criar conta local inicial de professor/admin conforme ambiente.
-- **Migração JSON:** comando separado deve importar `data/students.json`, `data/grades-last-upload.json` e `data/match-last.json` para staging auditável ou entidades de domínio, gerando relatório de contagens, rejeições e conflitos.
+- **Migração JSON:** o cutover de produção está concluído (Story 8.4) — os JSONs legados foram movidos para `legacy/data/` e o código de produção lê exclusivamente do DB. O subcommand `python -m backend.app.cli migrate-legacy-csv <dir>` está disponível para re-importar CSVs de demo a partir de `legacy/fixtures/` ou outros directórios, reaproveitando o mesmo pipeline de parse + bulk insert usado pelos routers FastAPI.
 - **Rollback:** antes de qualquer importação, criar backup timestamped de `data/`; rollback do DB local pode ser feito por cópia do ficheiro SQLite e reversão Alembic em ambiente de desenvolvimento.
 
 ## Arquitectura de Componentes
@@ -534,13 +534,15 @@ graph TD
 │   └── styles.css
 ├── tests/
 │   └── critical-flow.test.js
-├── data/
-│   ├── students.json
-│   ├── grades-last-upload.json
-│   └── match-last.json
+├── data/                  # production CSV uploads (no JSONs since Story 8.4)
+├── legacy/
+│   ├── data/              # historical JSON snapshots — not read by production
+│   └── fixtures/          # demo CSVs re-imported via `migrate-legacy-csv`
 ├── docs/
 └── package.json
 ```
+
+> **Story 8.4 — storage cutover:** os ficheiros `data/*.json` foram movidos para `legacy/data/` (via `git mv`); os CSVs de demo (`students_teste.csv`, `notas_teste.csv`) foram movidos para `legacy/fixtures/`. A árvore acima reflecte a estrutura legada antes do cutover; a estrutura actual lê do DB via `backend/app/app.sqlite3` e não tem JSONs sob `data/`.
 
 ### Nova Organização Prevista
 
