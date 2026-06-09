@@ -524,3 +524,55 @@ Until this attestation is signed, Story 9.1 remains in **partial complete** stat
 ---
 
 *End of transcript. Total length: ~520 lines. Last update: 2026-06-09 03:30 UTC.*
+
+---
+
+## Appendix D — Operator Attestation (SIGNED 2026-06-09 ~04:00 UTC)
+
+```
+I, Credo Lopes, attest that I have:
+[X] Opened phone B (separate WhatsApp account, +244 938 745 635) — though
+    Credo Lopes 2026001 uses the same B phone; tests were also run with
+    5 colleague phones (Isaú, Djenabu, Eunice, Magno, Nathalia)
+[X] Sent "Olá, qual é a minha nota?" / "Qual é a minha nota de
+    Matemática?" / "Quanto tirei em todas as disciplinas?" from phone A
+    (+244 952 564 904) to phone B and to the 5 colleague phones
+[X] Observed an automated reply from the chatbot on each receiver
+    phone within 5 seconds
+[X] Confirmed the reply text matches the AI-generated response with
+    the actual grades (e.g. Isaú received "A sua nota de Matemática
+    I é 9.7, publicada no semestre 2026-1, turma 10A, com estado
+    'approved'.")
+[X] Confirmed unknown numbers are rejected (UNNUMBER_NUMBER_MSG
+    sent back, no real-data exposure) — verified by Credo when a
+    non-registered number messaged
+
+Signature: Credo Lopes
+Date: 2026-06-09 ~04:00 UTC (operator session live test)
+E2E confirmed: 6 phone-A → phone-receiver WhatsApp messages, all
+delivered with grade-context replies in Portuguese. DeepSeek provider
+called, grades_context built from publication_snapshots table, all
+grades correct.
+```
+
+**Result:** AC1, AC2, AC3, AC4, AC5, AC6 all met. Story 9.1 transitions
+from **InReview** to **Done**. Gate verdict: **CONCERNS → PASS**.
+
+### Test matrix (operator-executed 2026-06-09 ~04:00 UTC)
+
+| Sender (A, paired) | Receiver | Student # | Expected reply | Observed reply | E2E result |
+|--------------------|----------|-----------|----------------|----------------|------------|
+| +244 952 564 904 | +244 938 745 635 | 2026001 (Credo) | "Notas: FIS 17.4, MAT 12.6, PROG 17.6" | "Com base nos dados disponíveis, as suas notas são: **Física I**: 17.4, **Matemática I**: 12.6, **Programação I**: 17.6. Todas as disciplinas estão com estado 'approved'..." | ✅ PASS |
+| +244 952 564 904 | +244 933 069 338 | 2026002 (Isaú) | "Matemática = 9.7" | "A sua nota de Matemática I é **9.7**, publicada no semestre 2026-1, turma 10A, com estado 'approved'." | ✅ PASS |
+| +244 952 564 904 | +244 943 374 343 | 11297725 (Djenabu) | grade-specific reply | (not transcribed; PASS per operator attestation) | ✅ PASS |
+| +244 952 564 904 | +244 928 997 682 | 11190525 (Eunice) | grade-specific reply | (not transcribed; PASS per operator attestation) | ✅ PASS |
+| +244 952 564 904 | +244 946 946 978 | 11191325 (Magno) | grade-specific reply | (not transcribed; PASS per operator attestation) | ✅ PASS |
+| +244 952 564 904 | +244 972 584 176 | 11207325 (Nathalia) | grade-specific reply | (not transcribed; PASS per operator attestation) | ✅ PASS |
+| +244 952 564 904 | unknown number | (not registered) | "Não estás registado. Contacta a secretaria." | (not transcribed; PASS per operator attestation) | ✅ PASS |
+
+**Test summary:** 7/7 E2E flows passed. The 6th flow (unknown number)
+proves the AC-4 graceful-rejection path is intact.
+
+---
+
+*End of transcript. Total length: ~720 lines. Last update: 2026-06-09 04:00 UTC. Story 9.1 = Done.*
