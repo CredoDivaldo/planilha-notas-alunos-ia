@@ -180,17 +180,69 @@ async def send_whatsapp_text_mock(
 
 
 class EvolutionApiError(RuntimeError):
-    """Raised when the Evolution API returns a 4xx/5xx response.
+    """Raised when the Evolution API returns a 4xx/5xx response or is unreachable.
 
     Story 8.2 AC-5: the router maps this to HTTP 502 with a sanitised
     detail message. The original response is preserved as ``status_code``
     and ``body`` for log inspection.
+
+    Story 9.2 AC-3 hardening: the user-facing string (used in HTTP 502 detail)
+    MUST NOT leak internal context such as docker commands, log paths,
+    connection strings, or traceback lines. Use ``user_message`` for the
+    response body; ``str(exc)`` is preserved for log inspection only.
     """
+
+    _INTERNAL_LEAK_PATTERNS = (
+        "docker ",
+        "dockerfile",
+        "/var/log",
+        "/etc/",
+        "traceback",
+        "stack trace",
+        "exception:",
+        "connection refused:",
+        "kubectl",
+        "ssh ",
+    )
 
     def __init__(self, status_code: int, body: str) -> None:
         self.status_code = status_code
         self.body = body
+        # Log-facing message (full diagnostic info preserved).
         super().__init__(f"Evolution API {status_code}: {body[:120]}")
+
+    @property
+    def user_message(self) -> str:
+        """Sanitised, user-facing message.
+
+        Truncated to 120 chars and stripped of internal-only patterns
+        (docker hints, log paths, traceback markers). Used by the router
+        to build the HTTP 502 detail.
+        """
+        raw = (self.body or "").strip()
+        if not raw:
+            if self.status_code == 0:
+                return "Evolution API is unreachable"
+            return f"Evolution API returned status {self.status_code}"
+
+        sanitised = raw
+        for pattern in self._INTERNAL_LEAK_PATTERNS:
+            # Case-insensitive strip; pattern + everything until next space
+            lower = sanitised.lower()
+            idx = lower.find(pattern)
+            while idx != -1:
+                # Find next space after pattern; if none, drop to end
+                end = sanitised.find(" ", idx + len(pattern))
+                if end == -1:
+                    sanitised = sanitised[:idx].rstrip()
+                else:
+                    sanitised = sanitised[:idx] + sanitised[end + 1 :]
+                lower = sanitised.lower()
+                idx = lower.find(pattern)
+        sanitised = sanitised.strip()
+        if not sanitised:
+            return f"Evolution API returned status {self.status_code}"
+        return sanitised[:120]
 
 
 async def connection_state(
