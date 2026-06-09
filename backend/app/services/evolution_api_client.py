@@ -91,9 +91,7 @@ async def send_whatsapp_text(
             "simulated": True,
         }
 
-    # Production path: HTTP call. Story 8.2 keeps the previous behaviour —
-    # the broadcaster path serialises HTTP errors as delivery failures
-    # rather than 502s, so the dashboard's resend flow keeps working.
+    # Production path: real HTTP call to Evolution API (Story 9.1 AC5).
     LOGGER.info(
         "evolution_api_send_whatsapp",
         extra={
@@ -103,11 +101,62 @@ async def send_whatsapp_text(
             "request_id": request_id,
         },
     )
-    return {
-        "success": True,
-        "message_id": f"mock-msg-{phone_number}-{hash(message) % 10000}",
-        "error": None,
+
+    import httpx  # local import — keep top-level imports clean
+
+    api_key = _api_key() or ""
+    base_url = _base_url() or ""
+    url = f"{base_url.rstrip('/')}/message/sendText/{instance}"
+    headers = {"apikey": api_key, "Content-Type": "application/json"}
+    payload = {
+        "number": phone_number,
+        "text": message,
     }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json() if response.content else {}
+        message_id = (
+            data.get("key", {}).get("id")
+            or data.get("messageId")
+            or data.get("id")
+            or f"sent-{phone_number}"
+        )
+        return {
+            "success": True,
+            "message_id": str(message_id),
+            "error": None,
+        }
+    except httpx.HTTPStatusError as exc:
+        error_body = exc.response.text[:500] if exc.response is not None else str(exc)
+        LOGGER.error(
+            "evolution_api_http_error",
+            extra={
+                "instance": instance,
+                "phone_number": phone_number,
+                "status_code": exc.response.status_code if exc.response is not None else 0,
+                "error": error_body,
+                "request_id": request_id,
+            },
+        )
+        raise EvolutionApiError(
+            exc.response.status_code if exc.response is not None else 0,
+            error_body,
+        ) from exc
+    except Exception as exc:
+        LOGGER.error(
+            "evolution_api_send_failed",
+            extra={
+                "instance": instance,
+                "phone_number": phone_number,
+                "error_type": type(exc).__name__,
+                "error_message": str(exc),
+                "request_id": request_id,
+            },
+        )
+        raise EvolutionApiError(0, f"{type(exc).__name__}: {exc}") from exc
 
 
 async def send_whatsapp_text_mock(

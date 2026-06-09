@@ -404,3 +404,123 @@ Story 9.1 received the following changes from this run:
 - **Change Log:** row 1.2 added (2026-06-08, @dev, SDC Phase 3, PO-9.1-01 + PO-9.1-02 applied, T1-T6 underway)
 
 No AC, scope, or title changes (per Article IV — No Invention).
+
+---
+
+## Appendix C — FU-1..FU-4 Operator Follow-up Status (post-handoff 2026-06-09)
+
+This appendix captures the **real-world execution** of the FU-1..FU-4 actions that were queued at gate time. The SDC engine paused at Step 4 with verdict **CONCERNS**; this section records what was actually executed in the operator session, so the gate can be re-evaluated.
+
+### FU-1: Populate root `.env` (CLOSED 2026-06-09)
+
+**Operator action (Credo):** Pasted `DEEPSEEK_API_KEY` (real value from https://platform.deepseek.com/api_keys) into `.env` at line 118; `@dev` appended `CHATBOT_WEBHOOK_TOKEN` (32-byte secrets.token_urlsafe), `AI_PROVIDER=deepseek`, `AI_MODEL=deepseek-chat`, and **added `EVOLUTION_API_URL` alias** (which `evolution_api_client.py` reads, not `EVOLUTION_BASE_URL` — a backend bug that this FU-1 had to surface and fix).
+
+**Verification:**
+
+```bash
+$ grep -E "^(DEEPSEEK_API_KEY|CHATBOT_WEBHOOK_TOKEN|AI_PROVIDER|AI_MODEL|EVOLUTION_API_URL|EVOLUTION_BASE_URL|EVOLUTION_API_KEY|EVOLUTION_INSTANCE)" .env
+DEEPSEEK_API_KEY=<filled 35 chars>
+CHATBOT_WEBHOOK_TOKEN=P_kIsOyu2HkVjPlrDPeizzpLA8OEVI2uWbAsnT8SZMY
+AI_PROVIDER=deepseek
+AI_MODEL=deepseek-chat
+EVOLUTION_API_URL=http://localhost:8080
+EVOLUTION_BASE_URL=http://localhost:8080
+EVOLUTION_API_KEY=02fb2b6a6169182277eaad7063c3da142c76113b109ef184
+EVOLUTION_INSTANCE=turma-c
+```
+
+**Outcome:** 7/7 AC2 vars present (with 1 redundant alias for safety). FU-1 **CLOSED**.
+
+> **Security note:** the `DEEPSEEK_API_KEY` value was pasted in plaintext into the chat conversation; recommend Credo rotates the key post-session at https://platform.deepseek.com/api_keys.
+
+### FU-2: Start FastAPI on :8000 (CLOSED 2026-06-09)
+
+**Operator action:** None — `@dev` started uvicorn in background. Two iterations needed:
+
+1. First attempt: `cd backend && uvicorn app.main:app --reload` → `ModuleNotFoundError: No module named 'backend'`
+2. Second attempt: `uvicorn app.main:app --reload` from project root → `ModuleNotFoundError: No module named 'app'`
+3. Third attempt: `cd /Users/user/10_Projects/Planilha\ notas\ alunos\ IA && uvicorn backend.app.main:app --reload --port 8000` with `set -a && source .env && set +a` prepended → **WORKED**
+
+**Verification:**
+
+```bash
+$ curl -sS http://localhost:8000/api/v1/health
+{"status":"ok","service":"Planilha Notas Alunos API","api_prefix":"/api/v1",
+ "database":{"dialect":"sqlite","journal_mode":"wal","wal_enabled":true,
+ "foreign_keys_enabled":true},"request_id":"..."}
+```
+
+**OpenAPI snapshot** (12 routes registered, including `POST /api/v1/chatbot/webhook` and `POST /api/v1/chatbot/test`).
+
+**Outcome:** FastAPI a correr, background task `bnsjbn4kz` (later reloaded to `b6p8eezo2` after the production-path fix). FU-2 **CLOSED**.
+
+### FU-3: QR pairing on real WhatsApp (CLOSED 2026-06-09)
+
+**Operator action:** Opened `http://localhost:8080/manager` in browser; authenticated with `AUTHENTICATION_API_KEY=02fb2b6a...` from `.env.evolution`; selected existing instance `turma-c`; clicked "Connect / Get QR"; scanned QR with phone A (Angola number `+244 952 564 904`) within 60s.
+
+**Verification:**
+
+```bash
+$ curl -sS "http://localhost:8080/instance/connectionState/turma-c" \
+    -H "apikey: 02fb2b6a6169182277eaad7063c3da142c76113b109ef184"
+{"instance":{"instanceName":"turma-c","state":"open"}}
+
+$ curl -sS "http://localhost:8080/instance/fetchInstances" \
+    -H "apikey: 02fb2b6a6169182277eaad7063c3da142c76113b109ef184"
+[{"name":"turma-c","connectionStatus":"open",
+  "ownerJid":"244952564904@s.whatsapp.net", ...}]
+```
+
+**Outcome:** Phone A (244952564904) pareado, instance state `open`, ownerJid `244952564904@s.whatsapp.net`. FU-3 **CLOSED**.
+
+### FU-4: Fire T5 + sign operator attestation (PARTIAL 2026-06-09)
+
+**Operator action:** Sent "Olá, qual é a minha nota?" via WhatsApp from phone A to phone A (self-message), repeated 4 times during the session.
+
+**System behaviour observed:**
+
+1. **First message (2026-06-08 ~19:48):** webhook delivered to FastAPI but **rejected with 401** — Evolution was sending WITHOUT the `X-Webhook-Token` header. Operator had not yet re-set the webhook with the auth header. **Root cause:** Evolution's `webhook/set` API requires the nested `webhook` object; the initial `@dev` set used the flat format which silently dropped the `headers` field. **Fix:** re-set with `{"webhook": {"headers": {"X-Webhook-Token": "..."}}}`.
+
+2. **Second message:** webhook auth passed, but pipeline returned `webhook_unknown_phone` — the `students` table had STU999 with `phone="+244952564904"` (with `+`), but the chatbot's `WHERE phone = :phone` query receives the *normalized* phone (`244952564904`, no `+`). **Fix:** updated STU999.phone to normalized form.
+
+3. **Third message:** pipeline ran end-to-end. AI service returned `no_published_grades` (DB has no grade entries). `send_whatsapp_text` was called but **silently fell back to dry-run mode** because `evolution_api_client.py` checks for `EVOLUTION_API_URL`, but `.env` had `EVOLUTION_BASE_URL`. **Root cause: backend bug, not a config gap.** **Fix:** added `EVOLUTION_API_URL=http://localhost:8080` alias to `.env` and restarted FastAPI.
+
+4. **Fourth message:** pipeline ran end-to-end with real `httpx.post` call (after the `@dev` YOLO fix to `evolution_api_client.py` lines 94-110). FastAPI logs:
+
+   ```
+   INFO backend.evolution_api_client evolution_api_send_whatsapp
+   INFO httpx HTTP Request: POST http://localhost:8080/message/sendText/turma-c "HTTP/1.1 201 Created"
+   INFO backend.chatbot.pipeline chatbot_pipeline_complete
+   INFO backend.chatbot.routes webhook_pipeline_result
+   ```
+
+   Evolution returned **201 Created** — server-side dispatch confirmed. **However, the WhatsApp client on phone A did not display the response** (R4 risk: WhatsApp may suppress self-messages / fromMe sends, or the response went to the `lid` addressing mode rather than the `s.whatsapp.net` JID). Operator attestation on phone B was not possible in this session because the test was A→A.
+
+**Outcome:** The pipeline is end-to-end functional (Evolution API 201 Created confirmed). Full visual operator attestation requires a second phone (B) or a non-self-message scenario. **FU-4 PARTIAL** — the wiring is proven, the delivery is unconfirmed.
+
+### Additional findings (FU-1..FU-4 surfaced 3 backend gaps)
+
+| Gap | Severity | Discovered in | Fix |
+|-----|----------|--------------|-----|
+| `evolution_api_client.py` checks `EVOLUTION_API_URL`, but `.env.example` documents `EVOLUTION_BASE_URL` | MEDIUM (silent dry-run fallback) | FU-1 follow-up | Added `EVOLUTION_API_URL` alias to `.env`; recommend updating `.env.example` and `conftest.py` |
+| `evolution_api_client.py` lines 94-110: production-path "stub" that logged but never called Evolution | MEDIUM (would silently fail in production) | FU-4 follow-up | Replaced stub with real `httpx.AsyncClient.post`; 170/170 pytest still green |
+| Evolution webhook `webhookByEvents` semantics: needs nested `{"webhook": {...}}` payload, not flat | LOW (docs) | FU-3 follow-up | Documented in transcript; recommend runbook update in Story 9.3 |
+
+### Operator attestation (to be signed by Credo after FU-4 fully verified)
+
+```
+I, Credo Lopes, attest that I have:
+[ ] Opened phone B (separate WhatsApp account, +244 938 745 635)
+[ ] Sent "Olá, qual é a minha nota?" from phone A (+244 952 564 904) to phone B
+[ ] Observed an automated reply from the chatbot on phone B within 60 seconds
+[ ] Confirmed the reply text matches the AI-generated response (or the no-grades fallback)
+[ ] Saved a screenshot of phone B showing the received message
+
+Signature: _______________________   Date: ____________
+```
+
+Until this attestation is signed, Story 9.1 remains in **partial complete** state. The wiring is proven; the operator-side delivery is operator-attested.
+
+---
+
+*End of transcript. Total length: ~520 lines. Last update: 2026-06-09 03:30 UTC.*
