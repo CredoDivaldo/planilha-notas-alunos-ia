@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Check, X } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -137,31 +138,31 @@ export function GradeTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200">
+    <div className="overflow-x-auto rounded-lg border border-border">
       <Table aria-label={`Notas da turma ${contextItem.turma}`}>
         <TableHeader>
-          <TableRow className="bg-slate-50">
-            <TableHead scope="col" className="w-28 font-semibold text-slate-700">
+          <TableRow className="bg-muted/50">
+            <TableHead scope="col" className="w-28 font-semibold text-foreground">
               Nº
             </TableHead>
-            <TableHead scope="col" className="font-semibold text-slate-700">
+            <TableHead scope="col" className="font-semibold text-foreground">
               Nome
             </TableHead>
             {contextItem.components.map((comp) => (
               <TableHead
                 key={comp.id}
                 scope="col"
-                className="font-semibold text-slate-700 text-center min-w-[110px]"
+                className="font-semibold text-foreground text-center min-w-[110px]"
               >
                 {comp.name}
                 <br />
-                <span className="text-xs font-normal text-slate-500">({comp.weight}%)</span>
+                <span className="text-xs font-normal text-muted-foreground">({comp.weight}%)</span>
               </TableHead>
             ))}
-            <TableHead scope="col" className="font-semibold text-slate-700 text-center w-28">
+            <TableHead scope="col" className="font-semibold text-foreground text-center w-28">
               Nota Final
             </TableHead>
-            <TableHead scope="col" className="font-semibold text-slate-700 text-center w-28">
+            <TableHead scope="col" className="font-semibold text-foreground text-center w-28">
               Estado
             </TableHead>
           </TableRow>
@@ -175,16 +176,16 @@ export function GradeTable({
             return (
               <TableRow
                 key={row.studentId}
-                className={row.published ? 'opacity-70 bg-slate-50' : 'hover:bg-slate-50/50'}
+                className={row.published ? 'opacity-70 bg-muted/50' : 'hover:bg-muted/50/50'}
               >
                 {/* Student number as row header */}
                 <TableHead
                   scope="row"
-                  className="font-mono text-sm font-normal text-slate-600 px-4 py-3"
+                  className="font-mono text-sm font-normal text-muted-foreground px-4 py-3"
                 >
                   {row.studentNumber}
                 </TableHead>
-                <TableCell className="font-medium text-slate-900">{row.studentName}</TableCell>
+                <TableCell className="font-medium text-foreground">{row.studentName}</TableCell>
 
                 {contextItem.components.map((comp) => {
                   const key = cellKey(row.studentId, comp.id)
@@ -197,7 +198,7 @@ export function GradeTable({
 
                   let cellBg = ''
                   if (isCellEditing) cellBg = 'bg-[#EFF6FF]'
-                  else if (status === 'saving') cellBg = 'bg-slate-100'
+                  else if (status === 'saving') cellBg = 'bg-muted'
                   else if (status === 'error') cellBg = 'bg-[#FEF2F2]'
 
                   return (
@@ -206,7 +207,7 @@ export function GradeTable({
                       className={[
                         'text-center py-2',
                         cellBg,
-                        status === 'error' ? 'ring-1 ring-inset ring-[#B91C1C]' : '',
+                        status === 'error' ? 'ring-1 ring-inset ring-destructive' : '',
                         !row.published && !isCellEditing ? 'cursor-pointer' : '',
                       ]
                         .filter(Boolean)
@@ -234,34 +235,34 @@ export function GradeTable({
                               if (e.key === 'Escape') cancelEdit()
                             }}
                             aria-label={`Nota de ${comp.name} para ${row.studentName}`}
-                            className="w-16 text-center border border-[#0D6EFD] rounded px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#0D6EFD]"
+                            className="w-16 text-center border border-primary rounded px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                           />
                           <button
                             type="button"
                             onClick={confirmEdit}
                             aria-label="Guardar nota"
-                            className="text-[#15803D] hover:text-green-900 text-base leading-none"
+                            className="text-success hover:text-success/80 text-base leading-none"
                           >
-                            ✅
+                            <Check className="size-4" />
                           </button>
                           <button
                             type="button"
                             onClick={cancelEdit}
                             aria-label="Cancelar edição"
-                            className="text-slate-400 hover:text-slate-700 text-sm leading-none"
+                            className="text-muted-foreground hover:text-foreground text-sm leading-none"
                           >
-                            ✕
+                            <X className="size-3.5" />
                           </button>
                         </div>
                       ) : status === 'saving' ? (
-                        <span className="text-slate-400 text-xs animate-pulse">A guardar…</span>
+                        <span className="text-muted-foreground text-xs animate-pulse">A guardar…</span>
                       ) : (
                         <div className="flex flex-col items-center gap-0.5">
                           <span
                             className={
                               gradeVal !== null && gradeVal !== undefined
-                                ? 'text-slate-900 tabular-nums'
-                                : 'text-slate-300 text-xs'
+                                ? 'text-foreground tabular-nums'
+                                : 'text-muted-foreground/30 text-xs'
                             }
                           >
                             {gradeVal !== null && gradeVal !== undefined ? gradeVal : '—'}
@@ -281,7 +282,7 @@ export function GradeTable({
                       {notaFinal.toFixed(1)}
                     </span>
                   ) : (
-                    <span className="text-slate-300 text-xs">—</span>
+                    <span className="text-muted-foreground/30 text-xs">—</span>
                   )}
                 </TableCell>
 
@@ -300,7 +301,7 @@ export function GradeTable({
             <TableRow>
               <TableCell
                 colSpan={contextItem.components.length + 4}
-                className="text-center text-slate-500 py-10"
+                className="text-center text-muted-foreground py-10"
               >
                 Nenhum estudante corresponde aos filtros seleccionados.
               </TableCell>

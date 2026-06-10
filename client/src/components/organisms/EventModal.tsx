@@ -2,6 +2,7 @@
 // Story 7.8 — T6, T7
 
 import { useState, useEffect, useId } from 'react'
+import { Pencil, Calendar } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -144,14 +145,14 @@ export function EventModal({ open, onClose, event, contexts, onSave }: EventModa
       >
         <DialogHeader>
           <DialogTitle id={titleId}>
-            {isEdit ? '✏️ Editar Evento Académico' : '📅 Criar Evento Académico'}
+            {isEdit ? <><Pencil className="size-4" /> Editar Evento Académico</> : <><Calendar className="size-4" /> Criar Evento Académico</>}
           </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
           {/* T7 — RadioGroup for event type */}
           <fieldset>
-            <legend className="text-sm font-medium text-slate-700 mb-2">
+            <legend className="text-sm font-medium text-foreground mb-2">
               Tipo de evento <span className="text-red-500">*</span>
             </legend>
             <RadioGroup
@@ -173,7 +174,7 @@ export function EventModal({ open, onClose, event, contexts, onSave }: EventModa
                       aria-hidden="true"
                     />
                     <span>{opt.label}</span>
-                    <span className="text-xs text-slate-400">{opt.hex}</span>
+                    <span className="text-xs text-muted-foreground">{opt.hex}</span>
                   </Label>
                 </div>
               ))}
@@ -204,7 +205,7 @@ export function EventModal({ open, onClose, event, contexts, onSave }: EventModa
                 id="event-context"
                 value={form.contextId}
                 onChange={(e) => setField('contextId', e.target.value)}
-                className="border border-slate-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#0D6EFD]"
+                className="border border-border rounded-md px-3 py-2 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-[#0D6EFD]"
                 required
               >
                 <option value="">Seleccionar contexto…</option>
@@ -271,7 +272,7 @@ export function EventModal({ open, onClose, event, contexts, onSave }: EventModa
               onChange={(e) => setField('notes', e.target.value)}
               rows={2}
               placeholder="Notas visíveis apenas para o professor…"
-              className="border border-slate-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#0D6EFD] resize-none"
+              className="border border-border rounded-md px-3 py-2 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-[#0D6EFD] resize-none"
             />
           </div>
 
@@ -289,12 +290,12 @@ export function EventModal({ open, onClose, event, contexts, onSave }: EventModa
             >
               <span
                 className={[
-                  'inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform',
+                  'inline-block h-3.5 w-3.5 rounded-full bg-card shadow transition-transform',
                   form.visivelEstudantes ? 'translate-x-4' : 'translate-x-0.5',
                 ].join(' ')}
               />
             </button>
-            <span className="text-sm text-slate-700">
+            <span className="text-sm text-foreground">
               Visível para estudantes:{' '}
               <strong>{form.visivelEstudantes ? 'Sim' : 'Não'}</strong>
             </span>

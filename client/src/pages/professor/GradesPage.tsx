@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from 'react'
+import { Download, BarChart2, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '@/components/organisms/AppHeader'
 import { SearchBar } from '@/components/molecules/SearchBar'
@@ -197,46 +198,46 @@ export default function GradesPage() {
   const visibleHistory = historyExpanded ? importHistory : importHistory.slice(0, 3)
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-muted/50">
       <AppHeader activeTab="notas" />
 
       <main className="max-w-[1280px] mx-auto px-6 py-6 flex flex-col gap-5">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-slate-600">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <button
             type="button"
             onClick={() => navigate('/painel')}
-            className="text-[#0D6EFD] hover:underline flex items-center gap-1"
+            className="text-primary hover:underline flex items-center gap-1"
           >
             ◀ Mudar contexto
           </button>
-          <span className="text-slate-400">/</span>
-          <span className="font-medium text-slate-900">Notas</span>
-          <span className="text-slate-400">/</span>
-          <span className="text-slate-500 truncate">{breadcrumb}</span>
+          <span className="text-muted-foreground">/</span>
+          <span className="font-medium text-foreground">Notas</span>
+          <span className="text-muted-foreground">/</span>
+          <span className="text-muted-foreground truncate">{breadcrumb}</span>
         </div>
 
         {/* Title + toolbar */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Gestão de Notas</h1>
-            <p className="text-sm text-slate-500 mt-0.5">{breadcrumb}</p>
+            <h1 className="text-xl font-bold text-foreground">Gestão de Notas</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{breadcrumb}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setImportModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors"
             >
-              📥 Importar CSV
+              <Download className="size-4" /> Importar CSV
             </button>
 
             <button
               type="button"
               disabled
               aria-disabled="true"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 opacity-40 cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground opacity-40 cursor-not-allowed"
             >
               💾 Guardar alterações
             </button>
@@ -244,7 +245,7 @@ export default function GradesPage() {
             <button
               type="button"
               onClick={() => showStatus('Notas finais recalculadas', 'success')}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors"
             >
               🧮 Recalcular
             </button>
@@ -253,11 +254,11 @@ export default function GradesPage() {
               type="button"
               onClick={() => navigate(`/publicar?context=${contextItem.id}`)}
               title={incompleteCount > 0 ? `${incompleteCount} notas incompletas — serão excluídas da publicação` : undefined}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-[#0D6EFD] text-white text-sm font-medium hover:bg-[#0D6EFD]/90 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
             >
               📤 Publicar notas
               {incompleteCount > 0 && (
-                <span className="ml-1 bg-white/20 text-xs px-1.5 py-0.5 rounded-full">
+                <span className="ml-1 bg-card/20 text-xs px-1.5 py-0.5 rounded-full">
                   {incompleteCount}
                 </span>
               )}
@@ -273,8 +274,8 @@ export default function GradesPage() {
             className={[
               'rounded-md px-4 py-2.5 text-sm font-medium',
               statusMsg.type === 'success'
-                ? 'bg-green-50 border border-green-200 text-[#15803D]'
-                : 'bg-red-50 border border-red-200 text-[#B91C1C]',
+                ? 'bg-green-50 border border-green-200 text-success'
+                : 'bg-red-50 border border-red-200 text-destructive',
             ].join(' ')}
           >
             {statusMsg.text}
@@ -292,14 +293,14 @@ export default function GradesPage() {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <label htmlFor="filter-status" className="text-sm text-slate-600 whitespace-nowrap">
+            <label htmlFor="filter-status" className="text-sm text-muted-foreground whitespace-nowrap">
               Mostrar:
             </label>
             <select
               id="filter-status"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#0D6EFD]"
+              className="border border-border rounded-md px-3 py-1.5 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="todos">Todos</option>
               <option value="lançada">Completos</option>
@@ -310,14 +311,14 @@ export default function GradesPage() {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <label htmlFor="sort-by" className="text-sm text-slate-600 whitespace-nowrap">
+            <label htmlFor="sort-by" className="text-sm text-muted-foreground whitespace-nowrap">
               Ordenar:
             </label>
             <select
               id="sort-by"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#0D6EFD]"
+              className="border border-border rounded-md px-3 py-1.5 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="numero">Número</option>
               <option value="nome">Nome</option>
@@ -328,7 +329,7 @@ export default function GradesPage() {
 
         {/* Table */}
         {loading ? (
-          <div className="flex items-center justify-center py-16 text-slate-500">
+          <div className="flex items-center justify-center py-16 text-muted-foreground">
             <span className="animate-pulse">A carregar notas…</span>
           </div>
         ) : (
@@ -345,31 +346,31 @@ export default function GradesPage() {
 
         {/* Stats */}
         <section aria-label="Estatísticas da turma">
-          <h2 className="text-sm font-semibold text-slate-700 mb-3">Estatísticas da turma</h2>
+          <h2 className="text-sm font-semibold text-foreground mb-3">Estatísticas da turma</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <StatCard icon="📊" label="Nota média" value={stats.media} />
-            <StatCard icon="⬆️" label="Nota mais alta" value={stats.alta} />
-            <StatCard icon="⬇️" label="Nota mais baixa" value={stats.baixa} />
-            <StatCard icon="✅" label="Aprovados" value={stats.aprovados} />
-            <StatCard icon="❌" label="Reprovados" value={stats.reprovados} />
-            <StatCard icon="⏳" label="Incompletos" value={stats.incompletos} />
+            <StatCard icon={<BarChart2 className="size-4" />} label="Nota média" value={stats.media} />
+            <StatCard icon={<TrendingUp className="size-4" />} label="Nota mais alta" variant="success" value={stats.alta} />
+            <StatCard icon={<TrendingDown className="size-4" />} label="Nota mais baixa" variant="danger" value={stats.baixa} />
+            <StatCard icon={<CheckCircle className="size-4" />} label="Aprovados" variant="success" value={stats.aprovados} />
+            <StatCard icon={<XCircle className="size-4" />} label="Reprovados" variant="danger" value={stats.reprovados} />
+            <StatCard icon={<Clock className="size-4" />} label="Incompletos" variant="warning" value={stats.incompletos} />
           </div>
         </section>
 
         {/* Import history */}
         {importHistory.length > 0 && (
           <section aria-label="Histórico de importações">
-            <h2 className="text-sm font-semibold text-slate-700 mb-3">Histórico de importações</h2>
-            <div className="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+            <h2 className="text-sm font-semibold text-foreground mb-3">Histórico de importações</h2>
+            <div className="bg-card rounded-lg border border-border divide-y divide-border">
               {visibleHistory.map((entry) => (
                 <div key={entry.id} className="px-4 py-3 flex items-center justify-between text-sm">
                   <div className="flex items-center gap-3">
-                    <span className="text-slate-400 font-mono text-xs">
+                    <span className="text-muted-foreground font-mono text-xs">
                       {formatTimestamp(entry.timestamp)}
                     </span>
-                    <span className="text-slate-700 font-medium">{entry.componentName}</span>
+                    <span className="text-foreground font-medium">{entry.componentName}</span>
                   </div>
-                  <span className="text-[#15803D] font-medium">{entry.count} notas</span>
+                  <span className="text-success font-medium">{entry.count} notas</span>
                 </div>
               ))}
               {importHistory.length > 3 && (
@@ -377,7 +378,7 @@ export default function GradesPage() {
                   <button
                     type="button"
                     onClick={() => setHistoryExpanded((p) => !p)}
-                    className="text-sm text-[#0D6EFD] hover:underline"
+                    className="text-sm text-primary hover:underline"
                   >
                     {historyExpanded
                       ? 'Ver menos'

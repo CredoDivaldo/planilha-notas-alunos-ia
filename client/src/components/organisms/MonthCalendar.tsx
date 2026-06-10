@@ -2,6 +2,7 @@
 // T5 — reusable component (Story 7.6, Story 7.8)
 // Story 7.8 — adapted: added allowEdit and onEventClick props (backward-compatible)
 
+import { Calendar } from 'lucide-react'
 import { useState } from 'react'
 import { EventDot } from '@/components/molecules/EventDot'
 import type { CalendarEvent } from '@/components/molecules/EventDot'
@@ -81,14 +82,14 @@ export function MonthCalendar({
   const todayStr = isoDate(today.getFullYear(), today.getMonth(), today.getDate())
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-4 select-none">
+    <div className="bg-card rounded-lg border border-border p-4 select-none">
       {/* Month nav */}
       <div className="flex items-center justify-between mb-3">
         <button
           type="button"
           onClick={prevMonth}
           aria-label="Mês anterior"
-          className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors text-sm"
+          className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 text-muted-foreground hover:text-slate-800 transition-colors text-sm"
         >
           ‹
         </button>
@@ -99,7 +100,7 @@ export function MonthCalendar({
           type="button"
           onClick={nextMonth}
           aria-label="Próximo mês"
-          className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors text-sm"
+          className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 text-muted-foreground hover:text-slate-800 transition-colors text-sm"
         >
           ›
         </button>
@@ -108,7 +109,7 @@ export function MonthCalendar({
       {/* Weekday headers */}
       <div className="grid grid-cols-7 mb-1">
         {WEEKDAY_LABELS.map((d, i) => (
-          <div key={i} className="text-center text-[10px] font-medium text-slate-400 py-1">
+          <div key={i} className="text-center text-[10px] font-medium text-muted-foreground py-1">
             {d}
           </div>
         ))}
@@ -132,7 +133,7 @@ export function MonthCalendar({
                   'text-xs w-6 h-6 flex items-center justify-center rounded-full',
                   isToday
                     ? 'bg-[#0D6EFD] text-white font-bold'
-                    : 'text-slate-700',
+                    : 'text-foreground',
                 ].join(' ')}
               >
                 {day}
@@ -166,7 +167,7 @@ export function MonthCalendar({
                     )
                   })}
                   {dayEvents.length > 3 && (
-                    <span className="text-[9px] text-slate-400">+{dayEvents.length - 3}</span>
+                    <span className="text-[9px] text-muted-foreground">+{dayEvents.length - 3}</span>
                   )}
                 </div>
               )}
@@ -186,7 +187,7 @@ export function MonthCalendar({
         >
           <div className="font-semibold mb-0.5">{activeEvent.title}</div>
           <div className="flex flex-wrap gap-2 text-xs opacity-80">
-            {activeEvent.date && <span>📅 {activeEvent.date}</span>}
+            {activeEvent.date && <span><span className="flex items-center gap-1"><Calendar className="size-3" /> {activeEvent.date}</span></span>}
             {activeEvent.time && <span>🕐 {activeEvent.time}</span>}
             {activeEvent.location && <span>📍 {activeEvent.location}</span>}
             {activeEvent.description && <span>{activeEvent.description}</span>}

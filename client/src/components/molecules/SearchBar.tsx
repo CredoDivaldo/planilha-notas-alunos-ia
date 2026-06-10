@@ -1,3 +1,4 @@
+import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 
 interface SearchBarProps {
@@ -15,9 +16,7 @@ export function SearchBar({
 }: SearchBarProps) {
   return (
     <div className={['relative flex items-center', className].filter(Boolean).join(' ')}>
-      <span className="absolute left-3 text-[#475569] pointer-events-none select-none text-sm">
-        🔍
-      </span>
+      <Search className="absolute left-3 size-4 text-muted-foreground pointer-events-none" />
       <Input
         type="search"
         value={value}

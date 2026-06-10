@@ -1,6 +1,7 @@
 // CalendarPage — student read-only view
 // Story 7.8 — T1 (student variant)
 
+import { Download } from 'lucide-react'
 import { useState } from 'react'
 import { AppHeader } from '@/components/organisms/AppHeader'
 import { MonthCalendar } from '@/components/organisms/MonthCalendar'
@@ -89,20 +90,20 @@ export default function StudentCalendarPage() {
   })
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-muted/50">
       <AppHeader activeTab="calendario" />
 
       <main className="max-w-[1280px] mx-auto px-6 py-6 flex flex-col gap-5">
 
         {/* Title + toolbar */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-xl font-bold text-slate-900">Calendário Académico</h1>
+          <h1 className="text-xl font-bold text-foreground">Calendário Académico</h1>
           <button
             type="button"
             onClick={() => downloadIcs(events)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-slate-300 bg-card text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
           >
-            📥 Descarregar .ics
+            <><Download className="size-4" /> Descarregar .ics</>
           </button>
         </div>
 
@@ -118,7 +119,7 @@ export default function StudentCalendarPage() {
 
             {/* AC7 — Próximos 7 dias */}
             <div>
-              <h2 className="text-sm font-semibold text-slate-700 mb-2">
+              <h2 className="text-sm font-semibold text-foreground mb-2">
                 Próximos Eventos (7 dias)
               </h2>
               <UpcomingEventsList events={next7Events} />

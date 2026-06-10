@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { CheckCircle, XCircle, AlertTriangle, Search, Rocket, RefreshCw, Clock, ArrowRight } from 'lucide-react'
 import { AppHeader } from '@/components/organisms/AppHeader'
 import { ContextBar } from '@/components/molecules/ContextBar'
 import { FileDropzone } from '@/components/molecules/FileDropzone'
@@ -165,9 +166,9 @@ function getApiBase(): string {
 // ─── Status badge helper ──────────────────────────────────────────────────────
 
 function MatchStatusBadge({ status }: { status: MatchResult['status'] }) {
-  if (status === 'matched') return <span className="text-[#15803D] font-medium">✅ Match</span>
-  if (status === 'no_grade') return <span className="text-[#B91C1C] font-medium">❌ Sem nota</span>
-  return <span className="text-[#B45309] font-medium">⚠️ Sem telefone</span>
+  if (status === 'matched') return <span className="text-success font-medium flex items-center gap-1"><CheckCircle className="size-3.5" /> Match</span>
+  if (status === 'no_grade') return <span className="text-destructive font-medium flex items-center gap-1"><XCircle className="size-3.5" /> Sem nota</span>
+  return <span className="text-warning font-medium flex items-center gap-1"><AlertTriangle className="size-3.5" /> Sem telefone</span>
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -489,7 +490,7 @@ export default function ProfessorDashboardPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-background">
       <AppHeader activeTab="painel" />
       <ContextBar />
 
@@ -513,19 +514,19 @@ export default function ProfessorDashboardPage() {
                   : undefined
               }
             >
-              <p className="text-sm text-slate-600 mb-3">
+              <p className="text-sm text-muted-foreground mb-3">
                 Importe a lista de estudantes em formato CSV.
               </p>
               {steps[0].status === 'completed' ? (
-                <div className="flex items-center gap-2 text-sm text-[#15803D]">
-                  <span>✅</span>
+                <div className="flex items-center gap-2 text-sm text-success">
+                  <CheckCircle className="size-4 shrink-0" />
                   <span>
                     <strong>{stats.estudantes}</strong> estudantes importados
                   </span>
                   <button
                     type="button"
                     onClick={() => dispatch({ type: 'RESET' })}
-                    className="ml-4 text-xs text-slate-400 hover:text-[#0D6EFD] underline"
+                    className="ml-4 text-xs text-muted-foreground hover:text-primary underline"
                   >
                     Reiniciar
                   </button>
@@ -551,12 +552,12 @@ export default function ProfessorDashboardPage() {
                   : undefined
               }
             >
-              <p className="text-sm text-slate-600 mb-3">
+              <p className="text-sm text-muted-foreground mb-3">
                 Importe o ficheiro CSV com as notas dos estudantes.
               </p>
               {steps[1].status === 'completed' ? (
-                <div className="flex items-center gap-2 text-sm text-[#15803D]">
-                  <span>✅</span>
+                <div className="flex items-center gap-2 text-sm text-success">
+                  <CheckCircle className="size-4 shrink-0" />
                   <span>
                     <strong>{stats.notas}</strong> notas importadas
                   </span>
@@ -582,20 +583,20 @@ export default function ProfessorDashboardPage() {
                   : undefined
               }
             >
-              <p className="text-sm text-slate-600 mb-3">
+              <p className="text-sm text-muted-foreground mb-3">
                 Cruza os estudantes com as notas e valida os números de telefone.
               </p>
 
               {steps[2].status === 'completed' && matchTimestamp && (
-                <div className="flex items-center gap-2 text-xs text-slate-500 mb-3">
-                  <span>🕒</span>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                  <Clock className="size-3 shrink-0" />
                   <span>Último match: {matchTimestamp}</span>
                 </div>
               )}
 
               {matchResults.length > 0 && (
                 <div className="mb-3">
-                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <div className="border border-border rounded-lg overflow-hidden">
                     <Table aria-label="Resultados do match">
                       <TableHeader>
                         <TableRow>
@@ -623,7 +624,7 @@ export default function ProfessorDashboardPage() {
                     <button
                       type="button"
                       onClick={() => setMatchDialogOpen(true)}
-                      className="mt-2 text-sm text-[#0D6EFD] hover:underline"
+                      className="mt-2 text-sm text-primary hover:underline"
                     >
                       Ver todos ({matchResults.length} resultados)
                     </button>
@@ -636,7 +637,7 @@ export default function ProfessorDashboardPage() {
                   {step3Error && (
                     <p
                       role="alert"
-                      className="mb-3 text-sm text-[#B91C1C] bg-red-50 border border-red-200 rounded-md px-3 py-2"
+                      className="mb-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2"
                     >
                       {step3Error}
                     </p>
@@ -644,9 +645,12 @@ export default function ProfessorDashboardPage() {
                   <Button
                     onClick={handleMatch}
                     disabled={step3Loading}
-                    className="bg-[#0D6EFD] hover:bg-[#0D6EFD]/90 text-white"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
                   >
-                    {step3Loading ? '⏳ A gerar match…' : '🔍 Gerar Match'}
+                    {step3Loading
+                      ? <><RefreshCw className="size-4 animate-spin" /> A gerar match…</>
+                      : <><Search className="size-4" /> Gerar Match</>
+                    }
                   </Button>
                 </>
               )}
@@ -678,21 +682,21 @@ export default function ProfessorDashboardPage() {
                         <div
                           className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
                             isDone
-                              ? 'bg-[#15803D] text-white'
+                              ? 'bg-success text-white'
                               : isActive
-                              ? 'bg-[#0D6EFD] text-white animate-pulse'
-                              : 'bg-slate-200 text-slate-500'
+                              ? 'bg-primary text-white animate-pulse'
+                              : 'bg-muted text-muted-foreground'
                           }`}
                         >
-                          {isDone ? '✓' : i + 1}
+                          {isDone ? <CheckCircle className="size-3.5" /> : i + 1}
                         </div>
                         <span
                           className={`text-xs ${
                             isDone
-                              ? 'text-[#15803D] font-medium'
+                              ? 'text-success font-medium'
                               : isActive
-                              ? 'text-[#0D6EFD] font-medium'
-                              : 'text-slate-400'
+                              ? 'text-primary font-medium'
+                              : 'text-muted-foreground'
                           }`}
                         >
                           {label}
@@ -700,7 +704,7 @@ export default function ProfessorDashboardPage() {
                       </div>
                       {i < 2 && (
                         <div
-                          className={`w-8 h-0.5 ${isDone ? 'bg-[#15803D]' : 'bg-slate-200'}`}
+                          className={`w-8 h-0.5 ${isDone ? 'bg-success' : 'bg-muted'}`}
                           aria-hidden="true"
                         />
                       )}
@@ -710,15 +714,15 @@ export default function ProfessorDashboardPage() {
               </div>
 
               {qrConnected ? (
-                <div className="flex items-center gap-2 text-sm text-[#15803D]">
-                  <span>✅</span>
+                <div className="flex items-center gap-2 text-sm text-success">
+                  <CheckCircle className="size-4 shrink-0" />
                   <span>WhatsApp conectado! A avançar para o passo seguinte…</span>
                 </div>
               ) : (
                 <div className="flex flex-col items-start gap-4 sm:flex-row">
                   {/* QR Placeholder */}
                   <div
-                    className="relative w-44 h-44 border-2 border-slate-300 rounded-lg flex items-center justify-center bg-white overflow-hidden flex-shrink-0"
+                    className="relative w-44 h-44 border-2 border-border rounded-lg flex items-center justify-center bg-card overflow-hidden flex-shrink-0"
                     aria-label="QR Code placeholder"
                     role="img"
                   >
@@ -729,16 +733,16 @@ export default function ProfessorDashboardPage() {
                           key={i}
                           className={`w-3.5 h-3.5 rounded-sm ${
                             (i % 3 === 0 || i % 7 === 0 || i % 11 === 0)
-                              ? 'bg-slate-900'
-                              : 'bg-white'
+                              ? 'bg-foreground'
+                              : 'bg-card'
                           }`}
                         />
                       ))}
                     </div>
                     {qrExpired && (
-                      <div className="absolute inset-0 bg-white/90 flex flex-col items-center justify-center gap-2">
-                        <span className="text-2xl">⏱️</span>
-                        <span className="text-xs text-slate-600 font-medium text-center">
+                      <div className="absolute inset-0 bg-card/90 flex flex-col items-center justify-center gap-2">
+                        <Clock className="size-6 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground font-medium text-center">
                           QR expirado
                         </span>
                       </div>
@@ -747,7 +751,7 @@ export default function ProfessorDashboardPage() {
 
                   {/* Info & countdown */}
                   <div className="flex flex-col gap-3">
-                    <p className="text-sm text-slate-600">
+                    <p className="text-sm text-muted-foreground">
                       Leia o QR code com a câmara do WhatsApp para conectar.
                     </p>
 
@@ -755,27 +759,27 @@ export default function ProfessorDashboardPage() {
                       <div className="flex items-center gap-2">
                         <div
                           className={`text-lg font-bold tabular-nums ${
-                            countdown <= 10 ? 'text-[#B91C1C]' : 'text-[#0D6EFD]'
+                            countdown <= 10 ? 'text-destructive' : 'text-primary'
                           }`}
                           aria-live="polite"
                           aria-label={`${countdown} segundos restantes`}
                         >
                           {countdown}s
                         </div>
-                        <span className="text-xs text-slate-500">restantes</span>
+                        <span className="text-xs text-muted-foreground">restantes</span>
                       </div>
                     ) : (
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={handleRefreshQr}
-                        className="text-[#0D6EFD] border-[#0D6EFD] hover:bg-[#0D6EFD]/5 self-start"
+                        className="text-primary border-primary hover:bg-primary/5 self-start gap-2"
                       >
-                        🔄 Gerar novo QR
+                        <RefreshCw className="size-4" /> Gerar novo QR
                       </Button>
                     )}
 
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-muted-foreground">
                       Polling automático a cada 5s. A conexão é simulada automaticamente após 8s.
                     </p>
                   </div>
@@ -800,13 +804,13 @@ export default function ProfessorDashboardPage() {
               }
             >
               {steps[4].status === 'completed' ? (
-                <div className="flex flex-col gap-2 text-sm text-[#15803D]">
+                <div className="flex flex-col gap-2 text-sm text-success">
                   <div className="flex items-center gap-2">
-                    <span>✅</span>
+                    <CheckCircle className="size-4 shrink-0" />
                     <span>
                       <strong>{stats.enviados}</strong> mensagens enviadas
                       {stats.falhas > 0 && (
-                        <span className="text-[#B91C1C] ml-2">({stats.falhas} falhas)</span>
+                        <span className="text-destructive ml-2">({stats.falhas} falhas)</span>
                       )}
                     </span>
                   </div>
@@ -815,7 +819,7 @@ export default function ProfessorDashboardPage() {
                 <div className="flex flex-col gap-4">
                   {/* Message template */}
                   <div>
-                    <Label htmlFor="broadcast-template" className="text-sm font-medium text-slate-700 mb-1.5 block">
+                    <Label htmlFor="broadcast-template" className="text-sm font-medium text-foreground mb-1.5 block">
                       Template da mensagem
                     </Label>
                     <textarea
@@ -823,19 +827,19 @@ export default function ProfessorDashboardPage() {
                       value={broadcastMessage}
                       onChange={(e) => setBroadcastMessage(e.target.value)}
                       rows={3}
-                      className="w-full rounded-md border border-input bg-white px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none"
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none"
                       placeholder="Olá {nome}! A sua nota é {nota}."
                     />
-                    <p className="text-xs text-slate-400 mt-1">
-                      Variáveis: <code className="bg-slate-100 px-1 rounded">{'{nome}'}</code>{' '}
-                      <code className="bg-slate-100 px-1 rounded">{'{nota}'}</code>{' '}
-                      <code className="bg-slate-100 px-1 rounded">{'{disciplina}'}</code>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Variáveis: <code className="bg-muted px-1 rounded">{'{nome}'}</code>{' '}
+                      <code className="bg-muted px-1 rounded">{'{nota}'}</code>{' '}
+                      <code className="bg-muted px-1 rounded">{'{disciplina}'}</code>
                     </p>
                   </div>
 
                   {/* Mode selection */}
                   <div className="flex flex-col gap-2">
-                    <p className="text-sm font-medium text-slate-700">Modo de envio</p>
+                    <p className="text-sm font-medium text-foreground">Modo de envio</p>
                     <div className="flex gap-4">
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -844,9 +848,9 @@ export default function ProfessorDashboardPage() {
                           value="simulation"
                           checked={broadcastMode === 'simulation'}
                           onChange={() => setBroadcastMode('simulation')}
-                          className="accent-[#0D6EFD]"
+                          className="accent-primary"
                         />
-                        <span className="text-sm text-slate-700">🧪 Simulação</span>
+                        <span className="text-sm text-foreground flex items-center gap-1.5"><AlertTriangle className="size-3.5 text-warning" /> Simulação</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -855,14 +859,14 @@ export default function ProfessorDashboardPage() {
                           value="real"
                           checked={broadcastMode === 'real'}
                           onChange={() => setBroadcastMode('real')}
-                          className="accent-[#0D6EFD]"
+                          className="accent-primary"
                         />
-                        <span className="text-sm text-slate-700">🚀 Envio Real</span>
+                        <span className="text-sm text-foreground flex items-center gap-1.5"><Rocket className="size-3.5 text-primary" /> Envio Real</span>
                       </label>
                     </div>
                     {broadcastMode === 'real' && (
-                      <p className="text-xs text-[#B45309] bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                        ⚠️ O modo real enviará mensagens WhatsApp reais a <strong>{stats.matched}</strong> estudantes.
+                      <p className="text-xs text-warning bg-warning/10 border border-warning/20 rounded px-3 py-2 flex items-center gap-2">
+                        <AlertTriangle className="size-3.5 shrink-0" /> O modo real enviará mensagens WhatsApp reais a <strong>{stats.matched}</strong> estudantes.
                       </p>
                     )}
                   </div>
@@ -870,7 +874,7 @@ export default function ProfessorDashboardPage() {
                   {broadcastError && (
                     <p
                       role="alert"
-                      className="text-sm text-[#B91C1C] bg-red-50 border border-red-200 rounded-md px-3 py-2"
+                      className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2"
                     >
                       {broadcastError}
                     </p>
@@ -880,9 +884,12 @@ export default function ProfessorDashboardPage() {
                     <Button
                       onClick={handleBroadcastClick}
                       disabled={broadcastLoading}
-                      className="bg-[#0D6EFD] hover:bg-[#0D6EFD]/90 text-white self-start"
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground self-start"
                     >
-                      {broadcastLoading ? '⏳ A enviar…' : '🚀 Disparar'}
+                      {broadcastLoading
+                        ? <><RefreshCw className="size-4 animate-spin" /> A enviar…</>
+                        : <><Rocket className="size-4" /> Disparar</>
+                      }
                     </Button>
                     <button
                       type="button"
@@ -890,9 +897,9 @@ export default function ProfessorDashboardPage() {
                         const ctxId = sessionStorage.getItem('active_context_id') ?? ''
                         navigate(`/publicar${ctxId ? `?context=${ctxId}` : ''}`)
                       }}
-                      className="text-sm text-[#0D6EFD] hover:underline"
+                      className="text-sm text-primary hover:underline"
                     >
-                      ⑤ Usar Assistente de Publicação →
+                      <ArrowRight className="size-4" /> Usar Assistente de Publicação
                     </button>
                   </div>
                 </div>
@@ -949,17 +956,18 @@ export default function ProfessorDashboardPage() {
       <Dialog open={confirmOpen} onOpenChange={(open) => { if (!open) setConfirmOpen(false) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>⚠️ Confirmar Envio Real</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><AlertTriangle className="size-5 text-warning" /> Confirmar Envio Real</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-slate-700">
+            <p className="text-sm text-foreground">
               Está prestes a enviar mensagens WhatsApp reais a{' '}
-              <strong className="text-slate-900">{stats.matched} destinatários</strong>.
+              <strong className="text-foreground">{stats.matched} destinatários</strong>.
               Esta acção não pode ser revertida.
             </p>
-            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-              <p className="text-sm text-[#B45309] font-medium">
-                ⚠️ Aviso: os destinatários receberão mensagens reais no WhatsApp.
+            <div className="bg-warning/10 border border-warning/20 rounded-lg px-4 py-3">
+              <p className="text-sm text-warning font-medium flex items-start gap-2">
+                <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+                Aviso: os destinatários receberão mensagens reais no WhatsApp.
                 Certifique-se de que os dados estão correctos antes de confirmar.
               </p>
             </div>
@@ -970,7 +978,7 @@ export default function ProfessorDashboardPage() {
                 onCheckedChange={(checked) => setConfirmChecked(checked === true)}
                 className="mt-0.5"
               />
-              <span className="text-sm text-slate-700" id="confirm-send-label">
+              <span className="text-sm text-foreground" id="confirm-send-label">
                 Confirmo que os dados estão correctos e autorizo o envio das mensagens.
               </span>
             </label>
@@ -986,9 +994,12 @@ export default function ProfessorDashboardPage() {
             <Button
               onClick={executeBroadcast}
               disabled={!confirmChecked || broadcastLoading}
-              className="bg-[#0D6EFD] hover:bg-[#0D6EFD]/90 text-white"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
-              {broadcastLoading ? '⏳ A enviar…' : 'Confirmar Envio Real'}
+              {broadcastLoading
+                ? <><RefreshCw className="size-4 animate-spin" /> A enviar…</>
+                : 'Confirmar Envio Real'
+              }
             </Button>
           </DialogFooter>
         </DialogContent>

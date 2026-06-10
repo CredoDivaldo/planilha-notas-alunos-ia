@@ -43,21 +43,21 @@ export function UpcomingEventsList({ events }: UpcomingEventsListProps) {
 
   if (upcoming.length === 0) {
     return (
-      <div className="bg-white rounded-lg border border-slate-200 p-4">
-        <h3 className="text-sm font-semibold text-slate-700 mb-2">Próximos Eventos</h3>
-        <p className="text-sm text-slate-400">Sem eventos nos próximos 30 dias.</p>
+      <div className="bg-card rounded-lg border border-border p-4">
+        <h3 className="text-sm font-semibold text-foreground mb-2">Próximos Eventos</h3>
+        <p className="text-sm text-muted-foreground">Sem eventos nos próximos 30 dias.</p>
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-4">
-      <h3 className="text-sm font-semibold text-slate-700 mb-3">Próximos Eventos</h3>
+    <div className="bg-card rounded-lg border border-border p-4">
+      <h3 className="text-sm font-semibold text-foreground mb-3">Próximos Eventos</h3>
       <div className="flex flex-col gap-3">
         {Array.from(grouped.entries()).map(([date, dayEvents]) => (
           <div key={date}>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-medium text-slate-500">📅 {formatDate(date)}</span>
+              <span className="text-xs font-medium text-muted-foreground"><span className="flex items-center gap-1"><Calendar className="size-3" /> {formatDate(date)}</span></span>
             </div>
             <div className="flex flex-col gap-1 pl-4">
               {dayEvents.map((ev) => (

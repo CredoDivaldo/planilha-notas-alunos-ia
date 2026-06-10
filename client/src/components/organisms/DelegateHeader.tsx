@@ -1,3 +1,4 @@
+import { User, LayoutDashboard } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -20,11 +21,11 @@ export function DelegateHeader({
   }
 
   return (
-    <header className="bg-white border-b border-slate-200 px-6 h-14 flex items-center justify-between">
+    <header className="bg-card border-b border-border px-6 h-14 flex items-center justify-between">
       {/* Left: Logo + Badge + Turma */}
       <div className="flex items-center gap-4">
-        <span className="font-semibold text-[#0D6EFD] text-base select-none">
-          📊 Planilha Notas
+        <span className="font-semibold text-primary text-base select-none">
+          <span className="flex items-center gap-2"><LayoutDashboard className="size-4" /> Planilha Notas</span>
         </span>
 
         <span
@@ -44,7 +45,7 @@ export function DelegateHeader({
       {/* Right: User + Logout */}
       <div className="flex items-center gap-3">
         <span className="text-sm text-[#475569]">
-          👤 {user?.name ?? 'Delegado'}
+          <span className="flex items-center gap-1.5"><User className="size-4" /> {user?.name ?? 'Delegado'}</span>
         </span>
         <Button variant="ghost" size="sm" onClick={handleLogout}>
           Sair

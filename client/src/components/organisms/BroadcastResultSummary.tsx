@@ -1,8 +1,7 @@
-// BroadcastResultSummary — O09 — Result screen after broadcast
-// Shows 3 StatCards + failure list + 3 action buttons
-// Rendered by PublishPage after POST /broadcast/ succeeds
-
+import { CheckCircle, AlertTriangle, ClipboardList, Smartphone, RotateCcw, Download, ArrowLeft } from 'lucide-react'
 import { StatCard } from '@/components/molecules/StatCard'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 
 export interface BroadcastFailure {
   studentId: string
@@ -37,88 +36,72 @@ export function BroadcastResultSummary({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header */}
       <div className="text-center">
-        <div className="text-3xl mb-2">✅</div>
-        <h2 className="text-xl font-bold text-slate-900">PUBLICAÇÃO CONCLUÍDA</h2>
-        <p className="text-sm text-slate-500 mt-1">
+        <div className="flex justify-center mb-3">
+          <CheckCircle className="size-12 text-success" />
+        </div>
+        <h2 className="text-xl font-bold text-foreground">Publicação Concluída</h2>
+        <p className="text-sm text-muted-foreground mt-1">
           As notas foram publicadas no portal e as notificações foram enviadas.
         </p>
       </div>
 
-      {/* StatCards */}
       <div className="grid grid-cols-3 gap-4">
-        <StatCard icon="📋" label="Publicadas no portal" value={result.portalPublished} />
-        <StatCard icon="📱" label="WhatsApp enviados" value={result.whatsappSent} />
         <StatCard
-          icon={result.failures > 0 ? '⚠️' : '✅'}
+          icon={<ClipboardList className="size-4" />}
+          label="Publicadas no portal"
+          value={result.portalPublished}
+          variant="success"
+        />
+        <StatCard
+          icon={<Smartphone className="size-4" />}
+          label="WhatsApp enviados"
+          value={result.whatsappSent}
+          variant="success"
+        />
+        <StatCard
+          icon={<AlertTriangle className="size-4" />}
           label="Falhas de envio"
           value={result.failures}
+          variant={result.failures > 0 ? 'danger' : 'default'}
         />
       </div>
 
-      {/* Failure list */}
       {hasFailures && (
-        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-            <span className="text-sm font-semibold text-slate-700">Falhas de Envio</span>
-            <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
-              {result.failureList.length}
-            </span>
+        <div className="bg-card rounded-lg border border-border overflow-hidden">
+          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+            <span className="text-sm font-semibold text-foreground">Falhas de Envio</span>
+            <Badge variant="destructive">{result.failureList.length}</Badge>
           </div>
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-border">
             {result.failureList.map((f) => (
-              <div
-                key={f.studentId}
-                className="px-4 py-3 flex items-center justify-between text-sm"
-              >
+              <div key={f.studentId} className="px-4 py-3 flex items-center justify-between text-sm">
                 <div>
-                  <span className="font-medium text-slate-900">{f.studentName}</span>
-                  <span className="text-slate-400 font-mono text-xs ml-2">({f.studentNumber})</span>
+                  <span className="font-medium text-foreground">{f.studentName}</span>
+                  <span className="text-muted-foreground font-mono text-xs ml-2">({f.studentNumber})</span>
                 </div>
-                <span className="text-xs text-[#B91C1C] bg-red-50 px-2 py-0.5 rounded">
-                  {f.reason}
-                </span>
+                <Badge variant="destructive" className="text-xs">{f.reason}</Badge>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Action buttons */}
       <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
+        <Button
           onClick={onResend}
           disabled={!hasFailures || resending}
-          aria-disabled={!hasFailures || resending}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[#0D6EFD] text-white text-sm font-medium hover:bg-[#0D6EFD]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="gap-2"
         >
-          {resending ? (
-            <>
-              <span className="animate-spin text-xs">⏳</span>
-              A reenviar…
-            </>
-          ) : (
-            '🔄 Re-enviar para falhados'
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={onExport}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-        >
-          📥 Exportar relatório
-        </button>
-
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-        >
-          ← Voltar ao painel
-        </button>
+          <RotateCcw className={`size-4 ${resending ? 'animate-spin' : ''}`} />
+          {resending ? 'A reenviar…' : 'Re-enviar para falhados'}
+        </Button>
+        <Button variant="outline" onClick={onExport} className="gap-2">
+          <Download className="size-4" /> Exportar relatório
+        </Button>
+        <Button variant="ghost" onClick={onBack} className="gap-2">
+          <ArrowLeft className="size-4" /> Voltar ao painel
+        </Button>
       </div>
     </div>
   )

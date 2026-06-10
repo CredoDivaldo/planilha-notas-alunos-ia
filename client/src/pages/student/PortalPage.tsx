@@ -1,6 +1,7 @@
 // PortalPage — Student Portal (Story 7.6, Tela 03)
 // AC1–AC13: route /portal, role=estudante guard, grades, calendar, WhatsApp banner, PDF
 
+import { Download } from 'lucide-react'
 import { useState, useCallback } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
@@ -233,12 +234,12 @@ function PortalContent({ userName }: { userName: string }) {
   return (
     <StudentPortalLayout studentNumber={gradesData?.student_number}>
       {/* AC3: Welcome banner */}
-      <div className="bg-white rounded-lg border border-slate-200 px-5 py-3 mb-5 flex flex-wrap items-center gap-x-4 gap-y-1">
+      <div className="bg-card rounded-lg border border-border px-5 py-3 mb-5 flex flex-wrap items-center gap-x-4 gap-y-1">
         <span className="text-base font-semibold text-slate-800">
           👋 Olá, {firstName}!
         </span>
         {contextInfo && (
-          <span className="text-sm text-slate-500">{contextInfo}</span>
+          <span className="text-sm text-muted-foreground">{contextInfo}</span>
         )}
       </div>
 
@@ -250,23 +251,23 @@ function PortalContent({ userName }: { userName: string }) {
         <section aria-live="polite" aria-label="Minhas Notas">
           {/* Section header with PDF button */}
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-bold text-slate-900">Minhas Notas</h2>
+            <h2 className="text-base font-bold text-foreground">Minhas Notas</h2>
             <button
               type="button"
               onClick={handleDownloadPdf}
               aria-label="Descarregar PDF das notas"
-              className="min-w-[44px] min-h-[44px] inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              className="min-w-[44px] min-h-[44px] inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
             >
-              📥 PDF
+              <><Download className="size-4" /> PDF</>
             </button>
           </div>
 
           {gradesLoading ? (
-            <div className="bg-white rounded-lg border border-slate-200 p-8 text-center text-slate-400 animate-pulse">
+            <div className="bg-card rounded-lg border border-border p-8 text-center text-muted-foreground animate-pulse">
               A carregar notas…
             </div>
           ) : subjects.length === 0 ? (
-            <div className="bg-white rounded-lg border border-slate-200 p-8 text-center text-slate-400">
+            <div className="bg-card rounded-lg border border-border p-8 text-center text-muted-foreground">
               Sem notas disponíveis para este semestre.
             </div>
           ) : (
@@ -285,7 +286,7 @@ function PortalContent({ userName }: { userName: string }) {
         <aside className="flex flex-col gap-4">
           {/* AC8: Mini calendar */}
           {calendarLoading ? (
-            <div className="bg-white rounded-lg border border-slate-200 p-4 text-center text-slate-400 animate-pulse h-48">
+            <div className="bg-card rounded-lg border border-border p-4 text-center text-muted-foreground animate-pulse h-48">
               A carregar calendário…
             </div>
           ) : (
@@ -298,12 +299,12 @@ function PortalContent({ userName }: { userName: string }) {
           )}
 
           {/* AC10: WhatsApp chatbot banner */}
-          <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-4 flex flex-col gap-3">
+          <div className="bg-success/10 border border-success/20 rounded-lg px-4 py-4 flex flex-col gap-3">
             <div>
-              <p className="font-semibold text-green-800 text-sm">
+              <p className="font-semibold text-success text-sm">
                 💬 Tem dúvidas sobre as suas notas?
               </p>
-              <p className="text-xs text-green-700 mt-1">
+              <p className="text-xs text-success mt-1">
                 Envie mensagem para o chatbot via WhatsApp e obtenha resposta
                 imediata sobre os seus resultados publicados.
               </p>
@@ -313,7 +314,7 @@ function PortalContent({ userName }: { userName: string }) {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Abrir chatbot no WhatsApp (abre nova janela)"
-              className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors self-start"
+              className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-success hover:bg-success/90 text-white text-sm font-medium transition-colors self-start"
             >
               💬 Abrir WhatsApp
             </a>

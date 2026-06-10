@@ -3,6 +3,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { CheckCircle, AlertTriangle, Rocket, RefreshCw, ChevronLeft } from 'lucide-react'
 import { WizardLayout } from '@/layouts/WizardLayout'
 import { PublicationStepper } from '@/components/organisms/PublicationStepper'
 import type { PublicationStepState } from '@/components/organisms/PublicationStepper'
@@ -95,9 +96,9 @@ interface StudentWithNota {
 // ---------------------------------------------------------------------------
 
 function ResultBadge({ nota }: { nota: number | null }) {
-  if (nota === null) return <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Incompleta</span>
-  if (nota >= 10) return <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Aprovado ✓</span>
-  return <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Reprovado ✗</span>
+  if (nota === null) return <span className="text-xs bg-warning/10 text-warning px-2 py-0.5 rounded-full">Incompleta</span>
+  if (nota >= 10) return <span className="text-xs bg-success/10 text-success px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><CheckCircle className="size-3" /> Aprovado</span>
+  return <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded-full">Reprovado</span>
 }
 
 // ---------------------------------------------------------------------------
@@ -456,7 +457,7 @@ export default function PublishPage() {
   if (loading) {
     return (
       <WizardLayout>
-        <div className="flex items-center justify-center py-24 text-slate-500">
+        <div className="flex items-center justify-center py-24 text-muted-foreground">
           <span className="animate-pulse">A carregar dados…</span>
         </div>
       </WizardLayout>
@@ -471,8 +472,8 @@ export default function PublishPage() {
     <WizardLayout>
       {/* Title */}
       <div className="mb-4">
-        <h1 className="text-xl font-bold text-slate-900">Publicar Notas</h1>
-        <p className="text-sm text-slate-500 mt-0.5">{breadcrumb}</p>
+        <h1 className="text-xl font-bold text-foreground">Publicar Notas</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">{breadcrumb}</p>
       </div>
 
       {/* AC1: PublicationStepper */}
@@ -480,24 +481,24 @@ export default function PublishPage() {
 
       {/* Publish error */}
       {publishError && (
-        <div role="alert" className="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-[#B91C1C]">
+        <div role="alert" className="mb-4 rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
           {publishError}
         </div>
       )}
 
       {/* ── Step 1: Revisão ──────────────────────────────────────────────── */}
       {currentStep === 0 && (
-        <div className="bg-white rounded-lg border border-slate-200 p-6 flex flex-col gap-5">
+        <div className="bg-white rounded-lg border border-border p-6 flex flex-col gap-5">
           <div>
-            <h2 className="text-base font-semibold text-slate-900 mb-0.5">① Revisão das Notas</h2>
-            <p className="text-sm text-slate-500">{breadcrumb}</p>
+            <h2 className="text-base font-semibold text-foreground mb-0.5">① Revisão das Notas</h2>
+            <p className="text-sm text-muted-foreground">{breadcrumb}</p>
           </div>
 
           {/* AC3: warning about incomplete students */}
           {incompleteStudents.length > 0 && (
             <div
               role="alert"
-              className="bg-amber-50 border border-amber-200 rounded-md px-4 py-3 text-sm text-[#B45309]"
+              className="bg-warning/10 border border-warning/20 rounded-md px-4 py-3 text-sm text-warning"
             >
               <strong>{incompleteStudents.length} aluno(s) com notas incompletas</strong> serão excluídos automaticamente da publicação.{' '}
               <button
@@ -515,35 +516,35 @@ export default function PublishPage() {
 
           {/* T3: Review table — complete students */}
           <div>
-            <h3 className="text-sm font-semibold text-slate-700 mb-2">
+            <h3 className="text-sm font-semibold text-foreground mb-2">
               Alunos com nota completa ({completeStudents.length})
             </h3>
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <div className="border border-border rounded-lg overflow-hidden">
               <table className="w-full text-sm" aria-label="Tabela de revisão de notas">
-                <thead className="bg-slate-50 border-b border-slate-200">
+                <thead className="bg-muted/50 border-b border-border">
                   <tr>
-                    <th className="text-left px-4 py-2.5 font-medium text-slate-600 text-xs uppercase tracking-wide">Nº</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-slate-600 text-xs uppercase tracking-wide">Nome</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs uppercase tracking-wide">Nº</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs uppercase tracking-wide">Nome</th>
                     {contextItem.components.map((c) => (
-                      <th key={c.id} className="text-center px-3 py-2.5 font-medium text-slate-600 text-xs uppercase tracking-wide">
+                      <th key={c.id} className="text-center px-3 py-2.5 font-medium text-muted-foreground text-xs uppercase tracking-wide">
                         {c.name}
                       </th>
                     ))}
-                    <th className="text-center px-4 py-2.5 font-medium text-slate-600 text-xs uppercase tracking-wide">Nota Final</th>
-                    <th className="text-center px-4 py-2.5 font-medium text-slate-600 text-xs uppercase tracking-wide">Resultado</th>
+                    <th className="text-center px-4 py-2.5 font-medium text-muted-foreground text-xs uppercase tracking-wide">Nota Final</th>
+                    <th className="text-center px-4 py-2.5 font-medium text-muted-foreground text-xs uppercase tracking-wide">Resultado</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {completeStudents.map(({ row, nota }) => (
-                    <tr key={row.studentId} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 font-mono text-xs text-slate-500">{row.studentNumber}</td>
-                      <td className="px-4 py-3 font-medium text-slate-900">{row.studentName}</td>
+                    <tr key={row.studentId} className="hover:bg-muted/50 transition-colors">
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{row.studentNumber}</td>
+                      <td className="px-4 py-3 font-medium text-foreground">{row.studentName}</td>
                       {contextItem.components.map((c) => (
-                        <td key={c.id} className="px-3 py-3 text-center text-slate-700">
+                        <td key={c.id} className="px-3 py-3 text-center text-foreground">
                           {row.components[c.id]?.value ?? '—'}
                         </td>
                       ))}
-                      <td className="px-4 py-3 text-center font-bold text-slate-900">
+                      <td className="px-4 py-3 text-center font-bold text-foreground">
                         {nota !== null ? nota : '—'}
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -553,7 +554,7 @@ export default function PublishPage() {
                   ))}
                   {completeStudents.length === 0 && (
                     <tr>
-                      <td colSpan={4 + contextItem.components.length} className="px-4 py-8 text-center text-slate-400 text-sm">
+                      <td colSpan={4 + contextItem.components.length} className="px-4 py-8 text-center text-muted-foreground text-sm">
                         Nenhum aluno com nota completa.
                       </td>
                     </tr>
@@ -566,25 +567,25 @@ export default function PublishPage() {
           {/* AC3: Excluded students list */}
           {incompleteStudents.length > 0 && (
             <div id="excluded-list">
-              <h3 className="text-sm font-semibold text-slate-500 mb-2">
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">
                 Excluídos — notas incompletas ({incompleteStudents.length})
               </h3>
-              <div className="border border-amber-200 rounded-lg overflow-hidden bg-amber-50/30">
+              <div className="border border-warning/30 rounded-lg overflow-hidden bg-warning/5">
                 <table className="w-full text-sm" aria-label="Alunos excluídos da publicação">
-                  <thead className="bg-amber-50 border-b border-amber-200">
+                  <thead className="bg-amber-50 border-b border-warning/30">
                     <tr>
-                      <th className="text-left px-4 py-2 font-medium text-amber-700 text-xs">Nº</th>
-                      <th className="text-left px-4 py-2 font-medium text-amber-700 text-xs">Nome</th>
-                      <th className="text-left px-4 py-2 font-medium text-amber-700 text-xs">Situação</th>
+                      <th className="text-left px-4 py-2 font-medium text-warning text-xs">Nº</th>
+                      <th className="text-left px-4 py-2 font-medium text-warning text-xs">Nome</th>
+                      <th className="text-left px-4 py-2 font-medium text-warning text-xs">Situação</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-amber-100">
                     {incompleteStudents.map(({ row, badge }) => (
                       <tr key={row.studentId}>
-                        <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{row.studentNumber}</td>
-                        <td className="px-4 py-2.5 text-slate-700">{row.studentName}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{row.studentNumber}</td>
+                        <td className="px-4 py-2.5 text-foreground">{row.studentName}</td>
                         <td className="px-4 py-2.5">
-                          <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                          <span className="text-xs bg-warning/10 text-warning px-2 py-0.5 rounded-full">
                             {badge}
                           </span>
                         </td>
@@ -601,7 +602,7 @@ export default function PublishPage() {
             <button
               type="button"
               onClick={() => navigate(-1)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-white text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
             >
               Cancelar
             </button>
@@ -609,7 +610,7 @@ export default function PublishPage() {
             <button
               type="button"
               onClick={advanceStep}
-              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-md bg-[#0D6EFD] text-white text-sm font-medium hover:bg-[#0D6EFD]/90 transition-colors"
+              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
             >
               Avançar: Audiência →
             </button>
@@ -619,14 +620,14 @@ export default function PublishPage() {
 
       {/* ── Step 2: Audiência ─────────────────────────────────────────────── */}
       {currentStep === 1 && (
-        <div className="bg-white rounded-lg border border-slate-200 p-6 flex flex-col gap-5">
-          <h2 className="text-base font-semibold text-slate-900">② Seleccionar Audiência</h2>
+        <div className="bg-white rounded-lg border border-border p-6 flex flex-col gap-5">
+          <h2 className="text-base font-semibold text-foreground">② Seleccionar Audiência</h2>
 
           {/* AC5: no-phone warning */}
           {noPhoneCount > 0 && (
             <div
               role="alert"
-              className="bg-amber-50 border border-amber-200 rounded-md px-4 py-3 text-sm text-[#B45309]"
+              className="bg-warning/10 border border-warning/20 rounded-md px-4 py-3 text-sm text-warning"
             >
               <strong>{noPhoneCount} aluno(s) sem telefone válido</strong> serão excluídos automaticamente das notificações WhatsApp.
             </div>
@@ -634,7 +635,7 @@ export default function PublishPage() {
 
           {/* AC5: RadioGroup */}
           <fieldset>
-            <legend id="audience-legend" className="text-sm font-medium text-slate-700 mb-3">
+            <legend id="audience-legend" className="text-sm font-medium text-foreground mb-3">
               Seleccionar Audiência
             </legend>
             <RadioGroup
@@ -644,17 +645,17 @@ export default function PublishPage() {
               onValueChange={(v) => setAudience(v as AudienceType)}
               className="flex flex-col gap-3"
             >
-              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors has-[input:checked]:border-[#0D6EFD] has-[input:checked]:bg-blue-50/30">
+              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors has-[input:checked]:border-primary has-[input:checked]:bg-primary/5">
                 <RadioGroupItem value="all" id="aud-all" aria-checked={audience === 'all'} />
                 <span className="text-sm text-slate-800 flex-1">
                   Todos os alunos com nota completa
                 </span>
-                <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono">
+                <span className="text-xs bg-slate-100 text-muted-foreground px-2 py-0.5 rounded-full font-mono">
                   {audienceCounts.all} alunos
                 </span>
               </label>
 
-              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors has-[input:checked]:border-[#0D6EFD] has-[input:checked]:bg-blue-50/30">
+              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors has-[input:checked]:border-primary has-[input:checked]:bg-primary/5">
                 <RadioGroupItem value="approved" id="aud-approved" aria-checked={audience === 'approved'} />
                 <span className="text-sm text-slate-800 flex-1">
                   Apenas aprovados
@@ -664,22 +665,22 @@ export default function PublishPage() {
                 </span>
               </label>
 
-              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors has-[input:checked]:border-[#0D6EFD] has-[input:checked]:bg-blue-50/30">
+              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors has-[input:checked]:border-primary has-[input:checked]:bg-primary/5">
                 <RadioGroupItem value="rejected" id="aud-rejected" aria-checked={audience === 'rejected'} />
                 <span className="text-sm text-slate-800 flex-1">
                   Apenas reprovados
                 </span>
-                <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-mono">
+                <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded-full font-mono">
                   {audienceCounts.rejected} alunos
                 </span>
               </label>
 
-              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors has-[input:checked]:border-[#0D6EFD] has-[input:checked]:bg-blue-50/30">
+              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors has-[input:checked]:border-primary has-[input:checked]:bg-primary/5">
                 <RadioGroupItem value="manual" id="aud-manual" aria-checked={audience === 'manual'} />
                 <span className="text-sm text-slate-800 flex-1">
                   Selecção manual
                 </span>
-                <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-mono">
+                <span className="text-xs bg-slate-100 text-muted-foreground px-2 py-0.5 rounded-full font-mono">
                   {audienceCounts.all} alunos
                 </span>
               </label>
@@ -691,14 +692,14 @@ export default function PublishPage() {
             <button
               type="button"
               onClick={goBack}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-white text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
             >
               ← Revisão
             </button>
             <button
               type="button"
               onClick={advanceStep}
-              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-md bg-[#0D6EFD] text-white text-sm font-medium hover:bg-[#0D6EFD]/90 transition-colors"
+              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
             >
               Avançar: Canais →
             </button>
@@ -708,14 +709,14 @@ export default function PublishPage() {
 
       {/* ── Step 3: Canais ────────────────────────────────────────────────── */}
       {currentStep === 2 && (
-        <div className="bg-white rounded-lg border border-slate-200 p-6 flex flex-col gap-5">
-          <h2 className="text-base font-semibold text-slate-900">③ Canais de Notificação</h2>
+        <div className="bg-white rounded-lg border border-border p-6 flex flex-col gap-5">
+          <h2 className="text-base font-semibold text-foreground">③ Canais de Notificação</h2>
 
           {/* AC13: WhatsApp disconnected warning */}
           {!waStatus.connected && (
             <div
               role="alert"
-              className="bg-red-50 border border-red-200 rounded-md px-4 py-3 text-sm text-[#B91C1C]"
+              className="bg-destructive/10 border border-destructive/20 rounded-md px-4 py-3 text-sm text-destructive"
             >
               <strong>WhatsApp desconectado.</strong> Para enviar por WhatsApp, conecte primeiro no{' '}
               <button
@@ -730,10 +731,10 @@ export default function PublishPage() {
 
           {/* AC6: Channel checkboxes */}
           <div className="flex flex-col gap-3">
-            <h3 className="text-sm font-medium text-slate-700">Seleccionar canais</h3>
+            <h3 className="text-sm font-medium text-foreground">Seleccionar canais</h3>
 
             {/* WhatsApp */}
-            <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
+            <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
               <Checkbox
                 id="ch-whatsapp"
                 checked={channels.has('whatsapp')}
@@ -746,36 +747,36 @@ export default function PublishPage() {
               </span>
               <div className="flex items-center gap-2">
                 {waChecking ? (
-                  <span className="text-xs text-slate-400">A verificar…</span>
+                  <span className="text-xs text-muted-foreground">A verificar…</span>
                 ) : (
                   <span
                     className={[
                       'text-xs px-2 py-0.5 rounded-full font-medium',
                       waStatus.connected
                         ? 'bg-green-100 text-green-700'
-                        : 'bg-red-100 text-red-700',
+                        : 'bg-destructive/10 text-destructive',
                     ].join(' ')}
                   >
                     {waStatus.connected ? '● Conectado' : '● Desconectado'}
                   </span>
                 )}
-                <span className="text-xs text-slate-500 font-mono">
+                <span className="text-xs text-muted-foreground font-mono">
                   {effectiveRecipients.length} destinatários
                 </span>
               </div>
             </label>
 
             {/* Email — not configured */}
-            <label className="flex items-center gap-3 cursor-not-allowed p-3 rounded-lg border border-slate-200 bg-slate-50 opacity-50">
+            <label className="flex items-center gap-3 cursor-not-allowed p-3 rounded-lg border border-border bg-muted/50 opacity-50">
               <Checkbox id="ch-email" checked={false} disabled aria-disabled="true" />
-              <span className="text-sm text-slate-600 flex-1">Email</span>
-              <span className="text-xs bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">
+              <span className="text-sm text-muted-foreground flex-1">Email</span>
+              <span className="text-xs bg-slate-200 text-muted-foreground px-2 py-0.5 rounded-full">
                 Não configurado
               </span>
             </label>
 
             {/* Portal only */}
-            <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
+            <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
               <Checkbox
                 id="ch-portal"
                 checked={channels.has('portal_only')}
@@ -788,7 +789,7 @@ export default function PublishPage() {
           {/* AC6: Message template + live preview */}
           <div className="flex flex-col gap-3">
             <div>
-              <label htmlFor="message-template" className="text-sm font-medium text-slate-700 block mb-1.5">
+              <label htmlFor="message-template" className="text-sm font-medium text-foreground block mb-1.5">
                 Template da mensagem WhatsApp
               </label>
               <textarea
@@ -796,10 +797,10 @@ export default function PublishPage() {
                 value={messageTemplate}
                 onChange={(e) => setMessageTemplate(e.target.value)}
                 rows={3}
-                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D6EFD]/30 focus:border-[#0D6EFD] resize-none"
+                className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D6EFD]/30 focus:border-primary resize-none"
                 placeholder="Olá {{nome}}! A sua nota é {{nota_final}}."
               />
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Variáveis: <code className="bg-slate-100 px-1 rounded">{'{{nome}}'}</code>{' '}
                 <code className="bg-slate-100 px-1 rounded">{'{{disciplina}}'}</code>{' '}
                 <code className="bg-slate-100 px-1 rounded">{'{{semestre}}'}</code>{' '}
@@ -810,8 +811,8 @@ export default function PublishPage() {
 
             {/* Live preview */}
             {completeStudents.length > 0 && (
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                <p className="text-xs font-medium text-slate-500 mb-1.5 uppercase tracking-wide">
+              <div className="bg-muted/50 border border-border rounded-lg p-3">
+                <p className="text-xs font-medium text-muted-foreground mb-1.5 uppercase tracking-wide">
                   Pré-visualização (1.º aluno)
                 </p>
                 <p className="text-sm text-slate-800 whitespace-pre-wrap">{previewText}</p>
@@ -824,7 +825,7 @@ export default function PublishPage() {
             <button
               type="button"
               onClick={goBack}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-white text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
             >
               ← Audiência
             </button>
@@ -833,7 +834,7 @@ export default function PublishPage() {
               onClick={advanceStep}
               disabled={channels.size === 0}
               aria-disabled={channels.size === 0}
-              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-md bg-[#0D6EFD] text-white text-sm font-medium hover:bg-[#0D6EFD]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Avançar: Confirmar →
             </button>
@@ -843,17 +844,17 @@ export default function PublishPage() {
 
       {/* ── Step 4: Confirmar ─────────────────────────────────────────────── */}
       {currentStep === 3 && (
-        <div className="bg-white rounded-lg border border-slate-200 p-6 flex flex-col gap-5">
-          <h2 className="text-base font-semibold text-slate-900">④ Confirmar Publicação</h2>
+        <div className="bg-white rounded-lg border border-border p-6 flex flex-col gap-5">
+          <h2 className="text-base font-semibold text-foreground">④ Confirmar Publicação</h2>
 
           {/* AC8: Summary box */}
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex flex-col gap-2 text-sm">
+          <div className="bg-muted/50 border border-border rounded-lg p-4 flex flex-col gap-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-slate-500">Contexto</span>
+              <span className="text-muted-foreground">Contexto</span>
               <span className="font-medium text-slate-800 text-right max-w-[60%]">{breadcrumb}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Audiência</span>
+              <span className="text-muted-foreground">Audiência</span>
               <span className="font-medium text-slate-800">
                 {audience === 'all' && `Todos (${audienceCounts.all} alunos)`}
                 {audience === 'approved' && `Apenas aprovados (${audienceCounts.approved} alunos)`}
@@ -862,33 +863,34 @@ export default function PublishPage() {
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Excluídos</span>
-              <span className="font-medium text-slate-700">
+              <span className="text-muted-foreground">Excluídos</span>
+              <span className="font-medium text-foreground">
                 {incompleteStudents.length} incompletos{noPhoneCount > 0 ? ` + ${noPhoneCount} sem telefone` : ''}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Canais</span>
+              <span className="text-muted-foreground">Canais</span>
               <span className="font-medium text-slate-800">
                 {Array.from(channels).join(', ') || '—'}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Destinatários efectivos</span>
-              <span className="font-semibold text-slate-900">{effectiveRecipients.length} alunos</span>
+              <span className="text-muted-foreground">Destinatários efectivos</span>
+              <span className="font-semibold text-foreground">{effectiveRecipients.length} alunos</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Portal</span>
-              <span className="font-medium text-[#15803D]">✓ Visível após publicação</span>
+              <span className="text-muted-foreground">Portal</span>
+              <span className="font-medium text-success flex items-center gap-1"><CheckCircle className="size-3.5" /> Visível após publicação</span>
             </div>
           </div>
 
           {/* AC8: Amber warning */}
           <div
             role="alert"
-            className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-[#B45309]"
+            className="bg-warning/10 border border-warning/20 rounded-lg px-4 py-3 text-sm text-warning flex items-start gap-2"
           >
-            <strong>⚠️ Atenção:</strong> Esta acção é irreversível. As notas ficarão visíveis no portal para os estudantes e as notificações WhatsApp serão enviadas imediatamente. Certifique-se de que todas as notas estão correctas.
+            <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+            <span><strong>Atenção:</strong> Esta acção é irreversível. As notas ficarão visíveis no portal para os estudantes e as notificações WhatsApp serão enviadas imediatamente. Certifique-se de que todas as notas estão correctas.</span>
           </div>
 
           {/* AC8: Mandatory confirmation checkbox */}
@@ -899,7 +901,7 @@ export default function PublishPage() {
               onCheckedChange={(checked) => setConfirmChecked(checked === true)}
               className="mt-0.5"
             />
-            <label htmlFor="confirm-checkbox" className="text-sm text-slate-700 cursor-pointer leading-relaxed">
+            <label htmlFor="confirm-checkbox" className="text-sm text-foreground cursor-pointer leading-relaxed">
               Confirmo que revi as notas e autorizo a publicação.
             </label>
           </div>
@@ -910,9 +912,9 @@ export default function PublishPage() {
               type="button"
               onClick={goBack}
               disabled={publishing}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
             >
-              ← Canais
+              <ChevronLeft className="size-4" /> Canais
             </button>
 
             {/* AC8: Disabled until checkbox checked; AC9: loading state */}
@@ -921,15 +923,15 @@ export default function PublishPage() {
               onClick={handlePublish}
               disabled={!confirmChecked || publishing}
               aria-disabled={!confirmChecked || publishing}
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-md bg-[#0D6EFD] text-white text-sm font-medium hover:bg-[#0D6EFD]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {publishing ? (
                 <>
-                  <span className="animate-spin text-xs">⏳</span>
+                  <RefreshCw className="size-4 animate-spin" />
                   A publicar…
                 </>
               ) : (
-                '🚀 Publicar e Enviar Notificações'
+                <><Rocket className="size-4" /> Publicar e Enviar Notificações</>
               )}
             </button>
           </div>

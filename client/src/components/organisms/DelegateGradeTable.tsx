@@ -1,3 +1,4 @@
+import { Clock, CheckCircle, AlertTriangle, XCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -20,33 +21,39 @@ export interface DelegateStudent {
   phone?: string
 }
 
-const RESULT_BADGE: Record<DelegateStudent['result'], { label: string; cls: string }> = {
+const RESULT_BADGE: Record<DelegateStudent['result'], { label: string; cls: string; icon: React.ReactNode }> = {
   aprovado: {
     label: 'Aprovado',
-    cls: 'bg-[#DCFCE7] text-[#15803D]',
+    cls: 'bg-success/10 text-success',
+    icon: <CheckCircle className="size-3" />,
   },
   reprovado: {
     label: 'Reprovado',
-    cls: 'bg-[#FEE2E2] text-[#B91C1C]',
+    cls: 'bg-destructive/10 text-destructive',
+    icon: <XCircle className="size-3" />,
   },
   pendente: {
-    label: '⏳ Pendente',
-    cls: 'bg-[#FEF9C3] text-[#854D0E]',
+    label: 'Pendente',
+    cls: 'bg-warning/10 text-warning',
+    icon: <Clock className="size-3" />,
   },
 }
 
-const CONTACT_BADGE: Record<DelegateStudent['contactStatus'], { label: string; cls: string }> = {
+const CONTACT_BADGE: Record<DelegateStudent['contactStatus'], { label: string; cls: string; icon: React.ReactNode }> = {
   ok: {
-    label: '✅ OK',
-    cls: 'bg-[#DCFCE7] text-[#15803D]',
+    label: 'OK',
+    cls: 'bg-success/10 text-success',
+    icon: <CheckCircle className="size-3" />,
   },
   invalid: {
-    label: '⚠️ Inválido',
-    cls: 'bg-[#FEF9C3] text-[#854D0E]',
+    label: 'Inválido',
+    cls: 'bg-warning/10 text-warning',
+    icon: <AlertTriangle className="size-3" />,
   },
   missing: {
-    label: '⚠️ Sem telefone',
-    cls: 'bg-[#FEE2E2] text-[#B91C1C]',
+    label: 'Sem telefone',
+    cls: 'bg-destructive/10 text-destructive',
+    icon: <AlertTriangle className="size-3" />,
   },
 }
 
@@ -71,26 +78,26 @@ export function DelegateGradeTable({
 
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto rounded-lg border border-slate-200">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <Table aria-label={`Lista de estudantes da turma ${turma}`}>
           <TableHeader>
-            <TableRow className="bg-slate-50">
-              <TableHead scope="col" className="w-28 font-semibold text-slate-700">
+            <TableRow className="bg-muted/50">
+              <TableHead scope="col" className="w-28 font-semibold text-foreground">
                 Nº Estudante
               </TableHead>
-              <TableHead scope="col" className="font-semibold text-slate-700">
+              <TableHead scope="col" className="font-semibold text-foreground">
                 Nome
               </TableHead>
-              <TableHead scope="col" className="font-semibold text-slate-700">
+              <TableHead scope="col" className="font-semibold text-foreground">
                 Disciplina
               </TableHead>
-              <TableHead scope="col" className="font-semibold text-slate-700 text-center w-20">
+              <TableHead scope="col" className="font-semibold text-foreground text-center w-20">
                 Nota
               </TableHead>
-              <TableHead scope="col" className="font-semibold text-slate-700 text-center w-32">
+              <TableHead scope="col" className="font-semibold text-foreground text-center w-32">
                 Resultado
               </TableHead>
-              <TableHead scope="col" className="font-semibold text-slate-700 text-center w-36">
+              <TableHead scope="col" className="font-semibold text-foreground text-center w-36">
                 Contacto
               </TableHead>
             </TableRow>
@@ -105,32 +112,32 @@ export function DelegateGradeTable({
                   : '—'
 
               return (
-                <TableRow key={student.id} className="hover:bg-slate-50/50">
+                <TableRow key={student.id} className="hover:bg-muted/30">
                   <TableHead
                     scope="row"
-                    className="font-mono text-sm font-normal text-slate-600 px-4 py-3"
+                    className="font-mono text-sm font-normal text-muted-foreground px-4 py-3"
                   >
                     {student.studentNumber}
                   </TableHead>
-                  <TableCell className="font-medium text-slate-900">{student.name}</TableCell>
-                  <TableCell className="text-slate-700">{student.subject}</TableCell>
-                  <TableCell className="text-center tabular-nums text-slate-900">
+                  <TableCell className="font-medium text-foreground">{student.name}</TableCell>
+                  <TableCell className="text-foreground">{student.subject}</TableCell>
+                  <TableCell className="text-center tabular-nums text-foreground">
                     {gradeDisplay}
                   </TableCell>
                   <TableCell className="text-center">
                     <span
-                      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${resultInfo.cls}`}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${resultInfo.cls}`}
                       aria-label={`Resultado: ${resultInfo.label}`}
                     >
-                      {resultInfo.label}
+                      {resultInfo.icon} {resultInfo.label}
                     </span>
                   </TableCell>
                   <TableCell className="text-center">
                     <span
-                      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${contactInfo.cls}`}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${contactInfo.cls}`}
                       aria-label={`Contacto: ${contactInfo.label}`}
                     >
-                      {contactInfo.label}
+                      {contactInfo.icon} {contactInfo.label}
                     </span>
                   </TableCell>
                 </TableRow>
@@ -141,7 +148,7 @@ export function DelegateGradeTable({
               <TableRow>
                 <TableCell
                   colSpan={6}
-                  className="text-center text-slate-500 py-10"
+                  className="text-center text-muted-foreground py-10"
                 >
                   Nenhum estudante corresponde à pesquisa.
                 </TableCell>
@@ -151,7 +158,6 @@ export function DelegateGradeTable({
         </Table>
       </div>
 
-      {/* Pagination — AC8 */}
       <div className="flex items-center justify-center gap-4 py-2">
         <Button
           variant="outline"
@@ -159,10 +165,11 @@ export function DelegateGradeTable({
           onClick={() => onPageChange(safePage - 1)}
           disabled={safePage <= 1}
           aria-label="Página anterior"
+          className="gap-1"
         >
-          ← Anterior
+          <ChevronLeft className="size-4" /> Anterior
         </Button>
-        <span className="text-sm text-slate-600" aria-live="polite" aria-atomic="true">
+        <span className="text-sm text-muted-foreground" aria-live="polite" aria-atomic="true">
           Página {safePage} de {totalPages}
         </span>
         <Button
@@ -171,8 +178,9 @@ export function DelegateGradeTable({
           onClick={() => onPageChange(safePage + 1)}
           disabled={safePage >= totalPages}
           aria-label="Próxima página"
+          className="gap-1"
         >
-          Seguinte →
+          Seguinte <ChevronRight className="size-4" />
         </Button>
       </div>
     </div>

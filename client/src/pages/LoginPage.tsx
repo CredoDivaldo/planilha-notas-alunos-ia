@@ -1,37 +1,22 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { GraduationCap, Mail, Hash, Lock, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
-import { FormField } from '@/components/molecules/FormField'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 type Tab = 'professor' | 'estudante'
 
-function Spinner() {
-  return (
-    <svg
-      className="mr-2 h-4 w-4 animate-spin"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-      />
-    </svg>
-  )
-}
-
 function PasswordRequirement({ met, label }: { met: boolean; label: string }) {
   return (
-    <p
-      className="text-sm flex items-center gap-1.5"
-      aria-label={`${label}: ${met ? 'satisfeito' : 'não satisfeito'}`}
-    >
-      <span aria-hidden="true">{met ? '✅' : '❌'}</span>
-      <span className={met ? 'text-[#15803D]' : 'text-[#475569]'}>{label}</span>
+    <p className="text-sm flex items-center gap-1.5">
+      {met ? (
+        <CheckCircle className="size-4 text-success shrink-0" />
+      ) : (
+        <XCircle className="size-4 text-muted-foreground shrink-0" />
+      )}
+      <span className={met ? 'text-success' : 'text-muted-foreground'}>{label}</span>
     </p>
   )
 }
@@ -45,22 +30,20 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [studentNumber, setStudentNumber] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showNew, setShowNew] = useState(false)
   const [changeLoading, setChangeLoading] = useState(false)
   const [changeError, setChangeError] = useState('')
 
-  // AC15: already authenticated and no pending password change → redirect
   if (isAuthenticated && !requiresPasswordChange && currentRole) {
     const dest =
-      currentRole === 'professor'
-        ? '/painel'
-        : currentRole === 'estudante'
-          ? '/portal'
-          : '/delegado'
+      currentRole === 'professor' ? '/painel' :
+      currentRole === 'estudante' ? '/portal' : '/delegado'
     navigate(dest, { replace: true })
     return null
   }
@@ -81,21 +64,16 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      await login({
-        email_or_student_number: identifier,
-        password,
-        role: tab,
-      })
-      // Redirect handled by the guard above on re-render (if not requiresPasswordChange)
+      await login({ email_or_student_number: identifier, password, role: tab })
     } catch (err: unknown) {
       if (err instanceof Error) {
         const msg = err.message
         if (msg.includes('401') || msg.toLowerCase().includes('login failed')) {
-          setError('⚠️ Email ou palavra-passe incorrectos.')
+          setError('Email ou palavra-passe incorrectos.')
         } else if (msg.includes('403')) {
-          setError('❌ Conta suspensa. Contacte o administrador.')
+          setError('Conta suspensa. Contacte o administrador.')
         } else {
-          setError('⚠️ Erro ao iniciar sessão. Tente novamente.')
+          setError('Erro ao iniciar sessão. Tente novamente.')
         }
       }
     } finally {
@@ -103,7 +81,6 @@ export default function LoginPage() {
     }
   }
 
-  // Password requirements
   const hasMinLength = newPassword.length >= 8
   const hasUppercase = /[A-Z]/.test(newPassword)
   const passwordsMatch = newPassword === confirmPassword && newPassword.length > 0
@@ -115,74 +92,72 @@ export default function LoginPage() {
     setChangeLoading(true)
     try {
       await changePassword({ new_password: newPassword, confirm_password: confirmPassword })
-      // After successful change, redirect based on role
       if (currentRole) {
         const dest =
-          currentRole === 'professor'
-            ? '/painel'
-            : currentRole === 'estudante'
-              ? '/portal'
-              : '/delegado'
+          currentRole === 'professor' ? '/painel' :
+          currentRole === 'estudante' ? '/portal' : '/delegado'
         navigate(dest, { replace: true })
       }
     } catch (err: unknown) {
-      setChangeError(
-        err instanceof Error ? err.message : 'Erro ao alterar palavra-passe.',
-      )
+      setChangeError(err instanceof Error ? err.message : 'Erro ao alterar palavra-passe.')
     } finally {
       setChangeLoading(false)
     }
   }
 
-  // AC10–AC13: First access form
+  /* ── First access — change password ─────────────────────────────────────── */
   if (requiresPasswordChange) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
-        <div className="w-full max-w-[440px] rounded-xl border bg-white p-8 shadow-sm">
-          <h1 className="text-xl font-semibold mb-6">🔐 Primeiro Acesso</h1>
+      <div className="min-h-screen flex items-center justify-center bg-dark-gradient">
+        <div className="w-full max-w-[440px] glass rounded-2xl p-8">
+          <div className="flex items-center gap-3 mb-6">
+            <Lock className="size-6 text-primary" />
+            <h1 className="text-xl font-semibold text-foreground">Primeiro Acesso</h1>
+          </div>
+          <p className="text-sm text-muted-foreground mb-6">
+            Defina uma palavra-passe segura para a sua conta.
+          </p>
           <form onSubmit={handleChangePassword} className="flex flex-col gap-4" noValidate>
-            <FormField
-              id="new-password"
-              label="Nova palavra-passe"
-              type="password"
-              value={newPassword}
-              onChange={e => setNewPassword(e.target.value)}
-              autoFocus
-            />
-            <FormField
-              id="confirm-password"
-              label="Confirmar palavra-passe"
-              type="password"
-              value={confirmPassword}
-              onChange={e => setConfirmPassword(e.target.value)}
-              error={
-                confirmPassword.length > 0 && !passwordsMatch
-                  ? 'As palavras-passe não coincidem.'
-                  : undefined
-              }
-            />
-            <div className="flex flex-col gap-1 p-3 rounded-lg bg-[#F8FAFC]">
-              <PasswordRequirement met={hasMinLength} label="mín. 8 caracteres" />
-              <PasswordRequirement met={hasUppercase} label="letra maiúscula" />
+            <div className="space-y-1.5">
+              <Label htmlFor="new-password">Nova palavra-passe</Label>
+              <div className="relative">
+                <Input
+                  id="new-password"
+                  type={showNew ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  autoFocus
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNew(!showNew)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showNew ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="confirm-password">Confirmar palavra-passe</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1 p-3 rounded-lg bg-muted/50">
+              <PasswordRequirement met={hasMinLength} label="mínimo 8 caracteres" />
+              <PasswordRequirement met={hasUppercase} label="pelo menos uma letra maiúscula" />
+              <PasswordRequirement met={passwordsMatch} label="palavras-passe coincidem" />
             </div>
             {changeError && (
-              <p role="alert" aria-live="assertive" className="text-sm text-[#B91C1C]">
-                {changeError}
-              </p>
+              <p role="alert" className="text-sm text-destructive">{changeError}</p>
             )}
-            <Button
-              type="submit"
-              disabled={!canChangePassword}
-              className="w-full bg-[#0D6EFD] hover:bg-[#0b5ed7] disabled:opacity-50"
-            >
-              {changeLoading ? (
-                <>
-                  <Spinner />
-                  A definir…
-                </>
-              ) : (
-                'Definir e Entrar'
-              )}
+            <Button type="submit" disabled={!canChangePassword} className="w-full">
+              {changeLoading ? 'A definir…' : 'Definir e Entrar'}
             </Button>
           </form>
         </div>
@@ -190,103 +165,158 @@ export default function LoginPage() {
     )
   }
 
+  /* ── Login ───────────────────────────────────────────────────────────────── */
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
-      <div className="w-full max-w-[440px] rounded-xl border bg-white p-8 shadow-sm">
-        {/* Header — AC1 */}
-        <h1 className="text-xl font-semibold mb-6">📊 Planilha Notas</h1>
+    <div className="min-h-screen flex bg-dark-gradient">
 
-        {/* Tabs — AC2 */}
-        <div
-          className="flex mb-6 border-b border-gray-200"
-          role="tablist"
-          aria-label="Tipo de utilizador"
-        >
-          {(['professor', 'estudante'] as Tab[]).map(t => (
-            <button
-              key={t}
-              role="tab"
-              aria-selected={tab === t}
-              onClick={() => handleTabChange(t)}
-              className={`px-4 py-2 text-sm font-medium capitalize transition-colors focus-visible:outline-2 focus-visible:outline-[#0D6EFD] ${
-                tab === t
-                  ? 'border-b-2 border-[#0D6EFD] text-[#0D6EFD]'
-                  : 'text-[#475569] hover:text-gray-900'
-              }`}
-            >
-              {t === 'professor' ? 'Professor' : 'Estudante'}
-            </button>
-          ))}
+      {/* Left panel — brand */}
+      <div className="hidden lg:flex w-1/2 relative overflow-hidden flex-col justify-center px-16"
+        style={{ background: 'linear-gradient(160deg, #1e3a8a, #2563eb)' }}
+      >
+        {/* Decorative circles */}
+        <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full"
+          style={{ background: 'rgba(255,255,255,0.08)' }} />
+        <div className="absolute -bottom-20 -left-20 w-60 h-60 rounded-full"
+          style={{ background: 'rgba(255,255,255,0.05)' }} />
+
+        <div className="relative z-10">
+          <div className="flex items-center gap-4 mb-8">
+            <GraduationCap className="size-12 text-white" />
+            <span className="text-4xl font-bold text-white">UniGrade</span>
+          </div>
+          <h2 className="text-3xl font-semibold text-white leading-snug mb-4">
+            Sistema Inteligente de<br />Gestão Académica
+          </h2>
+          <p className="text-blue-200 text-lg leading-relaxed">
+            Universidade Lusíada de Angola.<br />
+            Gerencie notas, notifique estudantes<br />e acompanhe o desempenho académico.
+          </p>
         </div>
+      </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-          {/* AC3 — Professor fields */}
+      {/* Right panel — form */}
+      <div className="flex-1 flex items-center justify-center px-8 py-12">
+        <div className="w-full max-w-[380px]">
+          {/* Mobile logo */}
+          <div className="flex items-center gap-3 mb-8 lg:hidden">
+            <GraduationCap className="size-8 text-primary" />
+            <span className="text-2xl font-bold text-foreground">UniGrade</span>
+          </div>
+
+          <h2 className="text-3xl font-bold text-foreground mb-2">Bem-vindo</h2>
+          <p className="text-muted-foreground mb-8">Entre na sua conta para continuar</p>
+
+          {/* Tab selector */}
+          <div
+            className="flex mb-6 border-b border-border"
+            role="tablist"
+            aria-label="Tipo de utilizador"
+          >
+            {(['professor', 'estudante'] as Tab[]).map(t => (
+              <button
+                key={t}
+                role="tab"
+                aria-selected={tab === t}
+                onClick={() => handleTabChange(t)}
+                className={`px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring ${
+                  tab === t
+                    ? 'border-b-2 border-primary text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {t === 'professor' ? 'Professor' : 'Estudante'}
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+            {tab === 'professor' ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="email">Email institucional</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-primary" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="email@unila.ao"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    className="pl-10"
+                    autoComplete="username"
+                    autoFocus
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="student-number">Número de Estudante</Label>
+                <div className="relative">
+                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-primary" />
+                  <Input
+                    id="student-number"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="ex: 2023001"
+                    value={studentNumber}
+                    onChange={e => setStudentNumber(e.target.value)}
+                    className="pl-10"
+                    autoFocus
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="password">Palavra-passe</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-primary" />
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="pl-10 pr-10"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div role="alert" className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+                <XCircle className="size-4 shrink-0" />
+                {error}
+              </div>
+            )}
+
+            <Button type="submit" disabled={!canSubmit} className="w-full glow-blue">
+              {loading ? 'A entrar…' : tab === 'professor' ? 'Entrar' : 'Entrar como Aluno'}
+            </Button>
+          </form>
+
           {tab === 'professor' && (
-            <FormField
-              id="email"
-              label="Email / Utilizador"
-              type="email"
-              placeholder="email@inst.ao"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              autoComplete="username"
-              autoFocus
-            />
-          )}
-
-          {/* AC4 — Estudante fields */}
-          {tab === 'estudante' && (
-            <FormField
-              id="student-number"
-              label="Número de Estudante"
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              placeholder="ex: 2023001"
-              value={studentNumber}
-              onChange={e => setStudentNumber(e.target.value)}
-              autoFocus
-            />
-          )}
-
-          <FormField
-            id="password"
-            label="Palavra-passe"
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            autoComplete="current-password"
-          />
-
-          {/* AC7 + AC8 errors */}
-          {error && (
-            <p role="alert" aria-live="assertive" className="text-sm text-[#B91C1C]">
-              {error}
+            <p className="mt-6 text-center text-sm text-muted-foreground">
+              Ainda não tem conta?{' '}
+              <Link to="/register" className="text-primary hover:underline font-medium">
+                Criar conta de professor
+              </Link>
             </p>
           )}
 
-          <Button
-            type="submit"
-            disabled={!canSubmit}
-            className="w-full bg-[#0D6EFD] hover:bg-[#0b5ed7] disabled:opacity-50"
-          >
-            {loading ? (
-              <>
-                <Spinner /> A entrar…
-              </>
-            ) : tab === 'professor' ? (
-              'Entrar'
-            ) : (
-              'Entrar como Aluno'
-            )}
-          </Button>
-        </form>
-
-        {tab === 'estudante' && (
-          <p className="mt-4 text-xs text-[#475569]">
-            ⚠️ Primeiro acesso? Será pedida troca de palavra-passe.
-          </p>
-        )}
+          {tab === 'estudante' && (
+            <p className="mt-4 text-xs text-muted-foreground text-center">
+              Primeiro acesso? Será pedida troca de palavra-passe.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   )

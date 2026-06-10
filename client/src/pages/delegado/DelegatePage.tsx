@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { AlertTriangle, CheckCircle, XCircle, Clock, Users, Lock, Info } from 'lucide-react'
 import { DelegateHeader } from '@/components/organisms/DelegateHeader'
 import { DelegateGradeTable } from '@/components/organisms/DelegateGradeTable'
 import type { DelegateStudent } from '@/components/organisms/DelegateGradeTable'
@@ -47,25 +48,25 @@ function ContactProblemsPanel({ students }: { students: DelegateStudent[] }) {
 
   return (
     <section
-      className="bg-white rounded-lg border border-slate-200 p-4"
+      className="bg-card rounded-lg border border-border p-4"
       aria-labelledby="contact-problems-heading"
     >
       <h2
         id="contact-problems-heading"
-        className="font-semibold text-slate-800 text-sm mb-3"
+        className="font-semibold text-foreground text-sm mb-3 flex items-center gap-2"
       >
-        ⚠️ Contactos com Problema
+        <AlertTriangle className="size-4 text-warning" /> Contactos com Problema
       </h2>
 
       {problematic.length === 0 ? (
-        <p className="text-sm text-[#15803D]">✅ Todos os contactos estão OK.</p>
+        <p className="text-sm text-success flex items-center gap-2"><CheckCircle className="size-4" /> Todos os contactos estão OK.</p>
       ) : (
         <ul className="space-y-2 mb-3">
           {problematic.map((s) => (
             <li key={s.id} className="flex items-start gap-2 text-sm">
-              <span className="text-[#B45309] font-mono">{s.studentNumber}</span>
-              <span className="text-slate-700 flex-1">{s.name}</span>
-              <span className="text-[#B91C1C] text-xs font-medium">
+              <span className="text-warning font-mono">{s.studentNumber}</span>
+              <span className="text-foreground flex-1">{s.name}</span>
+              <span className="text-destructive text-xs font-medium">
                 {s.contactStatus === 'missing' ? 'Sem telefone' : 'Número inválido'}
               </span>
             </li>
@@ -73,8 +74,8 @@ function ContactProblemsPanel({ students }: { students: DelegateStudent[] }) {
         </ul>
       )}
 
-      <p className="text-xs text-[#475569] bg-blue-50 border border-blue-100 rounded px-3 py-2">
-        ℹ️ Comunique ao professor para corrigir estes contactos.
+      <p className="text-xs text-muted-foreground bg-primary/5 border border-primary/10 rounded px-3 py-2 flex items-center gap-2">
+        <Info className="size-3.5 text-primary shrink-0" /> Comunique ao professor para corrigir estes contactos.
       </p>
     </section>
   )
@@ -95,42 +96,42 @@ function SystemStatusPanel({ status }: { status: SystemStatus }) {
 
   return (
     <section
-      className="bg-white rounded-lg border border-slate-200 p-4"
+      className="bg-card rounded-lg border border-border p-4"
       aria-labelledby="system-status-heading"
     >
       <h2
         id="system-status-heading"
-        className="font-semibold text-slate-800 text-sm mb-3"
+        className="font-semibold text-foreground text-sm mb-3"
       >
-        🖥️ Estado do Sistema
+        Estado do Sistema
       </h2>
 
       <dl className="space-y-2 text-sm">
         <div className="flex items-center justify-between">
-          <dt className="text-slate-600">WhatsApp</dt>
+          <dt className="text-muted-foreground">WhatsApp</dt>
           <dd>
             {status.whatsappConnected ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#DCFCE7] text-[#15803D]">
-                ✅ Conectado
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success">
+                <CheckCircle className="size-3" /> Conectado
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#FEE2E2] text-[#B91C1C]">
-                ❌ Desconectado
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-destructive/10 text-destructive">
+                <XCircle className="size-3" /> Desconectado
               </span>
             )}
           </dd>
         </div>
 
         <div className="flex items-center justify-between">
-          <dt className="text-slate-600">Último broadcast</dt>
-          <dd className="text-slate-700 text-xs tabular-nums">{broadcastDisplay}</dd>
+          <dt className="text-muted-foreground">Último broadcast</dt>
+          <dd className="text-foreground text-xs tabular-nums">{broadcastDisplay}</dd>
         </div>
 
         <div className="flex items-center justify-between">
-          <dt className="text-slate-600">Notas publicadas</dt>
+          <dt className="text-muted-foreground">Notas publicadas</dt>
           <dd>
             <span
-              className={`text-xs font-medium ${status.notesPublished ? 'text-[#15803D]' : 'text-[#B91C1C]'}`}
+              className={`text-xs font-medium ${status.notesPublished ? 'text-success' : 'text-destructive'}`}
             >
               {status.notesPublished ? 'Sim' : 'Não'}
             </span>
@@ -138,9 +139,9 @@ function SystemStatusPanel({ status }: { status: SystemStatus }) {
         </div>
       </dl>
 
-      <div className="mt-3 bg-slate-50 border border-slate-200 rounded px-3 py-2 flex items-start gap-2">
-        <span aria-hidden="true">🔒</span>
-        <p className="text-xs text-slate-600">
+      <div className="mt-3 bg-muted/50 border border-border rounded px-3 py-2 flex items-start gap-2">
+        <Lock className="size-3.5 text-muted-foreground mt-0.5 shrink-0" aria-hidden="true" />
+        <p className="text-xs text-muted-foreground">
           Edição de notas: bloqueada (acção exclusiva do professor)
         </p>
       </div>
@@ -222,7 +223,7 @@ export default function DelegatePage() {
   ).length
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-background">
       {/* Header — T3 / AC2 */}
       <DelegateHeader turma="ING-T1" semester="2026/1" />
 
@@ -230,10 +231,10 @@ export default function DelegatePage() {
 
         {/* StatCards — T4 / AC3 */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatCard icon="👥" label="Estudantes" value={totalStudents} />
-          <StatCard icon="✅" label="Notas publicadas" value={publishedCount} />
-          <StatCard icon="⏳" label="Pendentes" value={pendingCount} />
-          <StatCard icon="⚠️" label="Sem contacto" value={noContactCount} />
+          <StatCard icon={<Users className="size-4" />} label="Estudantes" value={totalStudents} />
+          <StatCard icon={<CheckCircle className="size-4" />} label="Notas publicadas" value={publishedCount} variant="success" />
+          <StatCard icon={<Clock className="size-4" />} label="Pendentes" value={pendingCount} />
+          <StatCard icon={<AlertTriangle className="size-4" />} label="Sem contacto" value={noContactCount} variant="warning" />
         </div>
 
         {/* Search + Export — T6 / T7 / AC6 / AC7 */}
@@ -248,7 +249,7 @@ export default function DelegatePage() {
             variant="outline"
             size="sm"
             onClick={() => downloadCSV(filteredStudents)}
-            className="text-[#0D6EFD] border-[#0D6EFD] hover:bg-[#0D6EFD]/5"
+            className="text-primary border-primary hover:bg-primary/5"
           >
             Exportar CSV ▾
           </Button>
@@ -256,8 +257,8 @@ export default function DelegatePage() {
 
         {/* Main table — T5 / AC4 / AC5 / AC8 */}
         {loading ? (
-          <div className="flex items-center justify-center py-16 text-slate-500 text-sm">
-            ⏳ A carregar dados da turma…
+          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground text-sm">
+            <Clock className="size-4 animate-pulse" /> A carregar dados da turma…
           </div>
         ) : (
           <DelegateGradeTable

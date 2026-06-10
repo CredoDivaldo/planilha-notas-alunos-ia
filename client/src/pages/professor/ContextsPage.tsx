@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { Pencil, Trash2, Users } from 'lucide-react'
 import { AppHeader } from '@/components/organisms/AppHeader'
 import { SearchBar } from '@/components/molecules/SearchBar'
 import { FileDropzone } from '@/components/molecules/FileDropzone'
@@ -248,17 +249,17 @@ export default function ContextsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-background">
       <AppHeader activeTab="contextos" />
 
       <main className="max-w-7xl mx-auto px-6 py-6">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-semibold text-slate-900">
+          <h1 className="text-xl font-semibold text-foreground">
             Gestão de Contextos Académicos
           </h1>
           <Button
             onClick={handleCreateOpen}
-            className="bg-[#0D6EFD] hover:bg-[#0D6EFD]/90 text-white"
+            className="bg-primary hover:bg-primary/90 text-white"
           >
             + Criar Contexto
           </Button>
@@ -271,8 +272,8 @@ export default function ContextsPage() {
             className={[
               'mb-4 rounded px-4 py-2.5 text-sm border',
               statusMsg.type === 'success'
-                ? 'bg-green-50 border-green-200 text-[#15803D]'
-                : 'bg-red-50 border-red-200 text-[#B91C1C]',
+                ? 'bg-success/10 border-success/20 text-success'
+                : 'bg-destructive/10 border-destructive/20 text-destructive',
             ].join(' ')}
           >
             {statusMsg.text}
@@ -315,10 +316,10 @@ export default function ContextsPage() {
             aria-live="polite"
             aria-label="A carregar contextos"
           >
-            <div className="w-8 h-8 border-4 border-[#0D6EFD] border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
-          <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
             <Table aria-label="Contextos Académicos">
               <TableHeader>
                 <TableRow>
@@ -333,7 +334,7 @@ export default function ContextsPage() {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-[#475569]">
+                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                       Nenhum contexto encontrado.
                     </TableCell>
                   </TableRow>
@@ -357,17 +358,17 @@ export default function ContextsPage() {
                             type="button"
                             aria-label={`Editar ${ctx.turma}`}
                             onClick={(e) => { e.stopPropagation(); handleEditOpen(ctx) }}
-                            className="p-1.5 rounded hover:bg-slate-100 transition-colors"
+                            className="p-1.5 rounded hover:bg-muted transition-colors"
                           >
-                            ✏️
+                            <Pencil className="size-3.5" />
                           </button>
                           <button
                             type="button"
                             aria-label={`Eliminar ${ctx.turma}`}
                             onClick={(e) => { e.stopPropagation(); setDeleteTarget(ctx) }}
-                            className="p-1.5 rounded hover:bg-red-50 transition-colors"
+                            className="p-1.5 rounded hover:bg-destructive/10 transition-colors"
                           >
-                            🗑
+                            <Trash2 className="size-3.5 text-destructive" />
                           </button>
                         </div>
                       </TableCell>
@@ -380,38 +381,38 @@ export default function ContextsPage() {
         )}
 
         {selectedContext && (
-          <div className="mt-4 bg-white rounded-lg border border-slate-200 shadow-sm p-6">
-            <h2 className="text-base font-semibold text-slate-900 mb-4">
+          <div className="mt-4 bg-card rounded-lg border border-border shadow-sm p-6">
+            <h2 className="text-base font-semibold text-foreground mb-4">
               Detalhe: {selectedContext.turma} · {selectedContext.disciplina} · {selectedContext.semestre}
             </h2>
 
             <section aria-labelledby="detail-components-heading">
               <h3
                 id="detail-components-heading"
-                className="text-sm font-semibold text-slate-700 mb-2 uppercase tracking-wide"
+                className="text-sm font-semibold text-foreground mb-2 uppercase tracking-wide"
               >
                 Componentes de Avaliação
               </h3>
-              <div className="bg-white border border-slate-200 rounded overflow-hidden mb-3">
+              <div className="bg-card border border-border rounded overflow-hidden mb-3">
                 <table className="w-full text-sm" aria-label="Componentes de avaliação do contexto seleccionado">
                   <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50">
-                      <th scope="col" className="text-left px-3 py-2 font-medium text-slate-600">Componente</th>
-                      <th scope="col" className="text-left px-3 py-2 font-medium text-slate-600 w-24">Peso</th>
+                    <tr className="border-b border-border bg-muted/50">
+                      <th scope="col" className="text-left px-3 py-2 font-medium text-muted-foreground">Componente</th>
+                      <th scope="col" className="text-left px-3 py-2 font-medium text-muted-foreground w-24">Peso</th>
                       <th scope="col" className="w-10 px-3 py-2" aria-label="Acções" />
                     </tr>
                   </thead>
                   <tbody>
                     {selectedContext.components.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="text-center px-3 py-4 text-[#475569] text-sm">
+                        <td colSpan={3} className="text-center px-3 py-4 text-muted-foreground text-sm">
                           Sem componentes de avaliação definidos.
                         </td>
                       </tr>
                     ) : (
                       <>
                         {selectedContext.components.map((comp) => (
-                          <tr key={comp.id} className="border-b border-slate-100">
+                          <tr key={comp.id} className="border-b border-border">
                             <td className="px-3 py-2">{comp.name}</td>
                             <td className="px-3 py-2">{comp.weight}%</td>
                             <td className="px-3 py-2">
@@ -419,16 +420,16 @@ export default function ContextsPage() {
                                 type="button"
                                 aria-label={`Editar componente ${comp.name}`}
                                 onClick={() => handleEditOpen(selectedContext)}
-                                className="hover:bg-slate-100 p-1 rounded transition-colors"
+                                className="hover:bg-muted p-1 rounded transition-colors"
                               >
-                                ✏️
+                                <Pencil className="size-3.5" />
                               </button>
                             </td>
                           </tr>
                         ))}
-                        <tr className="bg-slate-50">
-                          <td className="px-3 py-2 font-semibold text-slate-700">Total</td>
-                          <td className="px-3 py-2 font-semibold text-[#15803D]">
+                        <tr className="bg-muted/50">
+                          <td className="px-3 py-2 font-semibold text-foreground">Total</td>
+                          <td className="px-3 py-2 font-semibold text-success">
                             {selectedContext.components.reduce((s, c) => s + c.weight, 0)}%
                           </td>
                           <td />
@@ -441,7 +442,7 @@ export default function ContextsPage() {
               <button
                 type="button"
                 onClick={() => handleEditOpen(selectedContext)}
-                className="text-sm text-[#0D6EFD] hover:underline"
+                className="text-sm text-primary hover:underline"
               >
                 + Adicionar componente
               </button>
@@ -450,20 +451,20 @@ export default function ContextsPage() {
             <section aria-labelledby="detail-students-heading" className="mt-5">
               <h3
                 id="detail-students-heading"
-                className="text-sm font-semibold text-slate-700 mb-2 uppercase tracking-wide"
+                className="text-sm font-semibold text-foreground mb-2 uppercase tracking-wide"
               >
                 Estudantes Associados
               </h3>
-              <p className="text-sm text-[#475569] mb-3">
+              <p className="text-sm text-muted-foreground mb-3">
                 <strong>{selectedContext.alunosCount}</strong> alunos
               </p>
               <div className="flex flex-wrap gap-2 mb-4">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-[#0D6EFD] border-[#0D6EFD] hover:bg-[#0D6EFD]/5"
+                  className="text-primary border-primary hover:bg-primary/5 gap-2"
                 >
-                  👥 Ver estudantes
+                  <Users className="size-4" /> Ver estudantes
                 </Button>
               </div>
               <FileDropzone
@@ -477,23 +478,23 @@ export default function ContextsPage() {
             <section aria-labelledby="detail-delegate-heading" className="mt-5">
               <h3
                 id="detail-delegate-heading"
-                className="text-sm font-semibold text-slate-700 mb-2 uppercase tracking-wide"
+                className="text-sm font-semibold text-foreground mb-2 uppercase tracking-wide"
               >
                 Delegado Atribuído
               </h3>
               {selectedContext.delegado ? (
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-slate-900">
+                  <span className="text-sm text-foreground">
                     {selectedContext.delegado.name} ({selectedContext.delegado.studentNumber})
                   </span>
-                  <button type="button" className="text-sm text-[#0D6EFD] hover:underline">
+                  <button type="button" className="text-sm text-primary hover:underline">
                     Alterar delegado
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-[#475569]">Sem delegado atribuído</span>
-                  <button type="button" className="text-sm text-[#0D6EFD] hover:underline">
+                  <span className="text-sm text-muted-foreground">Sem delegado atribuído</span>
+                  <button type="button" className="text-sm text-primary hover:underline">
                     Atribuir delegado
                   </button>
                 </div>
@@ -516,7 +517,7 @@ export default function ContextsPage() {
           <DialogHeader>
             <DialogTitle>Confirmar eliminação</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-slate-700">
+          <p className="text-sm text-foreground">
             Eliminar o contexto{' '}
             <strong>
               {deleteTarget?.turma} · {deleteTarget?.disciplina}
@@ -534,7 +535,7 @@ export default function ContextsPage() {
             <Button
               onClick={handleDeleteConfirm}
               disabled={deleting}
-              className="bg-[#B91C1C] hover:bg-red-800 text-white"
+              className="bg-destructive hover:bg-destructive/90 text-white"
             >
               {deleting ? 'A eliminar…' : 'Eliminar'}
             </Button>

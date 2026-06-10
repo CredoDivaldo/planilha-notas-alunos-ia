@@ -1,6 +1,7 @@
 // CalendarPage — professor view with full CRUD, context selector, month/list view, .ics export
 // Story 7.8 — T1, T3, T4, T8, T9, T10, T11, T13
 
+import { Calendar, Download } from 'lucide-react'
 import { useState, useCallback } from 'react'
 import { AppHeader } from '@/components/organisms/AppHeader'
 import { MonthCalendar } from '@/components/organisms/MonthCalendar'
@@ -128,7 +129,7 @@ function ListViewPanel({ events }: { events: CalendarEvent[] }) {
 
   if (sorted.length === 0) {
     return (
-      <div className="bg-white rounded-lg border border-slate-200 p-8 text-center text-slate-400 text-sm">
+      <div className="bg-card rounded-lg border border-border p-8 text-center text-muted-foreground text-sm">
         Sem eventos neste período.
       </div>
     )
@@ -156,16 +157,16 @@ function ListViewPanel({ events }: { events: CalendarEvent[] }) {
     exame:   'bg-blue-50 border-blue-200 text-blue-800',
     outro:   'bg-purple-50 border-purple-200 text-purple-800',
     recurso: 'bg-orange-50 border-orange-200 text-orange-800',
-    entrega: 'bg-green-50 border-green-200 text-green-800',
-    feriado: 'bg-red-50 border-red-200 text-red-800',
-    reuniao: 'bg-green-50 border-green-200 text-green-800',
+    entrega: 'bg-success/10 border-success/20 text-success',
+    feriado: 'bg-destructive/10 border-destructive/20 text-destructive',
+    reuniao: 'bg-success/10 border-success/20 text-success',
   }
 
   return (
     <div className="flex flex-col gap-6">
       {Array.from(grouped.entries()).map(([key, evs]) => (
         <div key={key}>
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
             {monthLabel(key)}
           </h3>
           <div className="flex flex-col gap-2">
@@ -174,12 +175,12 @@ function ListViewPanel({ events }: { events: CalendarEvent[] }) {
                 key={ev.id}
                 className={[
                   'rounded-lg border px-4 py-3 text-sm',
-                  EVENT_COLOR_BG[ev.type] ?? 'bg-slate-50 border-slate-200 text-slate-700',
+                  EVENT_COLOR_BG[ev.type] ?? 'bg-muted/50 border-border text-foreground',
                 ].join(' ')}
               >
                 <div className="font-medium">{ev.title}</div>
                 <div className="flex flex-wrap gap-3 mt-1 text-xs opacity-75">
-                  <span>📅 {ev.date}</span>
+                  <span className="flex items-center gap-1"><Calendar className="size-3" /> {ev.date}</span>
                   {ev.time && <span>🕐 {ev.time}</span>}
                   {ev.location && <span>📍 {ev.location}</span>}
                 </div>
@@ -296,20 +297,20 @@ export default function CalendarPage() {
   })
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-muted/50">
       <AppHeader activeTab="calendario" />
 
       <main className="max-w-[1280px] mx-auto px-6 py-6 flex flex-col gap-5">
 
         {/* Title + Toolbar — AC1 */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-xl font-bold text-slate-900">Calendário Académico</h1>
+          <h1 className="text-xl font-bold text-foreground">Calendário Académico</h1>
           <div className="flex flex-wrap items-center gap-2">
             {/* View switcher — T13, AC5 */}
             <div
               role="tablist"
               aria-label="Vista do calendário"
-              className="flex rounded-md border border-slate-300 overflow-hidden bg-white"
+              className="flex rounded-md border border-border overflow-hidden bg-card"
             >
               {(['mes', 'lista'] as ViewMode[]).map((mode) => (
                 <button
@@ -321,8 +322,8 @@ export default function CalendarPage() {
                   className={[
                     'px-3 py-1.5 text-sm font-medium transition-colors',
                     viewMode === mode
-                      ? 'bg-[#0D6EFD] text-white'
-                      : 'text-slate-600 hover:bg-slate-50',
+                      ? 'bg-primary text-white'
+                      : 'text-muted-foreground hover:bg-muted/50',
                   ].join(' ')}
                 >
                   {mode === 'mes' ? 'Mês' : 'Lista'}
@@ -334,7 +335,7 @@ export default function CalendarPage() {
             <button
               type="button"
               onClick={() => downloadIcs(filteredEvents)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
             >
               📤 Exportar ▾
             </button>
@@ -343,7 +344,7 @@ export default function CalendarPage() {
             <button
               type="button"
               onClick={openCreate}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-[#0D6EFD] text-white text-sm font-medium hover:bg-[#0D6EFD]/90 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
             >
               + Adicionar Evento
             </button>
@@ -352,14 +353,14 @@ export default function CalendarPage() {
 
         {/* Context selector — T4, AC2 */}
         <div className="flex items-center gap-2">
-          <label htmlFor="ctx-select" className="text-sm text-slate-600 whitespace-nowrap">
+          <label htmlFor="ctx-select" className="text-sm text-muted-foreground whitespace-nowrap">
             Contexto:
           </label>
           <select
             id="ctx-select"
             value={selectedContextId}
             onChange={(e) => setSelectedContextId(e.target.value)}
-            className="border border-slate-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#0D6EFD]"
+            className="border border-border rounded-md px-3 py-1.5 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="todos">Todos os contextos</option>
             {FALLBACK_CONTEXTS.map((ctx) => (
@@ -376,8 +377,8 @@ export default function CalendarPage() {
             className={[
               'rounded-md px-4 py-2.5 text-sm font-medium',
               statusMsg.ok
-                ? 'bg-green-50 border border-green-200 text-[#15803D]'
-                : 'bg-red-50 border border-red-200 text-[#B91C1C]',
+                ? 'bg-green-50 border border-green-200 text-success'
+                : 'bg-red-50 border border-red-200 text-destructive',
             ].join(' ')}
           >
             {statusMsg.text}
@@ -403,7 +404,7 @@ export default function CalendarPage() {
 
             {/* AC7 — Próximos 7 dias */}
             <div>
-              <h2 className="text-sm font-semibold text-slate-700 mb-2">
+              <h2 className="text-sm font-semibold text-foreground mb-2">
                 Próximos Eventos (7 dias)
               </h2>
               <UpcomingEventsList events={next7Events} />
@@ -439,7 +440,7 @@ export default function CalendarPage() {
           <DialogHeader>
             <DialogTitle id="delete-dialog-title">Eliminar evento</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             Eliminar o evento{' '}
             <strong>"{deleteTarget?.title}"</strong>?{' '}
             Esta acção não pode ser desfeita.

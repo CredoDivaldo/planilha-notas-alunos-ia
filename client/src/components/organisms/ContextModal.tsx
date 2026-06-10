@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useId } from 'react'
+import { Pencil, Trash2, AlertTriangle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -191,20 +192,20 @@ export function ContextModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-card rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-          <h2 id={titleId} className="text-lg font-semibold text-slate-900">
-            {mode === 'create' ? '✏️  Criar Contexto Académico' : '✏️  Editar Contexto Académico'}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h2 id={titleId} className="text-lg font-semibold text-foreground">
+            {mode === 'create' ? <><Pencil className="size-4 mr-1" /> Criar Contexto Académico</> : <><Pencil className="size-4 mr-1" /> Editar Contexto Académico</>}
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Fechar modal"
-            className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded"
+            className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded"
           >
-            ✕
+            <X className="size-4" />
           </button>
         </div>
 
@@ -213,7 +214,7 @@ export function ContextModal({
           {/* Turma */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="ctx-turma">
-              Turma <span className="text-[#B91C1C]">*</span>
+              Turma <span className="text-destructive">*</span>
             </Label>
             <Input
               id="ctx-turma"
@@ -227,7 +228,7 @@ export function ContextModal({
           {/* Disciplina */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="ctx-disciplina">
-              Disciplina <span className="text-[#B91C1C]">*</span>
+              Disciplina <span className="text-destructive">*</span>
             </Label>
             <Select value={disciplina} onValueChange={setDisciplina}>
               <SelectTrigger id="ctx-disciplina" className="w-full">
@@ -244,7 +245,7 @@ export function ContextModal({
           {/* Semestre */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="ctx-semestre">
-              Semestre <span className="text-[#B91C1C]">*</span>
+              Semestre <span className="text-destructive">*</span>
             </Label>
             <Select value={semestre} onValueChange={setSemestre}>
               <SelectTrigger id="ctx-semestre" className="w-full">
@@ -261,7 +262,7 @@ export function ContextModal({
           {/* Turno */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="ctx-turno">
-              Turno <span className="text-[#B91C1C]">*</span>
+              Turno <span className="text-destructive">*</span>
             </Label>
             <Select value={turno} onValueChange={setTurno}>
               <SelectTrigger id="ctx-turno" className="w-full">
@@ -292,14 +293,14 @@ export function ContextModal({
 
           {/* Componentes de Avaliação */}
           <div>
-            <h3 className="text-sm font-semibold text-slate-700 mb-2">
+            <h3 className="text-sm font-semibold text-foreground mb-2">
               Componentes de Avaliação
             </h3>
 
             {components.length > 0 && (
               <table className="w-full text-sm mb-2" aria-label="Componentes de avaliação">
                 <thead>
-                  <tr className="border-b border-slate-200">
+                  <tr className="border-b border-border">
                     <th scope="col" className="text-left pb-1 font-medium text-slate-600">Componente</th>
                     <th scope="col" className="text-left pb-1 font-medium text-slate-600 w-24">Peso (%)</th>
                     <th scope="col" className="w-10 pb-1" aria-label="Remover" />
@@ -334,17 +335,17 @@ export function ContextModal({
                           type="button"
                           onClick={() => handleRemoveComponent(row.id)}
                           aria-label={`Remover componente ${row.name || ''}`}
-                          className="text-[#B91C1C] hover:text-red-800 transition-colors"
+                          className="text-destructive hover:text-destructive/80 transition-colors"
                         >
-                          🗑
+                          <Trash2 className="size-3.5" />
                         </button>
                       </td>
                     </tr>
                   ))}
                   {/* Total row */}
                   <tr>
-                    <td className="pt-1.5 font-medium text-slate-700">Total</td>
-                    <td className={['pt-1.5 font-semibold', isWeightValid ? 'text-[#15803D]' : 'text-[#B45309]'].join(' ')}>
+                    <td className="pt-1.5 font-medium text-foreground">Total</td>
+                    <td className={['pt-1.5 font-semibold', isWeightValid ? 'text-success' : 'text-warning'].join(' ')}>
                       {totalWeight}%
                     </td>
                     <td />
@@ -358,7 +359,7 @@ export function ContextModal({
               variant="outline"
               size="sm"
               onClick={handleAddComponent}
-              className="text-[#0D6EFD] border-[#0D6EFD] hover:bg-[#0D6EFD]/5"
+              className="text-primary border-primary hover:bg-primary/5"
             >
               + Componente
             </Button>
@@ -368,9 +369,9 @@ export function ContextModal({
               <div
                 role="alert"
                 aria-live="polite"
-                className="mt-2 flex items-center gap-2 rounded bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-[#B45309]"
+                className="mt-2 flex items-center gap-2 rounded bg-warning/10 border border-warning/20 px-3 py-2 text-sm text-warning"
               >
-                ⚠️ Os pesos devem somar 100%. Actual: {totalWeight}%
+                <AlertTriangle className="size-4 shrink-0" /> Os pesos devem somar 100%. Actual: {totalWeight}%
               </div>
             )}
           </div>
@@ -379,7 +380,7 @@ export function ContextModal({
           {backendError && (
             <div
               role="alert"
-              className="rounded bg-red-50 border border-red-200 px-3 py-2 text-sm text-[#B91C1C]"
+              className="rounded bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive"
             >
               {backendError}
             </div>
@@ -387,14 +388,14 @@ export function ContextModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2">
+        <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
           <Button variant="outline" onClick={onClose} disabled={submitting}>
             Cancelar
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={!isFormValid || (hasComponents && !isWeightValid) || submitting}
-            className="bg-[#0D6EFD] hover:bg-[#0D6EFD]/90 text-white"
+            className="bg-primary hover:bg-primary/90 text-white"
           >
             {submitting
               ? 'A guardar…'

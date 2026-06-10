@@ -21,18 +21,18 @@ export function StudentPortalLayout({ children, studentNumber }: StudentPortalLa
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-muted/50 flex flex-col">
       {/* AC2: Header with "📊 Portal do Estudante", student name, number, logout */}
-      <header className="bg-white border-b border-slate-200 px-4 sm:px-6 h-14 flex items-center justify-between shrink-0">
-        <span className="font-semibold text-[#0D6EFD] text-base select-none">
-          📊 Portal do Estudante
+      <header className="bg-card border-b border-border px-4 sm:px-6 h-14 flex items-center justify-between shrink-0">
+        <span className="font-semibold text-primary text-base select-none">
+          <span className="flex items-center gap-2"><LayoutDashboard className="size-4" /> Portal do Estudante</span>
         </span>
         <div className="flex items-center gap-2 sm:gap-3">
-          <span className="text-sm text-slate-700 hidden sm:inline">
-            👤 {user?.name ?? 'Estudante'}
+          <span className="text-sm text-foreground hidden sm:inline">
+            <span className="flex items-center gap-1.5"><User className="size-4" /> {user?.name ?? 'Estudante'}</span>
           </span>
           {studentNumber && (
-            <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+            <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
               {studentNumber}
             </span>
           )}

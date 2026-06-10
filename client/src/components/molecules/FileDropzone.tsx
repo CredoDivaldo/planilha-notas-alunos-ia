@@ -62,22 +62,22 @@ export function FileDropzone({
         className={cn(
           'border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors select-none',
           isDragOver
-            ? 'border-[#0D6EFD] bg-[#0D6EFD]/5'
-            : 'border-slate-300 hover:border-[#0D6EFD] hover:bg-slate-50',
+            ? 'border-primary bg-primary/5'
+            : 'border-border hover:border-primary hover:bg-muted/50',
           isLoading && 'opacity-60 cursor-wait',
         )}
       >
         <div className="flex flex-col items-center gap-2">
           <span className="text-2xl">📂</span>
-          <p className="text-sm text-[#475569]">{label}</p>
+          <p className="text-sm text-muted-foreground">{label}</p>
           <p className="text-xs text-slate-400">Formatos aceites: {accept}</p>
           {isLoading && (
-            <p className="text-xs text-[#0D6EFD] font-medium animate-pulse">A carregar…</p>
+            <p className="text-xs text-primary font-medium animate-pulse">A carregar…</p>
           )}
         </div>
       </div>
       {error && (
-        <p role="alert" className="mt-1.5 text-sm text-[#B91C1C]">
+        <p role="alert" className="mt-1.5 text-sm text-destructive">
           {error}
         </p>
       )}

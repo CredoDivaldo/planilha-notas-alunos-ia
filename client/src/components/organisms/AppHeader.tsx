@@ -1,4 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
+import { useTheme } from 'next-themes'
+import { GraduationCap, Sun, Moon, User, LogOut } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 
@@ -18,6 +20,7 @@ const NAV_TABS: { id: ActiveTab; label: string; href: string }[] = [
 
 export function AppHeader({ activeTab }: AppHeaderProps) {
   const { user, logout } = useAuth()
+  const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -26,12 +29,13 @@ export function AppHeader({ activeTab }: AppHeaderProps) {
   }
 
   return (
-    <header className="bg-white border-b border-slate-200 px-6 h-14 flex items-center justify-between">
+    <header className="bg-card border-b border-border px-6 h-14 flex items-center justify-between sticky top-0 z-50 backdrop-blur-sm">
       {/* Left: Logo + Nav */}
       <div className="flex items-center gap-6">
-        <span className="font-semibold text-[#0D6EFD] text-base select-none">
-          📊 Planilha Notas
-        </span>
+        <Link to="/painel" className="flex items-center gap-2 text-primary font-semibold text-base select-none">
+          <GraduationCap className="size-5" />
+          <span>UniGrade</span>
+        </Link>
         <nav aria-label="Navegação principal" className="flex items-center gap-1">
           {NAV_TABS.map((tab) => {
             const isActive = tab.id === activeTab
@@ -41,10 +45,10 @@ export function AppHeader({ activeTab }: AppHeaderProps) {
                 to={tab.href}
                 aria-current={isActive ? 'page' : undefined}
                 className={[
-                  'px-3 py-1 text-sm rounded-sm transition-colors',
+                  'px-3 py-1 text-sm rounded-md transition-colors',
                   isActive
-                    ? 'text-[#0D6EFD] border-b-2 border-[#0D6EFD] font-medium'
-                    : 'text-[#475569] hover:text-[#0D6EFD]',
+                    ? 'text-primary border-b-2 border-primary font-medium'
+                    : 'text-muted-foreground hover:text-foreground',
                 ].join(' ')}
               >
                 {tab.label}
@@ -54,13 +58,25 @@ export function AppHeader({ activeTab }: AppHeaderProps) {
         </nav>
       </div>
 
-      {/* Right: User + Logout */}
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-[#475569]">
-          👤 {user?.name ?? 'Utilizador'}
-        </span>
-        <Button variant="ghost" size="sm" onClick={handleLogout}>
-          Sair
+      {/* Right: Theme toggle + User + Logout */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Alternar tema"
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        >
+          {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </Button>
+
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <User className="size-4" />
+          <span>{user?.name ?? 'Utilizador'}</span>
+        </div>
+
+        <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-1.5">
+          <LogOut className="size-4" />
+          <span className="hidden sm:inline">Sair</span>
         </Button>
       </div>
     </header>

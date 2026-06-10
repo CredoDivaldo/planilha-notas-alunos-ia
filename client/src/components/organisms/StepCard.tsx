@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { CheckCircle, Play, Lock, AlertCircle, X } from 'lucide-react'
 
 export type StepStatus = 'locked' | 'active' | 'completed' | 'error'
 
@@ -10,25 +11,33 @@ interface StepCardProps {
   children?: ReactNode
 }
 
-const STATUS_ICONS: Record<StepStatus, string> = {
-  completed: '✅',
-  active: '▶',
-  locked: '🔒',
-  error: '❌',
-}
-
 const STATUS_STYLES: Record<StepStatus, string> = {
-  completed: 'bg-white border border-slate-200 border-l-4 border-l-[#15803D] rounded-lg',
-  active: 'bg-white border border-slate-200 border-l-4 border-l-[#0D6EFD] rounded-lg shadow-sm',
-  locked: 'bg-slate-50 border border-slate-200 rounded-lg',
-  error: 'bg-white border border-slate-200 border-l-4 border-l-[#B91C1C] rounded-lg',
+  completed: 'bg-card border border-border border-l-4 border-l-success rounded-lg',
+  active: 'bg-card border border-border border-l-4 border-l-primary rounded-lg shadow-sm',
+  locked: 'bg-muted/30 border border-border rounded-lg',
+  error: 'bg-card border border-border border-l-4 border-l-destructive rounded-lg',
 }
 
 const HEADER_STYLES: Record<StepStatus, string> = {
-  completed: 'text-[#15803D]',
-  active: 'text-[#0D6EFD]',
-  locked: 'text-slate-400',
-  error: 'text-[#B91C1C]',
+  completed: 'text-success',
+  active: 'text-primary',
+  locked: 'text-muted-foreground',
+  error: 'text-destructive',
+}
+
+const BADGE_STYLES: Record<StepStatus, string> = {
+  active: 'bg-primary text-primary-foreground animate-pulse',
+  completed: 'bg-success text-white',
+  error: 'bg-destructive text-white',
+  locked: 'bg-muted text-muted-foreground',
+}
+
+function StatusIcon({ status, stepNumber }: { status: StepStatus; stepNumber: number }) {
+  if (status === 'completed') return <CheckCircle className="size-4" />
+  if (status === 'error') return <AlertCircle className="size-4" />
+  if (status === 'locked') return <Lock className="size-3.5" />
+  if (status === 'active') return <Play className="size-3.5 fill-current" />
+  return <span className="text-xs font-bold">{stepNumber}</span>
 }
 
 export function StepCard({ stepNumber, title, status, preconditions, children }: StepCardProps) {
@@ -43,33 +52,25 @@ export function StepCard({ stepNumber, title, status, preconditions, children }:
       {/* Header */}
       <div className={`flex items-center gap-3 px-4 py-3 ${isLocked ? 'opacity-60' : ''}`}>
         <div
-          className={`flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold ${
-            status === 'active'
-              ? 'bg-[#0D6EFD] text-white animate-pulse'
-              : status === 'completed'
-              ? 'bg-[#15803D] text-white'
-              : status === 'error'
-              ? 'bg-[#B91C1C] text-white'
-              : 'bg-slate-200 text-slate-500'
-          }`}
+          className={`flex items-center justify-center w-7 h-7 rounded-full ${BADGE_STYLES[status]}`}
         >
-          {STATUS_ICONS[status] === '▶' ? stepNumber : STATUS_ICONS[status]}
+          <StatusIcon status={status} stepNumber={stepNumber} />
         </div>
         <span className={`font-semibold text-sm ${HEADER_STYLES[status]}`}>
           Passo {stepNumber}: {title}
         </span>
         {isLocked && (
-          <span className="ml-auto text-xs text-slate-400">Bloqueado</span>
+          <span className="ml-auto text-xs text-muted-foreground">Bloqueado</span>
         )}
         {status === 'completed' && (
-          <span className="ml-auto text-xs text-[#15803D] font-medium">Concluído</span>
+          <span className="ml-auto text-xs text-success font-medium">Concluído</span>
         )}
       </div>
 
       {/* Body */}
       {isExpanded && (
         <div className="px-4 pb-4">
-          <div className="border-t border-slate-100 pt-3">
+          <div className="border-t border-border pt-3">
             {children}
           </div>
         </div>
@@ -78,11 +79,11 @@ export function StepCard({ stepNumber, title, status, preconditions, children }:
       {/* Locked preconditions */}
       {isLocked && preconditions && preconditions.length > 0 && (
         <div className="px-4 pb-3">
-          <p className="text-xs text-slate-400 font-medium mb-1">Pré-condições em falta:</p>
+          <p className="text-xs text-muted-foreground font-medium mb-1">Pré-condições em falta:</p>
           <ul className="space-y-1">
             {preconditions.map((pre, i) => (
-              <li key={i} className="flex items-center gap-1.5 text-xs text-slate-400">
-                <span>❌</span>
+              <li key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <X className="size-3 text-destructive shrink-0" />
                 {pre}
               </li>
             ))}
