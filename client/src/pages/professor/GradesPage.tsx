@@ -1,8 +1,9 @@
-import { useState, useMemo, useCallback, useRef } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { Download, BarChart2, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '@/components/organisms/AppHeader'
 import { SearchBar } from '@/components/molecules/SearchBar'
+import { useActiveContext } from '@/contexts/ActiveContextContext'
 import { StatCard } from '@/components/molecules/StatCard'
 import { GradeTable } from '@/components/organisms/GradeTable'
 import { ImportCSVModal } from '@/components/organisms/ImportCSVModal'
@@ -68,6 +69,7 @@ function formatTimestamp(iso: string): string {
 // ---------------------------------------------------------------------------
 export default function GradesPage() {
   const navigate = useNavigate()
+  const { activeContextId } = useActiveContext()
 
   // Data — initialised with mock, replaced by API response
   const [contextItem, setContextItem] = useState<ContextItem>(FALLBACK_CONTEXT)
@@ -90,9 +92,8 @@ export default function GradesPage() {
     statusTimerRef.current = setTimeout(() => setStatusMsg(null), 4000)
   }, [])
 
-  // Load data — all setState inside async callbacks (not synchronous in effect body)
-  const loadData = useCallback(async () => {
-    const contextId = sessionStorage.getItem('active_context_id') ?? FALLBACK_CONTEXT.id
+  const loadData = useCallback(async (contextId: string) => {
+    setLoading(true)
     try {
       const ctx = await apiFetch<ContextItem>(`/academic-contexts/${contextId}`)
       setContextItem(ctx)
@@ -106,8 +107,10 @@ export default function GradesPage() {
     }
   }, [])
 
-  // Trigger load once on mount using lazy useState to avoid set-state-in-effect
-  useState(() => { loadData() })
+  useEffect(() => {
+    const id = activeContextId ?? FALLBACK_CONTEXT.id
+    void loadData(id)
+  }, [activeContextId, loadData])
 
   // Derived stats
   const stats = useMemo(() => {
@@ -176,7 +179,7 @@ export default function GradesPage() {
         }
         setImportHistory((prev) => [entry, ...prev].slice(0, 10))
         showStatus(`${res.imported} notas importadas para ${compName}`, 'success')
-        loadData()
+        void loadData(activeContextId ?? FALLBACK_CONTEXT.id)
         return res
       } catch {
         const mockRes = { imported: 4, unmatched: 1 }
@@ -191,7 +194,7 @@ export default function GradesPage() {
         return mockRes
       }
     },
-    [contextItem, loadData, showStatus],
+    [contextItem, activeContextId, loadData, showStatus],
   )
 
   const breadcrumb = `${contextItem.turma} · ${contextItem.disciplina} · ${contextItem.semestre} · ${contextItem.turno}`
@@ -204,14 +207,6 @@ export default function GradesPage() {
       <main className="max-w-[1280px] mx-auto px-6 py-6 flex flex-col gap-5">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <button
-            type="button"
-            onClick={() => navigate('/painel')}
-            className="text-primary hover:underline flex items-center gap-1"
-          >
-            ◀ Mudar contexto
-          </button>
-          <span className="text-muted-foreground">/</span>
           <span className="font-medium text-foreground">Notas</span>
           <span className="text-muted-foreground">/</span>
           <span className="text-muted-foreground truncate">{breadcrumb}</span>
@@ -274,8 +269,8 @@ export default function GradesPage() {
             className={[
               'rounded-md px-4 py-2.5 text-sm font-medium',
               statusMsg.type === 'success'
-                ? 'bg-green-50 border border-green-200 text-success'
-                : 'bg-red-50 border border-red-200 text-destructive',
+                ? 'bg-success/10 border border-success/20 text-success'
+                : 'bg-destructive/10 border border-destructive/20 text-destructive',
             ].join(' ')}
           >
             {statusMsg.text}

@@ -1,20 +1,21 @@
 // UpcomingEventsList — events in next 30 days, grouped by date (AC9)
 // T9
 
+import { Calendar, Clock, MapPin } from 'lucide-react'
 import type { CalendarEvent } from '@/components/molecules/EventDot'
-import { eventColorTextClass } from '@/components/molecules/EventDot'
+import { eventColorClass, eventColorTextClass } from '@/components/molecules/EventDot'
 
 interface UpcomingEventsListProps {
   events: CalendarEvent[]
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  exame:    '🔵 Exame',
-  recurso:  '🟠 Recurso',
-  entrega:  '🟣 Entrega',
-  reuniao:  '🟢 Reunião',
-  feriado:  '🔴 Feriado',
-  outro:    '⚪ Outro',
+  exame:    'Exame',
+  recurso:  'Recurso',
+  entrega:  'Entrega',
+  reuniao:  'Reunião',
+  feriado:  'Feriado',
+  outro:    'Outro',
 }
 
 function formatDate(iso: string): string {
@@ -68,12 +69,14 @@ export function UpcomingEventsList({ events }: UpcomingEventsListProps) {
                     eventColorTextClass(ev.type),
                   ].join(' ')}
                 >
-                  <div className="font-medium">
-                    {TYPE_LABEL[ev.type] ?? '⚪'} {ev.title}
+                  <div className="flex items-center gap-1.5 font-medium">
+                    <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${eventColorClass(ev.type)}`} aria-hidden="true" />
+                    <span className="text-muted-foreground text-[10px] uppercase tracking-wide">{TYPE_LABEL[ev.type] ?? 'Outro'}</span>
+                    <span>{ev.title}</span>
                   </div>
                   <div className="flex flex-wrap gap-2 mt-0.5 opacity-75">
-                    {ev.time && <span>🕐 {ev.time}</span>}
-                    {ev.location && <span>📍 {ev.location}</span>}
+                    {ev.time && <span className="flex items-center gap-1"><Clock className="size-3" /> {ev.time}</span>}
+                    {ev.location && <span className="flex items-center gap-1"><MapPin className="size-3" /> {ev.location}</span>}
                     {ev.description && <span>{ev.description}</span>}
                   </div>
                 </div>

@@ -19,7 +19,7 @@ const EVENT_COLOR: Record<EventType, string> = {
   entrega:  'bg-purple-500',
   reuniao:  'bg-green-500',
   feriado:  'bg-red-400',
-  outro:    'bg-slate-400',
+  outro:    'bg-muted-foreground',
 }
 
 const EVENT_COLOR_TEXT: Record<EventType, string> = {
@@ -28,7 +28,7 @@ const EVENT_COLOR_TEXT: Record<EventType, string> = {
   entrega:  'text-purple-700 bg-purple-50 border-purple-200',
   reuniao:  'text-green-700 bg-green-50 border-green-200',
   feriado:  'text-red-700 bg-red-50 border-red-200',
-  outro:    'text-slate-700 bg-slate-50 border-slate-200',
+  outro:    'text-muted-foreground bg-muted border-border',
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

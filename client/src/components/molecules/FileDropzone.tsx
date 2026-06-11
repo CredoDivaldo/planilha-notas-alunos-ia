@@ -70,7 +70,7 @@ export function FileDropzone({
         <div className="flex flex-col items-center gap-2">
           <span className="text-2xl">📂</span>
           <p className="text-sm text-muted-foreground">{label}</p>
-          <p className="text-xs text-slate-400">Formatos aceites: {accept}</p>
+          <p className="text-xs text-muted-foreground">Formatos aceites: {accept}</p>
           {isLoading && (
             <p className="text-xs text-primary font-medium animate-pulse">A carregar…</p>
           )}

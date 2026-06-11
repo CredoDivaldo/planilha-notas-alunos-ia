@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { GraduationCap, Mail, Hash, Lock, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -40,13 +40,16 @@ export default function LoginPage() {
   const [changeLoading, setChangeLoading] = useState(false)
   const [changeError, setChangeError] = useState('')
 
-  if (isAuthenticated && !requiresPasswordChange && currentRole) {
-    const dest =
-      currentRole === 'professor' ? '/painel' :
-      currentRole === 'estudante' ? '/portal' : '/delegado'
-    navigate(dest, { replace: true })
-    return null
-  }
+  useEffect(() => {
+    if (isAuthenticated && !requiresPasswordChange && currentRole) {
+      const dest =
+        currentRole === 'professor' ? '/painel' :
+        currentRole === 'estudante' ? '/portal' : '/delegado'
+      navigate(dest, { replace: true })
+    }
+  }, [isAuthenticated, requiresPasswordChange, currentRole, navigate])
+
+  if (isAuthenticated && !requiresPasswordChange && currentRole) return null
 
   const identifier = tab === 'professor' ? email : studentNumber
   const canSubmit = identifier.trim().length > 0 && password.trim().length > 0 && !loading

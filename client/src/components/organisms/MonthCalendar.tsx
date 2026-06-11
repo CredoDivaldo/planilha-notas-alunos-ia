@@ -89,18 +89,18 @@ export function MonthCalendar({
           type="button"
           onClick={prevMonth}
           aria-label="Mês anterior"
-          className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 text-muted-foreground hover:text-slate-800 transition-colors text-sm"
+          className="w-7 h-7 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors text-sm"
         >
           ‹
         </button>
-        <span className="text-sm font-semibold text-slate-800">
+        <span className="text-sm font-semibold text-foreground">
           {MONTH_NAMES[month]} {year}
         </span>
         <button
           type="button"
           onClick={nextMonth}
           aria-label="Próximo mês"
-          className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 text-muted-foreground hover:text-slate-800 transition-colors text-sm"
+          className="w-7 h-7 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors text-sm"
         >
           ›
         </button>
@@ -132,7 +132,7 @@ export function MonthCalendar({
                 className={[
                   'text-xs w-6 h-6 flex items-center justify-center rounded-full',
                   isToday
-                    ? 'bg-[#0D6EFD] text-white font-bold'
+                    ? 'bg-primary text-primary-foreground font-bold'
                     : 'text-foreground',
                 ].join(' ')}
               >

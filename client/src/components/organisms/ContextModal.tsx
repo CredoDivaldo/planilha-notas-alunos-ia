@@ -21,7 +21,6 @@ interface ComponentRow {
 type ModalMode = 'create' | 'edit'
 
 interface ContextModalProps {
-  isOpen: boolean
   mode: ModalMode
   initialData?: ContextItem | null
   onClose: () => void
@@ -69,7 +68,6 @@ function fromGradeComponents(comps: GradeComponent[]): ComponentRow[] {
 }
 
 export function ContextModal({
-  isOpen,
   mode,
   initialData,
   onClose,
@@ -78,7 +76,6 @@ export function ContextModal({
   const titleId = useId()
   const dialogRef = useRef<HTMLDivElement>(null)
 
-  // Modal returns null when !isOpen, so these lazy initializers run fresh on each open
   const [turma, setTurma] = useState(() =>
     mode === 'edit' && initialData ? initialData.turma : ''
   )
@@ -102,7 +99,6 @@ export function ContextModal({
 
   // Focus trap + Escape handler
   useEffect(() => {
-    if (!isOpen) return
     const el = dialogRef.current
     if (!el) return
 
@@ -131,7 +127,7 @@ export function ContextModal({
 
     el.addEventListener('keydown', handleKeyDown)
     return () => el.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+  }, [onClose])
 
   const totalWeight = components.reduce((sum, c) => sum + Number(c.weight || 0), 0)
   const isWeightValid = Math.abs(totalWeight - 100) < 0.01
@@ -177,8 +173,6 @@ export function ContextModal({
       setSubmitting(false)
     }
   }
-
-  if (!isOpen) return null
 
   return (
     // Backdrop
@@ -301,14 +295,14 @@ export function ContextModal({
               <table className="w-full text-sm mb-2" aria-label="Componentes de avaliação">
                 <thead>
                   <tr className="border-b border-border">
-                    <th scope="col" className="text-left pb-1 font-medium text-slate-600">Componente</th>
-                    <th scope="col" className="text-left pb-1 font-medium text-slate-600 w-24">Peso (%)</th>
+                    <th scope="col" className="text-left pb-1 font-medium text-muted-foreground">Componente</th>
+                    <th scope="col" className="text-left pb-1 font-medium text-muted-foreground w-24">Peso (%)</th>
                     <th scope="col" className="w-10 pb-1" aria-label="Remover" />
                   </tr>
                 </thead>
                 <tbody>
                   {components.map((row) => (
-                    <tr key={row.id} className="border-b border-slate-100">
+                    <tr key={row.id} className="border-b border-border">
                       <td className="py-1.5 pr-2">
                         <Input
                           value={row.name}

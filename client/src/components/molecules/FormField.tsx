@@ -19,7 +19,7 @@ export function FormField({ id, label, error, helperText, className, ...props }:
         aria-describedby={error ? `${id}-error` : helperText ? `${id}-helper` : undefined}
         aria-invalid={!!error}
         className={cn(
-          'focus-visible:outline-2 focus-visible:outline-[#0D6EFD]',
+          'focus-visible:outline-2 focus-visible:outline-ring',
           error && 'border-[#B91C1C]',
           className
         )}

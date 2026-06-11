@@ -1,0 +1,45 @@
+schema: 1
+story: '9.3'
+gate: PASS
+status_reason: >-
+  All 10 ACs are explicitly covered in docs/runbooks/evolution.md (702 lines).
+  Sanitisation patterns (10 verbatim) and rate limiter default (10/day) verified
+  against source. No credential leaks — placeholders only. Portable docker syntax
+  throughout. One low-severity accuracy note on _counters internal structure
+  (cosmetic; does not affect operator guidance).
+reviewer: Quinn
+updated: '2026-06-10T10:45:00Z'
+top_issues:
+  - severity: low
+    category: docs
+    description: >-
+      Section 9.1 describes _counters key as "{phone}:{YYYY-MM-DD}" (compound string),
+      but the actual implementation uses a nested dict structure:
+      {normalized_phone: {"count": int, "date": str}}. The operator-facing
+      description ("per phone, resets daily") is correct; only the internal
+      representation note is inaccurate.
+    recommendation: >-
+      Update Section 9.1 counter key description to match actual source:
+      `_counters[normalized_phone] = {"count": int, "date": "YYYY-MM-DD"}`.
+      Non-blocking — does not affect operator guidance.
+waiver:
+  active: false
+checks:
+  content_review: PASS
+  ac_traceability: PASS
+  no_credential_leaks: PASS
+  portable_syntax: PASS
+  concrete_examples: PASS
+  security: PASS
+  accuracy: PASS
+ac_coverage:
+  AC1: "Section 2 — Bring-up: docker compose command, 7 env vars, EVOLUTION_API_URL alias"
+  AC2: "Section 3 — Pairing WhatsApp: 6-step Manager UI + QR + webhook validation"
+  AC3: "Section 4 — Key Rotation: EVOLUTION_API_KEY + CHATBOT_WEBHOOK_TOKEN full steps"
+  AC4: "Section 5 — Failure Modes: FM-1 through FM-5 with signals and recovery"
+  AC5: "Section 6 — Log Locations + 6 grep recipes (webhook, errors, rate-limit, leaks, postgres, broadcast)"
+  AC6: "Section 7 — Backup/Restore: pg_dump, psql restore, integrity check, script + cron"
+  AC7: "Section 8 — Sanitisation Contract: 10 patterns verbatim, verification curl, example 502"
+  AC8: "Section 9 — Rate Limiting: default 10/day, adjustment steps, _counters runtime inspection"
+  AC9: "Section 10 — Architecture Reference: Epic 6/8/9 docs, E2E transcript, chaos test, source files"
+  AC10: "702-line runbook: all 6 Epic 9 scope-IN topics + 3 sub-topics; TL;DR quick reference included"

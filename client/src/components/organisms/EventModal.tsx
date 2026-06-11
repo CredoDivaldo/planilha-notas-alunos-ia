@@ -153,7 +153,7 @@ export function EventModal({ open, onClose, event, contexts, onSave }: EventModa
           {/* T7 — RadioGroup for event type */}
           <fieldset>
             <legend className="text-sm font-medium text-foreground mb-2">
-              Tipo de evento <span className="text-red-500">*</span>
+              Tipo de evento <span className="text-destructive">*</span>
             </legend>
             <RadioGroup
               value={form.type}
@@ -184,7 +184,7 @@ export function EventModal({ open, onClose, event, contexts, onSave }: EventModa
           {/* Description */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="event-desc">
-              Descrição <span className="text-red-500">*</span>
+              Descrição <span className="text-destructive">*</span>
             </Label>
             <Input
               id="event-desc"
@@ -199,13 +199,13 @@ export function EventModal({ open, onClose, event, contexts, onSave }: EventModa
           {contexts.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="event-context">
-                Contexto <span className="text-red-500">*</span>
+                Contexto <span className="text-destructive">*</span>
               </Label>
               <select
                 id="event-context"
                 value={form.contextId}
                 onChange={(e) => setField('contextId', e.target.value)}
-                className="border border-border rounded-md px-3 py-2 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-[#0D6EFD]"
+                className="border border-border rounded-md px-3 py-2 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-ring"
                 required
               >
                 <option value="">Seleccionar contexto…</option>
@@ -219,7 +219,7 @@ export function EventModal({ open, onClose, event, contexts, onSave }: EventModa
           {/* Date */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="event-date">
-              Data <span className="text-red-500">*</span>
+              Data <span className="text-destructive">*</span>
             </Label>
             <Input
               id="event-date"
@@ -272,7 +272,7 @@ export function EventModal({ open, onClose, event, contexts, onSave }: EventModa
               onChange={(e) => setField('notes', e.target.value)}
               rows={2}
               placeholder="Notas visíveis apenas para o professor…"
-              className="border border-border rounded-md px-3 py-2 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-[#0D6EFD] resize-none"
+              className="border border-border rounded-md px-3 py-2 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-ring resize-none"
             />
           </div>
 
@@ -284,8 +284,8 @@ export function EventModal({ open, onClose, event, contexts, onSave }: EventModa
               aria-checked={form.visivelEstudantes}
               onClick={() => setField('visivelEstudantes', !form.visivelEstudantes)}
               className={[
-                'relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#0D6EFD]',
-                form.visivelEstudantes ? 'bg-[#0D6EFD]' : 'bg-slate-300',
+                'relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring',
+                form.visivelEstudantes ? 'bg-primary' : 'bg-muted-foreground',
               ].join(' ')}
             >
               <span
@@ -303,7 +303,7 @@ export function EventModal({ open, onClose, event, contexts, onSave }: EventModa
 
           {/* Error */}
           {error && (
-            <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+            <p role="alert" className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2">
               {error}
             </p>
           )}

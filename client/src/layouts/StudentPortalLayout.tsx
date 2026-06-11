@@ -2,6 +2,7 @@
 // T1/T2: layout scaffold; AppHeader-variant with student name + number + logout
 
 import { useNavigate } from 'react-router-dom'
+import { User, LayoutDashboard } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import type { ReactNode } from 'react'

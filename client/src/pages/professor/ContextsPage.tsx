@@ -504,13 +504,15 @@ export default function ContextsPage() {
         )}
       </main>
 
-      <ContextModal
-        isOpen={modalOpen}
-        mode={modalMode}
-        initialData={editTarget}
-        onClose={() => setModalOpen(false)}
-        onSubmit={handleModalSubmit}
-      />
+      {modalOpen && (
+        <ContextModal
+          key={`${modalMode}-${editTarget?.id ?? 'new'}`}
+          mode={modalMode}
+          initialData={editTarget}
+          onClose={() => setModalOpen(false)}
+          onSubmit={handleModalSubmit}
+        />
+      )}
 
       <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
         <DialogContent>

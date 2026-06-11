@@ -70,7 +70,7 @@ export function EventDetailPanel({
         <div className="bg-card rounded-lg border border-border p-4 flex flex-col gap-3">
           {/* Header with close */}
           <div className="flex items-start justify-between gap-2">
-            <h3 className="text-sm font-semibold text-slate-800 leading-snug">
+            <h3 className="text-sm font-semibold text-foreground leading-snug">
               {event.title}
             </h3>
             {onClose && (

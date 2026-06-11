@@ -1,9 +1,10 @@
-import { useEffect, useReducer, useRef, useState } from 'react'
+import { useEffect, useReducer, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle, XCircle, AlertTriangle, Search, Rocket, RefreshCw, Clock, ArrowRight } from 'lucide-react'
+import { CheckCircle, XCircle, AlertTriangle, Search, Rocket, RefreshCw, Clock, ArrowRight, Wifi, WifiOff } from 'lucide-react'
 import { AppHeader } from '@/components/organisms/AppHeader'
-import { ContextBar } from '@/components/molecules/ContextBar'
 import { FileDropzone } from '@/components/molecules/FileDropzone'
+import { useActiveContext } from '@/contexts/ActiveContextContext'
+import { apiFetch } from '@/lib/api'
 import { StepCard } from '@/components/organisms/StepCard'
 import type { StepStatus } from '@/components/organisms/StepCard'
 import { ProgressStepper } from '@/components/organisms/ProgressStepper'
@@ -175,9 +176,45 @@ function MatchStatusBadge({ status }: { status: MatchResult['status'] }) {
 
 export default function ProfessorDashboardPage() {
   const navigate = useNavigate()
+  const { activeContextId } = useActiveContext()
 
   // Step state
   const [steps, dispatch] = useReducer(stepReducer, undefined, loadState)
+
+  // WhatsApp status
+  const [waConnected, setWaConnected] = useState(false)
+  const [waChecking, setWaChecking] = useState(false)
+  const [waReconnecting, setWaReconnecting] = useState(false)
+
+  const checkWaStatus = useCallback(async () => {
+    setWaChecking(true)
+    try {
+      const data = await apiFetch<{ connected: boolean }>('/whatsapp/status')
+      setWaConnected(data.connected)
+    } catch {
+      // keep current
+    } finally {
+      setWaChecking(false)
+    }
+  }, [])
+
+  const handleWaReconnect = useCallback(async () => {
+    setWaReconnecting(true)
+    try {
+      await apiFetch('/whatsapp/instance/create', { method: 'POST' })
+      await checkWaStatus()
+    } catch {
+      // non-fatal
+    } finally {
+      setWaReconnecting(false)
+    }
+  }, [checkWaStatus])
+
+  useEffect(() => {
+    void checkWaStatus()
+    const interval = setInterval(() => { void checkWaStatus() }, 30_000)
+    return () => clearInterval(interval)
+  }, [checkWaStatus])
 
   // Quick stats
   const [stats, setStats] = useState<QuickStats>(INITIAL_STATS)
@@ -293,7 +330,7 @@ export default function ProfessorDashboardPage() {
       form.append('file', file)
       const token = getAuthToken()
       const base = getApiBase()
-      const contextId = sessionStorage.getItem('active_context_id') ?? ''
+      const contextId = activeContextId ?? ''
       const url = `${base}/api/v1/students/upload${contextId ? `?context_id=${contextId}` : ''}`
       const res = await fetch(url, {
         method: 'POST',
@@ -332,7 +369,7 @@ export default function ProfessorDashboardPage() {
       form.append('file', file)
       const token = getAuthToken()
       const base = getApiBase()
-      const contextId = sessionStorage.getItem('active_context_id') ?? ''
+      const contextId = activeContextId ?? ''
       const url = `${base}/api/v1/grades/upload${contextId ? `?context_id=${contextId}` : ''}`
       const res = await fetch(url, {
         method: 'POST',
@@ -367,7 +404,7 @@ export default function ProfessorDashboardPage() {
     setStep3Loading(true)
     setStep3Error(undefined)
     try {
-      const contextId = sessionStorage.getItem('active_context_id') ?? ''
+      const contextId = activeContextId ?? ''
       const body = contextId ? JSON.stringify({ context_id: contextId }) : undefined
       const base = getApiBase()
       const token = getAuthToken()
@@ -440,7 +477,7 @@ export default function ProfessorDashboardPage() {
     try {
       const base = getApiBase()
       const token = getAuthToken()
-      const contextId = sessionStorage.getItem('active_context_id') ?? ''
+      const contextId = activeContextId ?? ''
       const res = await fetch(`${base}/api/v1/broadcast/`, {
         method: 'POST',
         headers: {
@@ -492,7 +529,6 @@ export default function ProfessorDashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       <AppHeader activeTab="painel" />
-      <ContextBar />
 
       <main className="max-w-7xl mx-auto px-6 py-6">
         {/* Progress Stepper */}
@@ -894,8 +930,7 @@ export default function ProfessorDashboardPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        const ctxId = sessionStorage.getItem('active_context_id') ?? ''
-                        navigate(`/publicar${ctxId ? `?context=${ctxId}` : ''}`)
+                        navigate(`/publicar${activeContextId ? `?context=${activeContextId}` : ''}`)
                       }}
                       className="text-sm text-primary hover:underline"
                     >
@@ -908,7 +943,50 @@ export default function ProfessorDashboardPage() {
           </div>
 
           {/* Right column — 30% */}
-          <div className="flex-[3] min-w-[240px]">
+          <div className="flex-[3] min-w-[240px] flex flex-col gap-4">
+            {/* WhatsApp status card */}
+            <div className="bg-card rounded-lg border border-border p-4">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                Estado WhatsApp
+              </h3>
+              <div className="flex items-center gap-2 mb-3">
+                {waChecking ? (
+                  <span className="text-xs text-muted-foreground animate-pulse">A verificar…</span>
+                ) : waConnected ? (
+                  <>
+                    <Wifi className="size-4 text-success shrink-0" />
+                    <span className="text-sm font-medium text-success">Conectado</span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="size-4 text-destructive shrink-0" />
+                    <span className="text-sm font-medium text-destructive">Desconectado</span>
+                  </>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleWaReconnect}
+                  disabled={waReconnecting || waChecking}
+                  className="text-xs h-7 gap-1.5"
+                >
+                  <RefreshCw className={`size-3 ${waReconnecting ? 'animate-spin' : ''}`} />
+                  {waReconnecting ? 'A reconectar…' : 'Reconectar'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void checkWaStatus()}
+                  disabled={waChecking}
+                  className="text-xs h-7 text-muted-foreground"
+                >
+                  Verificar
+                </Button>
+              </div>
+            </div>
+
             <QuickStatsSidebar stats={stats} />
           </div>
         </div>

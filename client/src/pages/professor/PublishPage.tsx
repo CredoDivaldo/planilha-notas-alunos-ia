@@ -4,6 +4,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CheckCircle, AlertTriangle, Rocket, RefreshCw, ChevronLeft } from 'lucide-react'
+import { useActiveContext } from '@/contexts/ActiveContextContext'
 import { WizardLayout } from '@/layouts/WizardLayout'
 import { PublicationStepper } from '@/components/organisms/PublicationStepper'
 import type { PublicationStepState } from '@/components/organisms/PublicationStepper'
@@ -124,9 +125,10 @@ function renderPreview(template: string, student: StudentWithNota, disciplina: s
 export default function PublishPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { activeContextId } = useActiveContext()
 
-  // T10: context propagation via ?context={id}
-  const contextId = searchParams.get('context') ?? sessionStorage.getItem('active_context_id') ?? FALLBACK_CONTEXT.id
+  // T10: context propagation via ?context={id}, falling back to global active context
+  const contextId = searchParams.get('context') ?? activeContextId ?? FALLBACK_CONTEXT.id
 
   // Data
   const [contextItem, setContextItem] = useState<ContextItem>(FALLBACK_CONTEXT)
@@ -488,7 +490,7 @@ export default function PublishPage() {
 
       {/* ── Step 1: Revisão ──────────────────────────────────────────────── */}
       {currentStep === 0 && (
-        <div className="bg-white rounded-lg border border-border p-6 flex flex-col gap-5">
+        <div className="bg-card rounded-lg border border-border p-6 flex flex-col gap-5">
           <div>
             <h2 className="text-base font-semibold text-foreground mb-0.5">① Revisão das Notas</h2>
             <p className="text-sm text-muted-foreground">{breadcrumb}</p>
@@ -534,7 +536,7 @@ export default function PublishPage() {
                     <th className="text-center px-4 py-2.5 font-medium text-muted-foreground text-xs uppercase tracking-wide">Resultado</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-border">
                   {completeStudents.map(({ row, nota }) => (
                     <tr key={row.studentId} className="hover:bg-muted/50 transition-colors">
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{row.studentNumber}</td>
@@ -572,14 +574,14 @@ export default function PublishPage() {
               </h3>
               <div className="border border-warning/30 rounded-lg overflow-hidden bg-warning/5">
                 <table className="w-full text-sm" aria-label="Alunos excluídos da publicação">
-                  <thead className="bg-amber-50 border-b border-warning/30">
+                  <thead className="bg-warning/10 border-b border-warning/30">
                     <tr>
                       <th className="text-left px-4 py-2 font-medium text-warning text-xs">Nº</th>
                       <th className="text-left px-4 py-2 font-medium text-warning text-xs">Nome</th>
                       <th className="text-left px-4 py-2 font-medium text-warning text-xs">Situação</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-amber-100">
+                  <tbody className="divide-y divide-border">
                     {incompleteStudents.map(({ row, badge }) => (
                       <tr key={row.studentId}>
                         <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{row.studentNumber}</td>
@@ -602,7 +604,7 @@ export default function PublishPage() {
             <button
               type="button"
               onClick={() => navigate(-1)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-white text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-cardtext-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
             >
               Cancelar
             </button>
@@ -620,7 +622,7 @@ export default function PublishPage() {
 
       {/* ── Step 2: Audiência ─────────────────────────────────────────────── */}
       {currentStep === 1 && (
-        <div className="bg-white rounded-lg border border-border p-6 flex flex-col gap-5">
+        <div className="bg-card rounded-lg border border-border p-6 flex flex-col gap-5">
           <h2 className="text-base font-semibold text-foreground">② Seleccionar Audiência</h2>
 
           {/* AC5: no-phone warning */}
@@ -647,27 +649,27 @@ export default function PublishPage() {
             >
               <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors has-[input:checked]:border-primary has-[input:checked]:bg-primary/5">
                 <RadioGroupItem value="all" id="aud-all" aria-checked={audience === 'all'} />
-                <span className="text-sm text-slate-800 flex-1">
+                <span className="text-sm text-foreground flex-1">
                   Todos os alunos com nota completa
                 </span>
-                <span className="text-xs bg-slate-100 text-muted-foreground px-2 py-0.5 rounded-full font-mono">
+                <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-mono">
                   {audienceCounts.all} alunos
                 </span>
               </label>
 
               <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors has-[input:checked]:border-primary has-[input:checked]:bg-primary/5">
                 <RadioGroupItem value="approved" id="aud-approved" aria-checked={audience === 'approved'} />
-                <span className="text-sm text-slate-800 flex-1">
+                <span className="text-sm text-foreground flex-1">
                   Apenas aprovados
                 </span>
-                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-mono">
+                <span className="text-xs bg-success/10 text-success px-2 py-0.5 rounded-full font-mono">
                   {audienceCounts.approved} alunos
                 </span>
               </label>
 
               <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors has-[input:checked]:border-primary has-[input:checked]:bg-primary/5">
                 <RadioGroupItem value="rejected" id="aud-rejected" aria-checked={audience === 'rejected'} />
-                <span className="text-sm text-slate-800 flex-1">
+                <span className="text-sm text-foreground flex-1">
                   Apenas reprovados
                 </span>
                 <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded-full font-mono">
@@ -677,10 +679,10 @@ export default function PublishPage() {
 
               <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors has-[input:checked]:border-primary has-[input:checked]:bg-primary/5">
                 <RadioGroupItem value="manual" id="aud-manual" aria-checked={audience === 'manual'} />
-                <span className="text-sm text-slate-800 flex-1">
+                <span className="text-sm text-foreground flex-1">
                   Selecção manual
                 </span>
-                <span className="text-xs bg-slate-100 text-muted-foreground px-2 py-0.5 rounded-full font-mono">
+                <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-mono">
                   {audienceCounts.all} alunos
                 </span>
               </label>
@@ -692,7 +694,7 @@ export default function PublishPage() {
             <button
               type="button"
               onClick={goBack}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-white text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-cardtext-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
             >
               ← Revisão
             </button>
@@ -709,7 +711,7 @@ export default function PublishPage() {
 
       {/* ── Step 3: Canais ────────────────────────────────────────────────── */}
       {currentStep === 2 && (
-        <div className="bg-white rounded-lg border border-border p-6 flex flex-col gap-5">
+        <div className="bg-card rounded-lg border border-border p-6 flex flex-col gap-5">
           <h2 className="text-base font-semibold text-foreground">③ Canais de Notificação</h2>
 
           {/* AC13: WhatsApp disconnected warning */}
@@ -742,7 +744,7 @@ export default function PublishPage() {
                 disabled={!waStatus.connected}
                 aria-disabled={!waStatus.connected}
               />
-              <span className="text-sm text-slate-800 flex-1">
+              <span className="text-sm text-foreground flex-1">
                 WhatsApp
               </span>
               <div className="flex items-center gap-2">
@@ -753,7 +755,7 @@ export default function PublishPage() {
                     className={[
                       'text-xs px-2 py-0.5 rounded-full font-medium',
                       waStatus.connected
-                        ? 'bg-green-100 text-green-700'
+                        ? 'bg-success/10 text-success'
                         : 'bg-destructive/10 text-destructive',
                     ].join(' ')}
                   >
@@ -770,7 +772,7 @@ export default function PublishPage() {
             <label className="flex items-center gap-3 cursor-not-allowed p-3 rounded-lg border border-border bg-muted/50 opacity-50">
               <Checkbox id="ch-email" checked={false} disabled aria-disabled="true" />
               <span className="text-sm text-muted-foreground flex-1">Email</span>
-              <span className="text-xs bg-slate-200 text-muted-foreground px-2 py-0.5 rounded-full">
+              <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
                 Não configurado
               </span>
             </label>
@@ -782,7 +784,7 @@ export default function PublishPage() {
                 checked={channels.has('portal_only')}
                 onCheckedChange={() => toggleChannel('portal_only')}
               />
-              <span className="text-sm text-slate-800 flex-1">Apenas Portal (sem notificação)</span>
+              <span className="text-sm text-foreground flex-1">Apenas Portal (sem notificação)</span>
             </label>
           </div>
 
@@ -797,15 +799,15 @@ export default function PublishPage() {
                 value={messageTemplate}
                 onChange={(e) => setMessageTemplate(e.target.value)}
                 rows={3}
-                className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D6EFD]/30 focus:border-primary resize-none"
+                className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-primary resize-none"
                 placeholder="Olá {{nome}}! A sua nota é {{nota_final}}."
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Variáveis: <code className="bg-slate-100 px-1 rounded">{'{{nome}}'}</code>{' '}
-                <code className="bg-slate-100 px-1 rounded">{'{{disciplina}}'}</code>{' '}
-                <code className="bg-slate-100 px-1 rounded">{'{{semestre}}'}</code>{' '}
-                <code className="bg-slate-100 px-1 rounded">{'{{nota_final}}'}</code>{' '}
-                <code className="bg-slate-100 px-1 rounded">{'{{resultado}}'}</code>
+                Variáveis: <code className="bg-muted px-1 rounded">{'{{nome}}'}</code>{' '}
+                <code className="bg-muted px-1 rounded">{'{{disciplina}}'}</code>{' '}
+                <code className="bg-muted px-1 rounded">{'{{semestre}}'}</code>{' '}
+                <code className="bg-muted px-1 rounded">{'{{nota_final}}'}</code>{' '}
+                <code className="bg-muted px-1 rounded">{'{{resultado}}'}</code>
               </p>
             </div>
 
@@ -815,7 +817,7 @@ export default function PublishPage() {
                 <p className="text-xs font-medium text-muted-foreground mb-1.5 uppercase tracking-wide">
                   Pré-visualização (1.º aluno)
                 </p>
-                <p className="text-sm text-slate-800 whitespace-pre-wrap">{previewText}</p>
+                <p className="text-sm text-foreground whitespace-pre-wrap">{previewText}</p>
               </div>
             )}
           </div>
@@ -825,7 +827,7 @@ export default function PublishPage() {
             <button
               type="button"
               onClick={goBack}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-white text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-cardtext-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
             >
               ← Audiência
             </button>
@@ -844,18 +846,18 @@ export default function PublishPage() {
 
       {/* ── Step 4: Confirmar ─────────────────────────────────────────────── */}
       {currentStep === 3 && (
-        <div className="bg-white rounded-lg border border-border p-6 flex flex-col gap-5">
+        <div className="bg-card rounded-lg border border-border p-6 flex flex-col gap-5">
           <h2 className="text-base font-semibold text-foreground">④ Confirmar Publicação</h2>
 
           {/* AC8: Summary box */}
           <div className="bg-muted/50 border border-border rounded-lg p-4 flex flex-col gap-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Contexto</span>
-              <span className="font-medium text-slate-800 text-right max-w-[60%]">{breadcrumb}</span>
+              <span className="font-medium text-foreground text-right max-w-[60%]">{breadcrumb}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Audiência</span>
-              <span className="font-medium text-slate-800">
+              <span className="font-medium text-foreground">
                 {audience === 'all' && `Todos (${audienceCounts.all} alunos)`}
                 {audience === 'approved' && `Apenas aprovados (${audienceCounts.approved} alunos)`}
                 {audience === 'rejected' && `Apenas reprovados (${audienceCounts.rejected} alunos)`}
@@ -870,7 +872,7 @@ export default function PublishPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Canais</span>
-              <span className="font-medium text-slate-800">
+              <span className="font-medium text-foreground">
                 {Array.from(channels).join(', ') || '—'}
               </span>
             </div>

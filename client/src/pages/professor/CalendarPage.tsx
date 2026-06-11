@@ -1,7 +1,7 @@
 // CalendarPage — professor view with full CRUD, context selector, month/list view, .ics export
 // Story 7.8 — T1, T3, T4, T8, T9, T10, T11, T13
 
-import { Calendar, Download } from 'lucide-react'
+import { Calendar } from 'lucide-react'
 import { useState, useCallback } from 'react'
 import { AppHeader } from '@/components/organisms/AppHeader'
 import { MonthCalendar } from '@/components/organisms/MonthCalendar'
@@ -377,8 +377,8 @@ export default function CalendarPage() {
             className={[
               'rounded-md px-4 py-2.5 text-sm font-medium',
               statusMsg.ok
-                ? 'bg-green-50 border border-green-200 text-success'
-                : 'bg-red-50 border border-red-200 text-destructive',
+                ? 'bg-success/10 border border-success/20 text-success'
+                : 'bg-destructive/10 border border-destructive/20 text-destructive',
             ].join(' ')}
           >
             {statusMsg.text}

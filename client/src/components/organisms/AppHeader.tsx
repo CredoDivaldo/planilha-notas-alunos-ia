@@ -1,8 +1,16 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useTheme } from 'next-themes'
-import { GraduationCap, Sun, Moon, User, LogOut } from 'lucide-react'
+import { GraduationCap, Sun, Moon, User, LogOut, BookOpen } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useActiveContext } from '@/contexts/ActiveContextContext'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 export type ActiveTab = 'painel' | 'contextos' | 'notas' | 'calendario' | 'publicar'
 
@@ -21,12 +29,15 @@ const NAV_TABS: { id: ActiveTab; label: string; href: string }[] = [
 export function AppHeader({ activeTab }: AppHeaderProps) {
   const { user, logout } = useAuth()
   const { theme, setTheme } = useTheme()
+  const { contexts, activeContextId, setActiveContextId } = useActiveContext()
   const navigate = useNavigate()
 
   const handleLogout = () => {
     logout()
     navigate('/login', { replace: true })
   }
+
+  const isProfessor = user?.role === 'professor'
 
   return (
     <header className="bg-card border-b border-border px-6 h-14 flex items-center justify-between sticky top-0 z-50 backdrop-blur-sm">
@@ -57,6 +68,25 @@ export function AppHeader({ activeTab }: AppHeaderProps) {
           })}
         </nav>
       </div>
+
+      {/* Centre: Active context selector — professors only */}
+      {isProfessor && contexts.length > 0 && (
+        <div className="flex items-center gap-2 text-sm">
+          <BookOpen className="size-3.5 text-muted-foreground shrink-0" />
+          <Select value={activeContextId ?? ''} onValueChange={setActiveContextId}>
+            <SelectTrigger className="h-7 text-xs w-52 border-border">
+              <SelectValue placeholder="Seleccionar contexto…" />
+            </SelectTrigger>
+            <SelectContent>
+              {contexts.map((ctx) => (
+                <SelectItem key={ctx.id} value={ctx.id} className="text-xs">
+                  {ctx.turma} · {ctx.disciplina}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* Right: Theme toggle + User + Logout */}
       <div className="flex items-center gap-2">

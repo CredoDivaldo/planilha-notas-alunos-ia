@@ -93,12 +93,12 @@ export function ContextBar({ onContextChange }: ContextBarProps) {
   }
 
   return (
-    <div className="bg-slate-50 border-b border-slate-200 px-6 py-2 flex items-center gap-3">
-      <span className="text-sm text-slate-600 font-medium whitespace-nowrap">
+    <div className="bg-muted/50 border-b border-border px-6 py-2 flex items-center gap-3">
+      <span className="text-sm text-muted-foreground font-medium whitespace-nowrap">
         Contexto activo:
       </span>
       <Select value={activeContextId} onValueChange={handleChange}>
-        <SelectTrigger className="w-64 h-8 text-sm bg-white">
+        <SelectTrigger className="w-64 h-8 text-sm">
           <SelectValue placeholder="Seleccionar contexto…" />
         </SelectTrigger>
         <SelectContent>
@@ -112,7 +112,7 @@ export function ContextBar({ onContextChange }: ContextBarProps) {
       <Button
         variant="outline"
         size="sm"
-        className="h-8 text-xs text-[#0D6EFD] border-[#0D6EFD] hover:bg-[#0D6EFD]/5"
+        className="h-8 text-xs text-primary border-primary hover:bg-primary/5"
         onClick={() => navigate('/contextos')}
       >
         + Novo
