@@ -28,7 +28,23 @@ const AuthContext = createContext<AuthContextType | null>(null)
 function loadUserFromStorage(): User | null {
   try {
     const stored = localStorage.getItem('auth_user')
-    return stored ? (JSON.parse(stored) as User) : null
+    if (!stored) return null
+
+    const user = JSON.parse(stored) as User
+
+    // Rejeitar dados mock/demo
+    if (user.name?.includes('Demo') || user.name?.includes('Mock') || user.id === 'mock-user-1') {
+      localStorage.removeItem('auth_user')
+      return null
+    }
+
+    // Validar que token existe (não é string vazia ou mock)
+    if (!user.token || user.token === 'mock-token-dev' || user.token.length < 10) {
+      localStorage.removeItem('auth_user')
+      return null
+    }
+
+    return user
   } catch {
     localStorage.removeItem('auth_user')
     return null

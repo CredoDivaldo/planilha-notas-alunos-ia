@@ -57,64 +57,7 @@ interface ApiCalendarResponse {
   events: ApiCalendarEvent[]
 }
 
-// ─── Mock data (API fallback) ─────────────────────────────────────────────────
-
-const MOCK_GRADES: ApiGradesResponse = {
-  student_number: '2024001',
-  turma: 'ING-T1',
-  disciplina: 'Inglês Técnico',
-  semestre: '2026/1',
-  turno: 'Manhã',
-  subjects: [
-    {
-      disciplina: 'Inglês Técnico',
-      docente: 'Prof. Divaldo Lopes',
-      semestre: '2026/1',
-      turma: 'ING-T1',
-      pendente: false,
-      nota_final: 14.4,
-      resultado: 'aprovado',
-      components: [
-        { id: 'c1', name: 'Frequência', weight: 40, value: 15, published: true },
-        { id: 'c2', name: 'Exame Final', weight: 60, value: 14, published: true },
-      ],
-    },
-    {
-      disciplina: 'Física',
-      pendente: true,
-      nota_final: null,
-      resultado: null,
-      components: [],
-    },
-  ],
-}
-
-const today = new Date()
-const fmt = (d: Date) => d.toISOString().slice(0, 10)
-const addDays = (d: Date, n: number) => { const r = new Date(d); r.setDate(r.getDate() + n); return r }
-
-const MOCK_CALENDAR: ApiCalendarResponse = {
-  events: [
-    {
-      id: 'ev1',
-      date: fmt(addDays(today, 10)),
-      type: 'exame',
-      title: 'Exame Final Inglês',
-      time: '09:00',
-      location: 'Sala 3',
-    },
-    {
-      id: 'ev2',
-      date: fmt(addDays(today, 17)),
-      type: 'recurso',
-      title: 'Recurso Física',
-      time: '14:00',
-      location: 'TBD',
-    },
-  ],
-}
-
-// ─── Map API → component types ────────────────────────────────────────────────
+// ─── Data mappers ────────────────────────────────────────────────────────────
 
 function mapSubject(s: ApiSubjectGrade): StudentSubjectGrade {
   return {
@@ -181,8 +124,7 @@ function PortalContent({ userName }: { userName: string }) {
         setSessionExpired(true)
         return
       }
-      // Fallback mock — API unavailable in development
-      setGradesData(MOCK_GRADES)
+      throw err
     } finally {
       setGradesLoading(false)
     }
@@ -198,7 +140,7 @@ function PortalContent({ userName }: { userName: string }) {
         setSessionExpired(true)
         return
       }
-      setCalendarEvents(MOCK_CALENDAR.events.map(mapEvent))
+      throw err
     } finally {
       setCalendarLoading(false)
     }
