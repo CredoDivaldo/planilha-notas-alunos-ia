@@ -11,50 +11,6 @@ import { apiFetch } from '@/lib/api'
 import { calcNotaFinal, getRowBadgeLabel } from '@/lib/grades'
 import type { ContextItem, StudentRow, ImportHistoryEntry } from '@/types'
 
-// ---------------------------------------------------------------------------
-// Fallback data — used when API is unavailable in dev
-// ---------------------------------------------------------------------------
-const FALLBACK_CONTEXT: ContextItem = {
-  id: 'ctx-fallback-1',
-  turma: 'ING-T1',
-  disciplina: 'Inglês Técnico',
-  semestre: '2026/1',
-  turno: 'Manhã',
-  alunosCount: 6,
-  delegado: null,
-  components: [
-    { id: 'c1', name: 'Frequência', weight: 40 },
-    { id: 'c2', name: 'Mini-teste', weight: 30 },
-    { id: 'c3', name: 'Exame', weight: 30 },
-  ],
-}
-
-const FALLBACK_ROWS: StudentRow[] = [
-  {
-    studentId: 'st-1', studentNumber: '2024001', studentName: 'Ana Silva', published: false,
-    components: { c1: { gradeId: 'g-1', value: 16 }, c2: { gradeId: 'g-2', value: 14 }, c3: { gradeId: 'g-3', value: 15 } },
-  },
-  {
-    studentId: 'st-2', studentNumber: '2024002', studentName: 'Bruno Costa', published: false,
-    components: { c1: { gradeId: 'g-4', value: 12 }, c2: { gradeId: 'g-5', value: null }, c3: { gradeId: 'g-6', value: 11 } },
-  },
-  {
-    studentId: 'st-3', studentNumber: '2024003', studentName: 'Carla Mendes', published: true,
-    components: { c1: { gradeId: 'g-7', value: 18 }, c2: { gradeId: 'g-8', value: 17 }, c3: { gradeId: 'g-9', value: 19 } },
-  },
-  {
-    studentId: 'st-4', studentNumber: '2024004', studentName: 'David Pinto', published: false,
-    components: { c1: { gradeId: 'g-10', value: 8 }, c2: { gradeId: 'g-11', value: 7 }, c3: { gradeId: 'g-12', value: 9 } },
-  },
-  {
-    studentId: 'st-5', studentNumber: '2024005', studentName: 'Eva Rodrigues', published: false,
-    components: { c1: { gradeId: 'g-13', value: null }, c2: { gradeId: 'g-14', value: null }, c3: { gradeId: 'g-15', value: null } },
-  },
-  {
-    studentId: 'st-6', studentNumber: '2024006', studentName: 'Filipe Santos', published: false,
-    components: { c1: { gradeId: 'g-16', value: 14 }, c2: { gradeId: 'g-17', value: 13 }, c3: { gradeId: 'g-18', value: null } },
-  },
-]
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -71,10 +27,10 @@ export default function GradesPage() {
   const navigate = useNavigate()
   const { activeContextId } = useActiveContext()
 
-  // Data — initialised with mock, replaced by API response
-  const [contextItem, setContextItem] = useState<ContextItem>(FALLBACK_CONTEXT)
-  const [rows, setRows] = useState<StudentRow[]>(FALLBACK_ROWS)
+  const [contextItem, setContextItem] = useState<ContextItem | null>(null)
+  const [rows, setRows] = useState<StudentRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [importHistory, setImportHistory] = useState<ImportHistoryEntry[]>([])
   const [historyExpanded, setHistoryExpanded] = useState(false)
 
@@ -94,22 +50,26 @@ export default function GradesPage() {
 
   const loadData = useCallback(async (contextId: string) => {
     setLoading(true)
+    setError(null)
     try {
       const ctx = await apiFetch<ContextItem>(`/academic-contexts/${contextId}`)
       setContextItem(ctx)
       const gradesData = await apiFetch<{ students: StudentRow[] }>(`/grades/?context_id=${contextId}`)
-      setRows(gradesData.students ?? FALLBACK_ROWS)
-    } catch {
-      setContextItem(FALLBACK_CONTEXT)
-      setRows(FALLBACK_ROWS)
+      setRows(gradesData.students ?? [])
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao carregar notas'
+      setError(msg)
+      setContextItem(null)
+      setRows([])
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    const id = activeContextId ?? FALLBACK_CONTEXT.id
-    void loadData(id)
+    if (activeContextId) {
+      void loadData(activeContextId)
+    }
   }, [activeContextId, loadData])
 
   // Derived stats
@@ -179,19 +139,12 @@ export default function GradesPage() {
         }
         setImportHistory((prev) => [entry, ...prev].slice(0, 10))
         showStatus(`${res.imported} notas importadas para ${compName}`, 'success')
-        void loadData(activeContextId ?? FALLBACK_CONTEXT.id)
+        if (activeContextId) void loadData(activeContextId)
         return res
-      } catch {
-        const mockRes = { imported: 4, unmatched: 1 }
-        const entry: ImportHistoryEntry = {
-          id: crypto.randomUUID(),
-          componentName: compName,
-          timestamp: new Date().toISOString(),
-          count: mockRes.imported,
-        }
-        setImportHistory((prev) => [entry, ...prev].slice(0, 10))
-        showStatus(`${mockRes.imported} notas importadas para ${compName} (demo)`, 'success')
-        return mockRes
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Erro ao importar notas'
+        showStatus(`Erro: ${errorMsg}`, 'error')
+        throw err
       }
     },
     [contextItem, activeContextId, loadData, showStatus],
