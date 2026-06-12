@@ -13,25 +13,43 @@ Não há servidor Express legacy, não há UI single-page MVP antiga, não há b
 
 ## Quick start
 
+### Opção 1: Unified Script (Recomendado)
+
 ```bash
-# Backend
+./start-dev.sh
+```
+
+Este script bash arranca backend FastAPI + frontend Vite em paralelo. **Requer:**
+- Python virtual environment (`.venv`) com dependências instaladas
+- `npm run client:install` executado previamente
+
+### Opção 2: npm run dev (Alternativo)
+
+```bash
+# Preparação única:
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+npm run client:install
+
+# Depois, sempre use:
+npm run dev
+```
+
+Este comando arranca backend e cliente em paralelo usando `concurrently`.
+
+### Opção 3: Terminais separados (Debug)
+
+```bash
+# Terminal 1 — Backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
 npm run dev:backend
 
-# Frontend (noutro terminal)
-npm run client:install
+# Terminal 2 — Frontend
 npm run dev:client
 ```
-
-Atalho unificado (a partir da raiz):
-
-```bash
-npm run dev
-```
-
-Este comando arranca backend e cliente em paralelo (`concurrently`).
 
 ## Estrutura
 
@@ -48,9 +66,11 @@ legacy/         # Artefactos históricos preservados
 
 | Comando | Descrição |
 |---------|-----------|
-| `npm run dev` | Arranca backend + frontend em paralelo |
+| `./start-dev.sh` | **Recomendado:** Arranca backend + frontend em paralelo |
+| `npm run dev` | Alternativa: arranca ambos (pode ter problemas de venv) |
 | `npm run dev:backend` | Só backend (uvicorn com reload) |
 | `npm run dev:client` | Só frontend (vite dev server) |
+| `./setup-test-env.sh` | Registra utilizador de teste + valida auth (com backend a correr) |
 | `npm run client:build` | Build de produção do frontend para `public/app/` |
 | `pytest backend/tests/` | Suite pytest do backend |
 | `npm run lint` | ESLint sobre testes frontend |
