@@ -101,7 +101,7 @@ export default function StudentCalendarPage() {
           <button
             type="button"
             onClick={() => downloadIcs(events)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-slate-300 bg-card text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
           >
             <><Download className="size-4" /> Descarregar .ics</>
           </button>

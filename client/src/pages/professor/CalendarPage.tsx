@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { apiFetch } from '@/lib/api'
 import type { CalendarEvent, EventType } from '@/components/molecules/EventDot'
+import { useActiveContext } from '@/contexts/ActiveContextContext'
 
 // ---------------------------------------------------------------------------
 // Fallback data (used when backend is unreachable in dev; not test fixtures)
@@ -57,15 +58,13 @@ const FALLBACK_EVENTS: CalendarEvent[] = [
   },
 ]
 
-const FALLBACK_CONTEXTS: ContextOption[] = [
-  { id: 'ctx-1', label: 'ING-T1 · Inglês Técnico · 2026/1' },
-  { id: 'ctx-2', label: 'MAT-T2 · Matemática · 2026/1' },
-]
+// Extended CalendarEvent with optional context_id for filtering
+type CalendarEventWithContext = CalendarEvent & { context_id?: string }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function formToEvent(data: EventFormData, id: string): CalendarEvent {
+function formToEvent(data: EventFormData, id: string, contextId?: string): CalendarEventWithContext {
   const timeParts = [data.startTime, data.endTime].filter(Boolean)
   return {
     id,
@@ -75,6 +74,7 @@ function formToEvent(data: EventFormData, id: string): CalendarEvent {
     time: timeParts.length === 2 ? `${timeParts[0]}–${timeParts[1]}` : timeParts[0] ?? undefined,
     location: data.location || undefined,
     description: data.notes || undefined,
+    context_id: contextId,
   }
 }
 
@@ -197,16 +197,24 @@ function ListViewPanel({ events }: { events: CalendarEvent[] }) {
 // Professor CalendarPage
 // ---------------------------------------------------------------------------
 export default function CalendarPage() {
+  const { contexts } = useActiveContext()
+
+  // Map real contexts to ContextOption format for EventModal
+  const contextOptions: ContextOption[] = contexts.map((c) => ({
+    id: c.id,
+    label: `${c.turma} · ${c.disciplina} · ${c.semestre}`,
+  }))
+
   // Data
-  const [events, setEvents] = useState<CalendarEvent[]>(FALLBACK_EVENTS)
+  const [events, setEvents] = useState<CalendarEventWithContext[]>(FALLBACK_EVENTS)
   const [selectedContextId, setSelectedContextId] = useState<string>('todos')
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEventWithContext | null>(null)
 
   // UI
   const [viewMode, setViewMode] = useState<ViewMode>('mes')
   const [modalOpen, setModalOpen] = useState(false)
-  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<CalendarEvent | null>(null)
+  const [editingEvent, setEditingEvent] = useState<CalendarEventWithContext | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<CalendarEventWithContext | null>(null)
   const [statusMsg, setStatusMsg] = useState<{ text: string; ok: boolean } | null>(null)
 
   function showStatus(text: string, ok = true) {
@@ -216,7 +224,7 @@ export default function CalendarPage() {
 
   // Load events — mock fallback
   useState(() => {
-    apiFetch<{ events: CalendarEvent[] }>('/api/v1/calendar/events')
+    apiFetch<{ events: CalendarEventWithContext[] }>('/api/v1/calendar/events')
       .then((d) => setEvents(d.events ?? FALLBACK_EVENTS))
       .catch(() => setEvents(FALLBACK_EVENTS))
   })
@@ -224,24 +232,22 @@ export default function CalendarPage() {
   // Filtered events by context
   const filteredEvents = selectedContextId === 'todos'
     ? events
-    : events.filter(() => {
-        // Events don't carry context_id in CalendarEvent type — show all in mock
-        return true
-      })
+    : events.filter((ev) => ev.context_id === selectedContextId)
 
   // T8 — Create event
   const handleSave = useCallback(async (data: EventFormData, eventId?: string) => {
+    const ctxId = selectedContextId !== 'todos' ? selectedContextId : undefined
     if (eventId) {
       // T9 — Edit
       try {
         await apiFetch(`/api/v1/calendar/events/${eventId}`, {
           method: 'PUT',
-          body: JSON.stringify(data),
+          body: JSON.stringify({ ...data, context_id: ctxId }),
         })
       } catch {
         // Optimistic update for mock
       }
-      const updated = formToEvent(data, eventId)
+      const updated = formToEvent(data, eventId, ctxId)
       setEvents((prev) => prev.map((ev) => ev.id === eventId ? updated : ev))
       setSelectedEvent(updated)
       showStatus('Evento actualizado com sucesso.')
@@ -251,16 +257,16 @@ export default function CalendarPage() {
       try {
         await apiFetch<{ id: string }>('/api/v1/calendar/events', {
           method: 'POST',
-          body: JSON.stringify(data),
+          body: JSON.stringify({ ...data, context_id: ctxId }),
         })
       } catch {
         // Optimistic local create
       }
-      const created = formToEvent(data, newId)
+      const created = formToEvent(data, newId, ctxId)
       setEvents((prev) => [...prev, created])
       showStatus('Evento criado com sucesso.')
     }
-  }, [])
+  }, [selectedContextId])
 
   // T10 — Delete
   const handleDeleteConfirm = useCallback(async () => {
@@ -282,7 +288,7 @@ export default function CalendarPage() {
   }
 
   function openEdit(ev: CalendarEvent) {
-    setEditingEvent(ev)
+    setEditingEvent(ev as CalendarEventWithContext)
     setModalOpen(true)
   }
 
@@ -297,7 +303,7 @@ export default function CalendarPage() {
   })
 
   return (
-    <div className="min-h-screen bg-muted/50">
+    <div className="min-h-screen bg-background">
       <AppHeader activeTab="calendario" />
 
       <main className="max-w-[1280px] mx-auto px-6 py-6 flex flex-col gap-5">
@@ -363,7 +369,7 @@ export default function CalendarPage() {
             className="border border-border rounded-md px-3 py-1.5 text-sm bg-card focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="todos">Todos os contextos</option>
-            {FALLBACK_CONTEXTS.map((ctx) => (
+            {contextOptions.map((ctx) => (
               <option key={ctx.id} value={ctx.id}>{ctx.label}</option>
             ))}
           </select>
@@ -416,7 +422,7 @@ export default function CalendarPage() {
             event={selectedEvent}
             role="professor"
             onEdit={openEdit}
-            onDelete={setDeleteTarget}
+            onDelete={(ev) => setDeleteTarget(ev as CalendarEventWithContext)}
             onClose={() => setSelectedEvent(null)}
           />
         </div>
@@ -427,7 +433,7 @@ export default function CalendarPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         event={editingEvent}
-        contexts={FALLBACK_CONTEXTS}
+        contexts={contextOptions}
         onSave={handleSave}
       />
 

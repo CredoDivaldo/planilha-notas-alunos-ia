@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [requiresPasswordChange, setRequiresPasswordChange] = useState(false)
 
   const login = async (credentials: LoginCredentials) => {
-    const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+    const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
     const res = await fetch(`${base}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -95,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const changePassword = async (payload: ChangePasswordPayload) => {
-    const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+    const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
     const stored = localStorage.getItem('auth_user')
     const token: string | null = stored
       ? (JSON.parse(stored) as { token: string }).token

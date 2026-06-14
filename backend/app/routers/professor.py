@@ -27,6 +27,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.app.publication.service import compute_match, trigger_broadcast
 from backend.app.services.evolution_api_client import (
     EvolutionApiError,
+    _default_instance,
+    configure_webhook,
     connection_state,
     create_instance,
     get_qrcode,
@@ -115,6 +117,17 @@ class WhatsAppConnectResponse(BaseModel):
     pairing_code: str | None = None
     simulated: bool = False
     connected: bool = False
+
+
+class WebhookConfigureRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    webhook_url: str
+
+
+class WebhookConfigureResponse(BaseModel):
+    configured: bool
+    url: str
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +368,36 @@ async def whatsapp_instance_connect() -> WhatsAppConnectResponse:
         pairing_code=result.get("pairing_code"),
         simulated=result.get("simulated", False),
         connected=False,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/whatsapp/webhook/configure
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/whatsapp/webhook/configure",
+    response_model=WebhookConfigureResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def whatsapp_webhook_configure(
+    payload: WebhookConfigureRequest,
+) -> WebhookConfigureResponse:
+    """Configure the Evolution webhook URL and default events."""
+    try:
+        result = await configure_webhook(
+            instance=_default_instance(),
+            webhook_url=payload.webhook_url,
+        )
+    except EvolutionApiError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=_safe_detail(f"Evolution API error: {exc.status_code}"),
+        ) from exc
+    return WebhookConfigureResponse(
+        configured=result.get("configured", False),
+        url=result.get("url", payload.webhook_url),
     )
 
 

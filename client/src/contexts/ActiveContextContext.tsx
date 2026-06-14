@@ -3,32 +3,6 @@ import type { ReactNode } from 'react'
 import { apiFetch } from '@/lib/api'
 import type { ContextItem } from '@/types'
 
-const MOCK_CONTEXTS: ContextItem[] = [
-  {
-    id: '1',
-    turma: 'ING-T1',
-    disciplina: 'Inglês Técnico',
-    semestre: '2026/1',
-    turno: 'Manhã',
-    alunosCount: 42,
-    delegado: null,
-    components: [
-      { id: 'c1', name: 'Frequência', weight: 40 },
-      { id: 'c2', name: 'Exame Final', weight: 60 },
-    ],
-  },
-  {
-    id: '2',
-    turma: 'ING-T2',
-    disciplina: 'Inglês Técnico',
-    semestre: '2026/1',
-    turno: 'Tarde',
-    alunosCount: 38,
-    delegado: null,
-    components: [],
-  },
-]
-
 interface ActiveContextType {
   contexts: ContextItem[]
   activeContextId: string | null
@@ -57,13 +31,8 @@ export function ActiveContextProvider({ children }: { children: ReactNode }) {
         })
       })
       .catch(() => {
-        setContexts(MOCK_CONTEXTS)
-        setActiveContextIdState((prev) => {
-          if (prev && MOCK_CONTEXTS.some((c) => c.id === prev)) return prev
-          const firstId = MOCK_CONTEXTS[0]?.id ?? null
-          if (firstId) sessionStorage.setItem('active_context_id', firstId)
-          return firstId
-        })
+        setContexts([])
+        // Keep existing active context ID if user had one; don't override with mock
       })
   }, [])
 

@@ -16,54 +16,6 @@ import { apiFetch } from '@/lib/api'
 import { calcNotaFinal, getRowBadgeLabel } from '@/lib/grades'
 import type { ContextItem, StudentRow } from '@/types'
 
-// ---------------------------------------------------------------------------
-// Fallback data — used when API is unavailable in dev
-// ---------------------------------------------------------------------------
-
-const FALLBACK_CONTEXT: ContextItem = {
-  id: 'ctx-fallback-1',
-  turma: 'ING-T1',
-  disciplina: 'Inglês Técnico',
-  semestre: '2026/1',
-  turno: 'Manhã',
-  alunosCount: 6,
-  delegado: null,
-  components: [
-    { id: 'c1', name: 'Frequência', weight: 40 },
-    { id: 'c2', name: 'Mini-teste', weight: 30 },
-    { id: 'c3', name: 'Exame', weight: 30 },
-  ],
-}
-
-const FALLBACK_ROWS: StudentRow[] = [
-  {
-    studentId: 'st-1', studentNumber: '2024001', studentName: 'Ana Silva', published: false,
-    components: { c1: { gradeId: 'g-1', value: 16 }, c2: { gradeId: 'g-2', value: 14 }, c3: { gradeId: 'g-3', value: 15 } },
-  },
-  {
-    studentId: 'st-2', studentNumber: '2024002', studentName: 'Bruno Costa', published: false,
-    components: { c1: { gradeId: 'g-4', value: 12 }, c2: { gradeId: 'g-5', value: null }, c3: { gradeId: 'g-6', value: 11 } },
-  },
-  {
-    studentId: 'st-3', studentNumber: '2024003', studentName: 'Carla Mendes', published: true,
-    components: { c1: { gradeId: 'g-7', value: 18 }, c2: { gradeId: 'g-8', value: 17 }, c3: { gradeId: 'g-9', value: 19 } },
-  },
-  {
-    studentId: 'st-4', studentNumber: '2024004', studentName: 'David Pinto', published: false,
-    components: { c1: { gradeId: 'g-10', value: 8 }, c2: { gradeId: 'g-11', value: 7 }, c3: { gradeId: 'g-12', value: 9 } },
-  },
-  {
-    studentId: 'st-5', studentNumber: '2024005', studentName: 'Eva Rodrigues', published: false,
-    components: { c1: { gradeId: 'g-13', value: null }, c2: { gradeId: 'g-14', value: null }, c3: { gradeId: 'g-15', value: null } },
-  },
-  {
-    studentId: 'st-6', studentNumber: '2024006', studentName: 'Filipe Santos', published: false,
-    components: { c1: { gradeId: 'g-16', value: 14 }, c2: { gradeId: 'g-17', value: 13 }, c3: { gradeId: 'g-18', value: null } },
-  },
-]
-
-// Fallback: 2 students have no valid phone (Eva, Bruno)
-const FALLBACK_NO_PHONE_IDS = new Set(['st-2', 'st-5'])
 
 // ---------------------------------------------------------------------------
 // Types
@@ -128,11 +80,12 @@ export default function PublishPage() {
   const { activeContextId } = useActiveContext()
 
   // T10: context propagation via ?context={id}, falling back to global active context
-  const contextId = searchParams.get('context') ?? activeContextId ?? FALLBACK_CONTEXT.id
+  const contextId = searchParams.get('context') ?? activeContextId ?? null
 
   // Data
-  const [contextItem, setContextItem] = useState<ContextItem>(FALLBACK_CONTEXT)
-  const [rows, setRows] = useState<StudentRow[]>(FALLBACK_ROWS)
+  const [contextItem, setContextItem] = useState<ContextItem | null>(null)
+  const [rows, setRows] = useState<StudentRow[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   // T11: WhatsApp status
@@ -165,26 +118,33 @@ export default function PublishPage() {
   // ---------------------------------------------------------------------------
 
   const loadData = useCallback(async () => {
+    if (!contextId) {
+      setLoadError('Nenhum contexto académico seleccionado. Seleccione um contexto no topo da página.')
+      setLoading(false)
+      return
+    }
+    setLoadError(null)
     try {
       const ctx = await apiFetch<ContextItem>(`/academic-contexts/${contextId}`)
       setContextItem(ctx)
       const gradesData = await apiFetch<{ students: StudentRow[] }>(`/grades/?context_id=${contextId}`)
-      setRows(gradesData.students ?? FALLBACK_ROWS)
-    } catch {
-      setContextItem(FALLBACK_CONTEXT)
-      setRows(FALLBACK_ROWS)
+      setRows(gradesData.students ?? [])
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Erro ao carregar dados.')
+      setContextItem(null)
+      setRows([])
     } finally {
       setLoading(false)
     }
   }, [contextId])
 
-  useState(() => { loadData() })
+  useEffect(() => { void loadData() }, [loadData])
 
   // T11: WhatsApp status polling
   const checkWaStatus = useCallback(async () => {
     setWaChecking(true)
     try {
-      const data = await apiFetch<{ connected: boolean; instance_name: string }>('/whatsapp/status')
+      const data = await apiFetch<{ connected: boolean; instance_name: string }>('/api/v1/whatsapp/setup/status')
       setWaStatus({ connected: data.connected, instanceName: data.instance_name })
     } catch {
       // keep current
@@ -208,10 +168,11 @@ export default function PublishPage() {
 
   const studentsWithNota = useMemo<StudentWithNota[]>(() =>
     rows.map((row) => {
-      const nota = calcNotaFinal(row.components, contextItem.components)
-      const badge = getRowBadgeLabel(row.components, contextItem.components, row.published)
+      const components = contextItem?.components ?? []
+      const nota = calcNotaFinal(row.components, components)
+      const badge = getRowBadgeLabel(row.components, components, row.published)
       const complete = badge !== 'Incompleta' && badge !== 'Vazio'
-      const hasPhone = !FALLBACK_NO_PHONE_IDS.has(row.studentId)
+      const hasPhone = !!(row.phone && row.phone.trim().length > 0)
       return { row, nota, badge, complete, hasPhone }
     }),
     [rows, contextItem],
@@ -256,11 +217,13 @@ export default function PublishPage() {
   // Preview with first student
   const previewText = useMemo(() => {
     const first = completeStudents[0]
-    if (!first) return messageTemplate
+    if (!first || !contextItem) return messageTemplate
     return renderPreview(messageTemplate, first, contextItem.disciplina, contextItem.semestre)
-  }, [messageTemplate, completeStudents, contextItem.disciplina, contextItem.semestre])
+  }, [messageTemplate, completeStudents, contextItem])
 
-  const breadcrumb = `${contextItem.turma} · ${contextItem.disciplina} · ${contextItem.semestre} · ${contextItem.turno}`
+  const breadcrumb = contextItem
+    ? `${contextItem.turma} · ${contextItem.disciplina} · ${contextItem.semestre} · ${contextItem.turno}`
+    : '—'
 
   // ---------------------------------------------------------------------------
   // Stepper state derivation
@@ -320,7 +283,7 @@ export default function PublishPage() {
         failure_list?: Array<{ student_id: string; student_name: string; student_number: string; reason: string }>
       }
 
-      const data = await apiFetch<BroadcastResponse>('/broadcast/', {
+      const data = await apiFetch<BroadcastResponse>('/api/v1/broadcast/', {
         method: 'POST',
         body: JSON.stringify({
           context_id: contextId,
@@ -368,7 +331,7 @@ export default function PublishPage() {
         failure_list?: Array<{ student_id: string; student_name: string; student_number: string; reason: string }>
       }
 
-      const data = await apiFetch<BroadcastResponse>('/broadcast/', {
+      const data = await apiFetch<BroadcastResponse>('/api/v1/broadcast/', {
         method: 'POST',
         body: JSON.stringify({
           context_id: contextId,
@@ -461,6 +424,25 @@ export default function PublishPage() {
       <WizardLayout>
         <div className="flex items-center justify-center py-24 text-muted-foreground">
           <span className="animate-pulse">A carregar dados…</span>
+        </div>
+      </WizardLayout>
+    )
+  }
+
+  if (loadError || !contextItem) {
+    return (
+      <WizardLayout>
+        <div className="bg-destructive/10 border border-destructive/20 rounded-lg px-6 py-8 text-center">
+          <p className="text-destructive font-medium mb-4">
+            {loadError ?? 'Contexto académico não encontrado.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="text-sm text-primary hover:underline"
+          >
+            ← Voltar
+          </button>
         </div>
       </WizardLayout>
     )
@@ -604,7 +586,7 @@ export default function PublishPage() {
             <button
               type="button"
               onClick={() => navigate(-1)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-cardtext-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
             >
               Cancelar
             </button>
@@ -694,7 +676,7 @@ export default function PublishPage() {
             <button
               type="button"
               onClick={goBack}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-cardtext-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
             >
               ← Revisão
             </button>
@@ -827,7 +809,7 @@ export default function PublishPage() {
             <button
               type="button"
               onClick={goBack}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-cardtext-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
             >
               ← Audiência
             </button>

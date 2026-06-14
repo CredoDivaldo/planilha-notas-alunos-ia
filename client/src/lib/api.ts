@@ -1,5 +1,7 @@
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+  // In production the frontend is served by the same FastAPI server, so use
+  // relative paths. In local dev, Vite proxies /api/* to localhost:8000.
+  const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
   const stored = localStorage.getItem('auth_user')
   const token: string | null = stored
     ? (JSON.parse(stored) as { token: string }).token
@@ -17,6 +19,10 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText })) as { detail?: string }
     throw new Error(err.detail ?? `Request failed: ${res.status}`)
+  }
+
+  if (res.status === 204) {
+    return undefined as unknown as T
   }
 
   return res.json() as Promise<T>

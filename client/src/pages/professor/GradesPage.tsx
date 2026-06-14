@@ -30,7 +30,6 @@ export default function GradesPage() {
   const [contextItem, setContextItem] = useState<ContextItem | null>(null)
   const [rows, setRows] = useState<StudentRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [importHistory, setImportHistory] = useState<ImportHistoryEntry[]>([])
   const [historyExpanded, setHistoryExpanded] = useState(false)
 
@@ -50,7 +49,6 @@ export default function GradesPage() {
 
   const loadData = useCallback(async (contextId: string) => {
     setLoading(true)
-    setError(null)
     try {
       const ctx = await apiFetch<ContextItem>(`/academic-contexts/${contextId}`)
       setContextItem(ctx)
@@ -58,13 +56,13 @@ export default function GradesPage() {
       setRows(gradesData.students ?? [])
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro ao carregar notas'
-      setError(msg)
+      showStatus(msg, 'error')
       setContextItem(null)
       setRows([])
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [showStatus])
 
   useEffect(() => {
     if (activeContextId) {
@@ -74,6 +72,7 @@ export default function GradesPage() {
 
   // Derived stats
   const stats = useMemo(() => {
+    if (!contextItem) return { media: '—', alta: '—', baixa: '—', aprovados: '0 (0%)', reprovados: '0 (0%)', incompletos: '0 (0%)' }
     const allComputed = rows.map((r) => ({
       nota: calcNotaFinal(r.components, contextItem.components),
       published: r.published,
@@ -102,7 +101,7 @@ export default function GradesPage() {
   }, [rows, contextItem])
 
   const incompleteCount = useMemo(
-    () => rows.filter((r) => {
+    () => !contextItem ? 0 : rows.filter((r) => {
       const b = getRowBadgeLabel(r.components, contextItem.components, r.published)
       return b === 'Incompleta' || b === 'Vazio'
     }).length,
@@ -120,13 +119,14 @@ export default function GradesPage() {
 
   const handleImport = useCallback(
     async (componentId: string, file: File): Promise<{ imported: number; unmatched: number }> => {
+      if (!contextItem) return { imported: 0, unmatched: 0 }
       const compName = contextItem.components.find((c) => c.id === componentId)?.name ?? componentId
       try {
         const formData = new FormData()
         formData.append('file', file)
         formData.append('component_id', componentId)
         formData.append('context_id', contextItem.id)
-        const res = await apiFetch<{ imported: number; unmatched: number }>('/grades/upload', {
+        const res = await apiFetch<{ imported: number; unmatched: number }>('/api/v1/grades/upload', {
           method: 'POST',
           body: formData,
           headers: {},
@@ -150,11 +150,24 @@ export default function GradesPage() {
     [contextItem, activeContextId, loadData, showStatus],
   )
 
+  if (loading || !contextItem) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader activeTab="notas" />
+        <main className="max-w-[1280px] mx-auto px-6 py-16 flex items-center justify-center">
+          <span className="text-muted-foreground animate-pulse">
+            {loading ? 'A carregar notas…' : 'Selecione um contexto académico no topo da página.'}
+          </span>
+        </main>
+      </div>
+    )
+  }
+
   const breadcrumb = `${contextItem.turma} · ${contextItem.disciplina} · ${contextItem.semestre} · ${contextItem.turno}`
   const visibleHistory = historyExpanded ? importHistory : importHistory.slice(0, 3)
 
   return (
-    <div className="min-h-screen bg-muted/50">
+    <div className="min-h-screen bg-background">
       <AppHeader activeTab="notas" />
 
       <main className="max-w-[1280px] mx-auto px-6 py-6 flex flex-col gap-5">
@@ -183,16 +196,7 @@ export default function GradesPage() {
 
             <button
               type="button"
-              disabled
-              aria-disabled="true"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground opacity-40 cursor-not-allowed"
-            >
-              💾 Guardar alterações
-            </button>
-
-            <button
-              type="button"
-              onClick={() => showStatus('Notas finais recalculadas', 'success')}
+              onClick={() => { void loadData(activeContextId!); showStatus('Notas actualizadas da base de dados.', 'success') }}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground hover:bg-muted transition-colors"
             >
               🧮 Recalcular
@@ -276,21 +280,15 @@ export default function GradesPage() {
         </div>
 
         {/* Table */}
-        {loading ? (
-          <div className="flex items-center justify-center py-16 text-muted-foreground">
-            <span className="animate-pulse">A carregar notas…</span>
-          </div>
-        ) : (
-          <GradeTable
-            contextItem={contextItem}
-            rows={rows}
-            onRowsChange={setRows}
-            onGradeUpdate={handleGradeUpdate}
-            filterText={filterText}
-            filterStatus={filterStatus}
-            sortBy={sortBy}
-          />
-        )}
+        <GradeTable
+          contextItem={contextItem}
+          rows={rows}
+          onRowsChange={setRows}
+          onGradeUpdate={handleGradeUpdate}
+          filterText={filterText}
+          filterStatus={filterStatus}
+          sortBy={sortBy}
+        />
 
         {/* Stats */}
         <section aria-label="Estatísticas da turma">

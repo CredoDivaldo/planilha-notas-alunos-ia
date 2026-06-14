@@ -29,71 +29,13 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { apiFetch } from '@/lib/api'
+import { useActiveContext } from '@/contexts/ActiveContextContext'
 import type { ContextItem } from '@/types'
-
-const FALLBACK_CONTEXTS: ContextItem[] = [
-  {
-    id: '1',
-    turma: 'ING-T1',
-    disciplina: 'Inglês Técnico',
-    semestre: '2026/1',
-    turno: 'Manhã',
-    alunosCount: 42,
-    delegado: { id: 'a1', name: 'Carlos Mendes', studentNumber: '22009' },
-    components: [
-      { id: 'c1', name: 'Frequência', weight: 40 },
-      { id: 'c2', name: 'Exame Final', weight: 60 },
-    ],
-  },
-  {
-    id: '2',
-    turma: 'ING-T2',
-    disciplina: 'Inglês Técnico',
-    semestre: '2026/1',
-    turno: 'Tarde',
-    alunosCount: 38,
-    delegado: null,
-    components: [
-      { id: 'c3', name: 'Teste 1', weight: 30 },
-      { id: 'c4', name: 'Teste 2', weight: 30 },
-      { id: 'c5', name: 'Exame', weight: 40 },
-    ],
-  },
-  {
-    id: '3',
-    turma: 'MAT-T1',
-    disciplina: 'Matemática',
-    semestre: '2026/1',
-    turno: 'Manhã',
-    alunosCount: 40,
-    delegado: null,
-    components: [],
-  },
-  {
-    id: '4',
-    turma: 'FIS-T1',
-    disciplina: 'Física',
-    semestre: '2025/2',
-    turno: 'Manhã',
-    alunosCount: 35,
-    delegado: null,
-    components: [],
-  },
-  {
-    id: '5',
-    turma: 'QUI-T1',
-    disciplina: 'Química',
-    semestre: '2025/2',
-    turno: 'Tarde',
-    alunosCount: 37,
-    delegado: null,
-    components: [],
-  },
-]
 
 type StatusMsg = { type: 'success' | 'error'; text: string }
 
 export default function ContextsPage() {
+  const { reloadContexts } = useActiveContext()
   const [contexts, setContexts] = useState<ContextItem[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -112,6 +54,12 @@ export default function ContextsPage() {
   const [csvUploading, setCsvUploading] = useState(false)
   const [csvError, setCsvError] = useState<string | undefined>()
 
+  const [studentsDialogOpen, setStudentsDialogOpen] = useState(false)
+  const [studentsLoading, setStudentsLoading] = useState(false)
+  const [studentsList, setStudentsList] = useState<Array<{ studentId: string; studentNumber: string; studentName: string }>>([])
+
+  const [delegateDialogOpen, setDelegateDialogOpen] = useState(false)
+
   const [statusMsg, setStatusMsg] = useState<StatusMsg | null>(null)
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -124,7 +72,10 @@ export default function ContextsPage() {
   useEffect(() => {
     apiFetch<ContextItem[]>('/academic-contexts/')
       .then(setContexts)
-      .catch(() => setContexts(FALLBACK_CONTEXTS))
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Erro ao carregar contextos.'
+        showStatus({ type: 'error', text: msg })
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -165,29 +116,12 @@ export default function ContextsPage() {
 
   const handleModalSubmit = async (payload: ContextPayload): Promise<void> => {
     if (modalMode === 'create') {
-      try {
-        const created = await apiFetch<ContextItem>('/academic-contexts/', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        })
-        setContexts((prev) => [...prev, created])
-      } catch {
-        const mockItem: ContextItem = {
-          id: crypto.randomUUID(),
-          turma: payload.turma,
-          disciplina: payload.disciplina,
-          semestre: payload.semestre,
-          turno: payload.turno,
-          alunosCount: 0,
-          delegado: null,
-          components: payload.components.map((c, i) => ({
-            id: String(i),
-            name: c.name,
-            weight: c.weight,
-          })),
-        }
-        setContexts((prev) => [...prev, mockItem])
-      }
+      const created = await apiFetch<ContextItem>('/academic-contexts/', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      setContexts((prev) => [...prev, created])
+      reloadContexts()
       setModalOpen(false)
       showStatus({ type: 'success', text: 'Contexto criado com sucesso.' })
     } else if (editTarget) {
@@ -206,14 +140,32 @@ export default function ContextsPage() {
     setDeleting(true)
     try {
       await apiFetch(`/academic-contexts/${deleteTarget.id}`, { method: 'DELETE' })
-    } catch {
-      // no backend — remove locally
+      setContexts((prev) => prev.filter((c) => c.id !== deleteTarget.id))
+      if (selectedId === deleteTarget.id) setSelectedId(null)
+      showStatus({ type: 'success', text: 'Contexto eliminado.' })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao eliminar contexto.'
+      showStatus({ type: 'error', text: msg })
+    } finally {
+      setDeleting(false)
+      setDeleteTarget(null)
     }
-    setContexts((prev) => prev.filter((c) => c.id !== deleteTarget.id))
-    if (selectedId === deleteTarget.id) setSelectedId(null)
-    showStatus({ type: 'success', text: 'Contexto eliminado.' })
-    setDeleting(false)
-    setDeleteTarget(null)
+  }
+
+  const handleViewStudents = async () => {
+    if (!selectedContext) return
+    setStudentsLoading(true)
+    setStudentsDialogOpen(true)
+    try {
+      const result = await apiFetch<{ students: Array<{ studentId: string; studentNumber: string; studentName: string }> }>(
+        `/grades/?context_id=${selectedContext.id}`
+      )
+      setStudentsList(result.students ?? [])
+    } catch {
+      setStudentsList([])
+    } finally {
+      setStudentsLoading(false)
+    }
   }
 
   const handleCsvUpload = async (file: File) => {
@@ -227,7 +179,7 @@ export default function ContextsPage() {
       const token: string | null = stored
         ? (JSON.parse(stored) as { token: string }).token
         : null
-      const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+      const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
       const res = await fetch(
         `${base}/students/upload?context_id=${selectedContext.id}`,
         {
@@ -463,6 +415,7 @@ export default function ContextsPage() {
                   variant="outline"
                   size="sm"
                   className="text-primary border-primary hover:bg-primary/5 gap-2"
+                  onClick={() => void handleViewStudents()}
                 >
                   <Users className="size-4" /> Ver estudantes
                 </Button>
@@ -487,14 +440,22 @@ export default function ContextsPage() {
                   <span className="text-sm text-foreground">
                     {selectedContext.delegado.name} ({selectedContext.delegado.studentNumber})
                   </span>
-                  <button type="button" className="text-sm text-primary hover:underline">
+                  <button
+                    type="button"
+                    className="text-sm text-primary hover:underline"
+                    onClick={() => setDelegateDialogOpen(true)}
+                  >
                     Alterar delegado
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-muted-foreground">Sem delegado atribuído</span>
-                  <button type="button" className="text-sm text-primary hover:underline">
+                  <button
+                    type="button"
+                    className="text-sm text-primary hover:underline"
+                    onClick={() => setDelegateDialogOpen(true)}
+                  >
                     Atribuir delegado
                   </button>
                 </div>
@@ -513,6 +474,67 @@ export default function ContextsPage() {
           onSubmit={handleModalSubmit}
         />
       )}
+
+      {/* Students Dialog */}
+      <Dialog open={studentsDialogOpen} onOpenChange={(open) => { if (!open) setStudentsDialogOpen(false) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Estudantes — {selectedContext?.turma} · {selectedContext?.disciplina}
+            </DialogTitle>
+          </DialogHeader>
+          {studentsLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="w-6 h-6 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : studentsList.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              Nenhum estudante encontrado para este contexto.
+            </p>
+          ) : (
+            <div className="overflow-auto max-h-80">
+              <Table aria-label="Lista de estudantes">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead scope="col">Nº</TableHead>
+                    <TableHead scope="col">Nome</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {studentsList.map((s) => (
+                    <TableRow key={s.studentId}>
+                      <TableCell className="font-mono text-sm">{s.studentNumber}</TableCell>
+                      <TableCell>{s.studentName}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStudentsDialogOpen(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delegate Dialog */}
+      <Dialog open={delegateDialogOpen} onOpenChange={(open) => { if (!open) setDelegateDialogOpen(false) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Atribuir Delegado</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Funcionalidade em desenvolvimento. Contacte o administrador para atribuir delegados via base de dados.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDelegateDialogOpen(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
         <DialogContent>

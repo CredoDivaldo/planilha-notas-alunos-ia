@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Users, FileText, CheckCircle, XCircle, PhoneOff, Send, AlertTriangle, RefreshCw, Wifi, WifiOff } from 'lucide-react'
+import { Users, FileText, CheckCircle, XCircle, PhoneOff, Send, AlertTriangle, RefreshCw } from 'lucide-react'
 import { StatCard } from '@/components/molecules/StatCard'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { apiFetch } from '@/lib/api'
 
@@ -22,6 +21,8 @@ interface WhatsAppStatus {
 
 interface QuickStatsSidebarProps {
   stats: QuickStats
+  onReconnect?: () => void
+  reconnecting?: boolean
 }
 
 const STAT_CARDS: { icon: React.ReactNode; label: string; key: keyof QuickStats; variant?: 'default' | 'success' | 'warning' | 'danger' }[] = [
@@ -34,7 +35,7 @@ const STAT_CARDS: { icon: React.ReactNode; label: string; key: keyof QuickStats;
   { icon: <AlertTriangle className="size-4" />, label: 'Falhas', key: 'falhas', variant: 'danger' },
 ]
 
-export function QuickStatsSidebar({ stats }: QuickStatsSidebarProps) {
+export function QuickStatsSidebar({ stats, onReconnect, reconnecting }: QuickStatsSidebarProps) {
   const [waStatus, setWaStatus] = useState<WhatsAppStatus>({
     connected: false,
     instanceName: 'whatsapp-instance',
@@ -45,7 +46,12 @@ export function QuickStatsSidebar({ stats }: QuickStatsSidebarProps) {
   const checkWaStatus = async () => {
     setChecking(true)
     try {
-      const data = await apiFetch<{ connected: boolean; instance_name: string }>('/whatsapp/status')
+      // Use per-professor endpoint; fall back to global status if unauthenticated
+      const data = await apiFetch<{ connected: boolean; instance_name: string }>(
+        '/api/v1/whatsapp/setup/status',
+      ).catch(() =>
+        apiFetch<{ connected: boolean; instance_name: string }>('/api/v1/whatsapp/status'),
+      )
       setWaStatus({ connected: data.connected, instanceName: data.instance_name })
     } catch {
       // keep current status
@@ -56,7 +62,7 @@ export function QuickStatsSidebar({ stats }: QuickStatsSidebarProps) {
 
   useEffect(() => {
     const initTimer = setTimeout(() => { void checkWaStatus() }, 0)
-    pollingRef.current = setInterval(() => { void checkWaStatus() }, 30_000)
+    pollingRef.current = setInterval(() => { void checkWaStatus() }, 15_000)
     return () => {
       clearTimeout(initTimer)
       if (pollingRef.current) clearInterval(pollingRef.current)
@@ -97,19 +103,33 @@ export function QuickStatsSidebar({ stats }: QuickStatsSidebarProps) {
 
         <div className="flex items-center gap-2 mb-2">
           {waStatus.connected ? (
-            <Badge variant="default" className="gap-1 bg-success text-white hover:bg-success">
-              <Wifi className="size-3" /> Conectado
-            </Badge>
+            <span className="flex items-center gap-1.5 text-sm font-medium text-success">
+              <span className="w-2 h-2 rounded-full bg-success inline-block" aria-hidden="true" />
+              Conectado ●
+            </span>
           ) : (
-            <Badge variant="destructive" className="gap-1">
-              <WifiOff className="size-3" /> Desconectado
-            </Badge>
+            <span className="flex items-center gap-1.5 text-sm font-medium text-destructive">
+              <span className="w-2 h-2 rounded-full bg-destructive inline-block" aria-hidden="true" />
+              Desconectado ●
+            </span>
           )}
         </div>
         <p className="text-xs text-muted-foreground">
           Instância: <span className="font-medium text-foreground">{waStatus.instanceName}</span>
         </p>
-        <p className="text-xs text-muted-foreground/60 mt-1">Polling automático a cada 30s</p>
+        <p className="text-xs text-muted-foreground/60 mt-1">Polling automático a cada 15s</p>
+        {onReconnect && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onReconnect}
+            disabled={reconnecting || checking}
+            className="text-xs h-7 gap-1.5 mt-2 w-full"
+          >
+            <RefreshCw className={`size-3 ${reconnecting ? 'animate-spin' : ''}`} />
+            {reconnecting ? 'A reconectar…' : 'Reconectar'}
+          </Button>
+        )}
       </div>
     </aside>
   )

@@ -51,6 +51,7 @@ export interface StudentRow {
   studentId: string
   studentNumber: string
   studentName: string
+  phone: string | null
   components: Record<string, GradeValue>
   published: boolean
 }

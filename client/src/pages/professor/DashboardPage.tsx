@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle, XCircle, AlertTriangle, Search, Rocket, RefreshCw, Clock, ArrowRight, Wifi, WifiOff } from 'lucide-react'
+import { CheckCircle, XCircle, AlertTriangle, Search, Rocket, RefreshCw, Clock, ArrowRight } from 'lucide-react'
 import { AppHeader } from '@/components/organisms/AppHeader'
 import { FileDropzone } from '@/components/molecules/FileDropzone'
 import { useActiveContext } from '@/contexts/ActiveContextContext'
@@ -161,7 +161,7 @@ function getAuthToken(): string | null {
 }
 
 function getApiBase(): string {
-  return (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8000'
+  return (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
 }
 
 // ─── Status badge helper ──────────────────────────────────────────────────────
@@ -181,43 +181,36 @@ export default function ProfessorDashboardPage() {
   // Step state
   const [steps, dispatch] = useReducer(stepReducer, undefined, loadState)
 
-  // WhatsApp status
-  const [waConnected, setWaConnected] = useState(false)
-  const [waChecking, setWaChecking] = useState(false)
+  // WhatsApp reconnect (status polling handled by QuickStatsSidebar)
   const [waReconnecting, setWaReconnecting] = useState(false)
-
-  const checkWaStatus = useCallback(async () => {
-    setWaChecking(true)
-    try {
-      const data = await apiFetch<{ connected: boolean }>('/whatsapp/status')
-      setWaConnected(data.connected)
-    } catch {
-      // keep current
-    } finally {
-      setWaChecking(false)
-    }
-  }, [])
 
   const handleWaReconnect = useCallback(async () => {
     setWaReconnecting(true)
     try {
-      await apiFetch('/whatsapp/instance/create', { method: 'POST' })
-      await checkWaStatus()
+      await apiFetch('/api/v1/whatsapp/instance/create', { method: 'POST' })
     } catch {
       // non-fatal
     } finally {
       setWaReconnecting(false)
     }
-  }, [checkWaStatus])
+  }, [])
+
+  // Quick stats — pre-populated from DB on mount
+  const [stats, setStats] = useState<QuickStats>(INITIAL_STATS)
 
   useEffect(() => {
-    void checkWaStatus()
-    const interval = setInterval(() => { void checkWaStatus() }, 30_000)
-    return () => clearInterval(interval)
-  }, [checkWaStatus])
-
-  // Quick stats
-  const [stats, setStats] = useState<QuickStats>(INITIAL_STATS)
+    apiFetch<{ totalStudents: number; publishedGrades: number }>(
+      '/api/v1/delegado/system-status',
+    )
+      .then((data) =>
+        setStats((prev) => ({
+          ...prev,
+          estudantes: data.totalStudents ?? 0,
+          notas: data.publishedGrades ?? 0,
+        })),
+      )
+      .catch(() => { /* non-fatal */ })
+  }, [])
 
   // Step 1 — Upload Estudantes
   const [step1Loading, setStep1Loading] = useState(false)
@@ -235,11 +228,15 @@ export default function ProfessorDashboardPage() {
   const [matchDialogOpen, setMatchDialogOpen] = useState(false)
 
   // Step 4 — QR WhatsApp
-  const [countdown, setCountdown] = useState(45)
+  const [countdown, setCountdown] = useState(60)
   const [qrExpired, setQrExpired] = useState(false)
   const [qrConnected, setQrConnected] = useState(false)
+  const [qrCode, setQrCode] = useState<string | null>(null)
+  const [qrLoading, setQrLoading] = useState(false)
+  const [qrError, setQrError] = useState<string | null>(null)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const autoConnectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const qrPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Step 5 — Disparar
   const [broadcastMode, setBroadcastMode] = useState<'simulation' | 'real'>('simulation')
@@ -251,63 +248,85 @@ export default function ProfessorDashboardPage() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmChecked, setConfirmChecked] = useState(false)
 
-  // ─── QR countdown effects ───────────────────────────────────────────────
+  // ─── QR fetch and polling ───────────────────────────────────────────────
 
-  const startCountdown = () => {
+  const fetchQrCode = useCallback(async () => {
+    setQrLoading(true)
+    setQrError(null)
+    try {
+      // Ensure the professor's instance exists before requesting QR
+      await apiFetch('/api/v1/whatsapp/setup/create', { method: 'POST' }).catch(() => {})
+      const data = await apiFetch<{ code: string | null; simulated?: boolean }>(
+        '/api/v1/whatsapp/setup/qr',
+      )
+      if (data.code) {
+        setQrCode(data.code)
+        setQrExpired(false)
+        // Reset the 60s countdown each time we get a fresh QR
+        if (countdownRef.current) clearInterval(countdownRef.current)
+        setCountdown(60)
+        countdownRef.current = setInterval(() => {
+          setCountdown((prev) => {
+            if (prev <= 1) {
+              clearInterval(countdownRef.current!)
+              setQrExpired(true)
+              return 0
+            }
+            return prev - 1
+          })
+        }, 1000)
+      } else {
+        setQrCode(null)
+        setQrError('Evolution API não respondeu. Verifique a configuração.')
+      }
+    } catch {
+      setQrCode(null)
+      setQrError('Evolution API não respondeu. Verifique a configuração.')
+    } finally {
+      setQrLoading(false)
+    }
+  }, [])
+
+  const checkWaConnected = useCallback(async () => {
+    try {
+      const data = await apiFetch<{ connected: boolean }>('/api/v1/whatsapp/setup/status')
+      if (data.connected) {
+        setQrConnected(true)
+        if (countdownRef.current) clearInterval(countdownRef.current)
+        if (qrPollRef.current) clearInterval(qrPollRef.current)
+        if (statusPollRef.current) clearInterval(statusPollRef.current)
+      }
+    } catch {
+      // non-fatal
+    }
+  }, [])
+
+  const startCountdown = useCallback(() => {
+    // Clear existing timers
     if (countdownRef.current) clearInterval(countdownRef.current)
-    if (autoConnectRef.current) clearTimeout(autoConnectRef.current)
-    setCountdown(45)
-    setQrExpired(false)
+    if (qrPollRef.current) clearInterval(qrPollRef.current)
+    if (statusPollRef.current) clearInterval(statusPollRef.current)
     setQrConnected(false)
 
-    countdownRef.current = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(countdownRef.current!)
-          setQrExpired(true)
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
+    // Fetch QR immediately, then every 5s for fresh codes
+    void fetchQrCode()
+    qrPollRef.current = setInterval(() => { void fetchQrCode() }, 5000)
 
-    // Story 8.2: poll the real Evolution connect endpoint every 5s.
-    // The endpoint returns {connected: bool}; when it flips true we mark
-    // the QR card as paired and clear the countdown.
-    const base = getApiBase()
-    const token = getAuthToken()
-    autoConnectRef.current = setTimeout(() => {
-      void (async () => {
-        try {
-          const res = await fetch(`${base}/api/v1/whatsapp/instance/connect`, {
-            method: 'GET',
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          })
-          if (res.ok) {
-            const data = (await res.json()) as { connected?: boolean; simulated?: boolean }
-            if (data.connected) {
-              setQrConnected(true)
-              if (countdownRef.current) clearInterval(countdownRef.current)
-            }
-          }
-        } catch {
-          // Network errors are non-fatal — the countdown UI keeps the user
-          // informed and they can refresh the QR.
-        }
-      })()
-    }, 5000)
-  }
+    // Poll connection status every 5s to detect when user scans
+    statusPollRef.current = setInterval(() => { void checkWaConnected() }, 5000)
+  }, [fetchQrCode, checkWaConnected])
 
   useEffect(() => {
     if (steps[3].status !== 'active') return
-    // Defer the countdown start so setState calls happen asynchronously
+    // Defer slightly so state updates land after render
     const initTimer = setTimeout(() => {
       if (!qrConnected) startCountdown()
     }, 0)
     return () => {
       clearTimeout(initTimer)
       if (countdownRef.current) clearInterval(countdownRef.current)
-      if (autoConnectRef.current) clearTimeout(autoConnectRef.current)
+      if (qrPollRef.current) clearInterval(qrPollRef.current)
+      if (statusPollRef.current) clearInterval(statusPollRef.current)
     }
     // Only re-run when step 4 status changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -457,6 +476,9 @@ export default function ProfessorDashboardPage() {
   // ─── Step 4 — refresh QR ─────────────────────────────────────────────────
 
   const handleRefreshQr = () => {
+    setQrExpired(false)
+    setQrCode(null)
+    setQrError(null)
     startCountdown()
   }
 
@@ -756,30 +778,35 @@ export default function ProfessorDashboardPage() {
                 </div>
               ) : (
                 <div className="flex flex-col items-start gap-4 sm:flex-row">
-                  {/* QR Placeholder */}
+                  {/* QR Code — real image from Evolution API */}
                   <div
                     className="relative w-44 h-44 border-2 border-border rounded-lg flex items-center justify-center bg-card overflow-hidden flex-shrink-0"
-                    aria-label="QR Code placeholder"
+                    aria-label="QR Code WhatsApp"
                     role="img"
                   >
-                    {/* Dot-pattern QR placeholder */}
-                    <div className="grid grid-cols-9 gap-0.5 p-2">
-                      {Array.from({ length: 81 }).map((_, i) => (
-                        <div
-                          key={i}
-                          className={`w-3.5 h-3.5 rounded-sm ${
-                            (i % 3 === 0 || i % 7 === 0 || i % 11 === 0)
-                              ? 'bg-foreground'
-                              : 'bg-card'
-                          }`}
-                        />
-                      ))}
-                    </div>
+                    {qrLoading && !qrCode && (
+                      <RefreshCw className="size-6 text-muted-foreground animate-spin" />
+                    )}
+                    {qrCode && !qrExpired && (
+                      <img
+                        src={qrCode}
+                        alt="QR WhatsApp"
+                        className="w-44 h-44 object-contain"
+                      />
+                    )}
                     {qrExpired && (
                       <div className="absolute inset-0 bg-card/90 flex flex-col items-center justify-center gap-2">
                         <Clock className="size-6 text-muted-foreground" />
                         <span className="text-xs text-muted-foreground font-medium text-center">
                           QR expirado
+                        </span>
+                      </div>
+                    )}
+                    {!qrLoading && !qrCode && !qrExpired && qrError && (
+                      <div className="flex flex-col items-center justify-center gap-2 p-2">
+                        <AlertTriangle className="size-5 text-warning" />
+                        <span className="text-xs text-muted-foreground text-center">
+                          {qrError}
                         </span>
                       </div>
                     )}
@@ -791,7 +818,7 @@ export default function ProfessorDashboardPage() {
                       Leia o QR code com a câmara do WhatsApp para conectar.
                     </p>
 
-                    {!qrExpired ? (
+                    {!qrExpired && qrCode ? (
                       <div className="flex items-center gap-2">
                         <div
                           className={`text-lg font-bold tabular-nums ${
@@ -816,7 +843,7 @@ export default function ProfessorDashboardPage() {
                     )}
 
                     <p className="text-xs text-muted-foreground">
-                      Polling automático a cada 5s. A conexão é simulada automaticamente após 8s.
+                      Polling automático a cada 5s. A leitura do QR activa a ligação.
                     </p>
                   </div>
                 </div>
@@ -944,50 +971,7 @@ export default function ProfessorDashboardPage() {
 
           {/* Right column — 30% */}
           <div className="flex-[3] min-w-[240px] flex flex-col gap-4">
-            {/* WhatsApp status card */}
-            <div className="bg-card rounded-lg border border-border p-4">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                Estado WhatsApp
-              </h3>
-              <div className="flex items-center gap-2 mb-3">
-                {waChecking ? (
-                  <span className="text-xs text-muted-foreground animate-pulse">A verificar…</span>
-                ) : waConnected ? (
-                  <>
-                    <Wifi className="size-4 text-success shrink-0" />
-                    <span className="text-sm font-medium text-success">Conectado</span>
-                  </>
-                ) : (
-                  <>
-                    <WifiOff className="size-4 text-destructive shrink-0" />
-                    <span className="text-sm font-medium text-destructive">Desconectado</span>
-                  </>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleWaReconnect}
-                  disabled={waReconnecting || waChecking}
-                  className="text-xs h-7 gap-1.5"
-                >
-                  <RefreshCw className={`size-3 ${waReconnecting ? 'animate-spin' : ''}`} />
-                  {waReconnecting ? 'A reconectar…' : 'Reconectar'}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void checkWaStatus()}
-                  disabled={waChecking}
-                  className="text-xs h-7 text-muted-foreground"
-                >
-                  Verificar
-                </Button>
-              </div>
-            </div>
-
-            <QuickStatsSidebar stats={stats} />
+            <QuickStatsSidebar stats={stats} onReconnect={handleWaReconnect} reconnecting={waReconnecting} />
           </div>
         </div>
       </main>

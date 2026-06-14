@@ -29,12 +29,15 @@ from typing import Any
 
 LOGGER = logging.getLogger("backend.evolution_api_client")
 
+def _default_instance() -> str:
+    return os.getenv("EVOLUTION_INSTANCE") or "whatsapp-instance"
+
 DEFAULT_INSTANCE = "whatsapp-instance"
 
 
 def _base_url() -> str | None:
     """Return the Evolution base URL, or None if not configured."""
-    return os.getenv("EVOLUTION_API_URL") or None
+    return os.getenv("EVOLUTION_API_URL") or os.getenv("EVOLUTION_BASE_URL") or None
 
 
 def _api_key() -> str | None:
@@ -44,6 +47,10 @@ def _api_key() -> str | None:
 def _is_configured() -> bool:
     """Story 8.2 AC-4: dry-run when no Evolution URL is configured."""
     return _base_url() is not None
+
+
+def _headers() -> dict[str, str]:
+    return {"apikey": _api_key() or "", "Content-Type": "application/json"}
 
 
 # ---------------------------------------------------------------------------
@@ -246,94 +253,165 @@ class EvolutionApiError(RuntimeError):
 
 
 async def connection_state(
-    instance: str = DEFAULT_INSTANCE,
+    instance: str | None = None,
 ) -> dict[str, Any]:
     """Return the current connection state of an Evolution instance.
 
-    When Evolution is not configured (``EVOLUTION_API_URL`` is unset), this
-    returns ``{connected: False, instance_name, simulated: True}`` so the
-    React dashboard's QR card can render the "not configured" state without
-    crashing.
-
-    Production path uses ``GET /instance/connectionState/{instance}``.
+    Uses /instance/connectionState (real-time state from Baileys) as primary.
+    Falls back to /instance/fetchInstances if connectionState fails.
     """
+    inst = instance or _default_instance()
     if not _is_configured():
-        return {
-            "connected": False,
-            "instance_name": instance,
-            "simulated": True,
-        }
+        return {"connected": False, "instance_name": inst, "simulated": True}
 
-    # Real path: in production we would call:
-    #   GET {base}/instance/connectionState/{instance}
-    #   Headers: apikey: {key}
-    # The current call site is a synchronous FastAPI handler; the
-    # implementation keeps the same shape as the simulator so the router
-    # does not need to special-case the path. The broadcaster record
-    # expects the same keys regardless.
-    LOGGER.info(
-        "evolution_api_connection_state",
-        extra={"instance": instance, "configured": True},
-    )
-    return {
-        "connected": False,
-        "instance_name": instance,
-        "simulated": True,  # keep surface identical until HTTP client is wired
-    }
+    import httpx
+
+    base = (_base_url() or "").rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            # Primary: connectionState — real-time Baileys state
+            resp = await client.get(f"{base}/instance/connectionState/{inst}", headers=_headers())
+        if resp.status_code == 200:
+            data = resp.json()
+            status = (
+                data.get("instance", {}).get("state")
+                or data.get("instance", {}).get("status")
+                or data.get("state")
+                or ""
+            ).lower()
+            connected = status in ("open", "connected", "online")
+            return {"connected": connected, "instance_name": inst, "simulated": False}
+        # Fallback: fetchInstances
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp2 = await client.get(f"{base}/instance/fetchInstances", headers=_headers())
+        if resp2.status_code == 200:
+            instances = resp2.json() if isinstance(resp2.json(), list) else []
+            for item in instances:
+                if isinstance(item, dict) and item.get("name") == inst:
+                    status = (item.get("connectionStatus") or "").lower()
+                    connected = status in ("open", "connected", "online")
+                    return {"connected": connected, "instance_name": inst, "simulated": False}
+        LOGGER.warning("evolution_api_connection_state_non200", extra={"status": resp.status_code})
+        return {"connected": False, "instance_name": inst, "simulated": False}
+    except Exception as exc:
+        LOGGER.warning("evolution_api_connection_state_failed", extra={"error": str(exc)})
+        return {"connected": False, "instance_name": inst, "simulated": False}
 
 
 async def create_instance(
-    instance: str = DEFAULT_INSTANCE,
+    instance: str | None = None,
 ) -> dict[str, Any]:
-    """Create an Evolution instance.
-
-    Story 8.2 AC-4: dry-run when Evolution is not configured. The QR card
-    then polls ``get_qrcode`` to render the pairing flow.
-    """
+    """Create an Evolution instance."""
+    inst = instance or _default_instance()
     if not _is_configured():
-        return {
-            "instance_name": instance,
-            "status": "simulated",
-            "simulated": True,
-        }
+        return {"instance_name": inst, "status": "simulated", "simulated": True}
 
-    # Production: POST {base}/instance/create with apikey header
-    LOGGER.info(
-        "evolution_api_create_instance",
-        extra={"instance": instance, "configured": True},
-    )
-    return {
-        "instance_name": instance,
-        "status": "simulated",
-        "simulated": True,
+    import httpx
+
+    base = (_base_url() or "").rstrip("/")
+    url = f"{base}/instance/create"
+    payload = {
+        "instanceName": inst,
+        "integration": os.getenv("EVOLUTION_INTEGRATION") or "WHATSAPP-BAILEYS",
     }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url, json=payload, headers=_headers())
+        if resp.status_code in (200, 201):
+            data = resp.json()
+            return {
+                "instance_name": data.get("instanceName") or inst,
+                "status": data.get("status") or "created",
+                "simulated": False,
+            }
+        LOGGER.warning("evolution_api_create_instance_failed", extra={"status": resp.status_code})
+        raise EvolutionApiError(resp.status_code, resp.text[:500])
+    except EvolutionApiError:
+        raise
+    except Exception as exc:
+        LOGGER.error("evolution_api_create_instance_error", extra={"error": str(exc)})
+        raise EvolutionApiError(0, str(exc)) from exc
 
 
 async def get_qrcode(
-    instance: str = DEFAULT_INSTANCE,
+    instance: str | None = None,
 ) -> dict[str, Any]:
-    """Return the current pairing QR code (or a simulated sentinel).
-
-    The real Evolution endpoint ``GET /instance/connect/{instance}`` returns
-    a base64 PNG in ``code``. We surface the same key here so the front-end
-    can render either source without branching.
-    """
+    """Return the current pairing QR code from Evolution API."""
+    inst = instance or _default_instance()
     if not _is_configured():
-        return {
-            "instance_name": instance,
-            "code": None,
-            "pairing_code": None,
-            "simulated": True,
-        }
+        return {"instance_name": inst, "code": None, "pairing_code": None, "simulated": True}
 
-    # Production: GET {base}/instance/connect/{instance} with apikey header
-    LOGGER.info(
-        "evolution_api_get_qrcode",
-        extra={"instance": instance, "configured": True},
-    )
-    return {
-        "instance_name": instance,
-        "code": None,
-        "pairing_code": None,
-        "simulated": True,
+    import httpx
+
+    base = (_base_url() or "").rstrip("/")
+    url = f"{base}/instance/connect/{inst}"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, headers=_headers())
+        if resp.status_code == 200:
+            data = resp.json()
+            code = data.get("code") or data.get("qrcode") or data.get("base64")
+            pairing = data.get("pairingCode") or data.get("pairing_code")
+            return {
+                "instance_name": inst,
+                "code": code,
+                "pairing_code": pairing,
+                "simulated": False,
+            }
+        LOGGER.warning("evolution_api_get_qrcode_failed", extra={"status": resp.status_code})
+        return {"instance_name": inst, "code": None, "pairing_code": None, "simulated": False}
+    except Exception as exc:
+        LOGGER.warning("evolution_api_get_qrcode_error", extra={"error": str(exc)})
+        return {"instance_name": inst, "code": None, "pairing_code": None, "simulated": False}
+
+
+async def configure_webhook(
+    instance: str | None = None,
+    webhook_url: str = "",
+    events: list[str] | None = None,
+) -> dict[str, Any]:
+    """Configure the webhook for an Evolution instance.
+
+    Calls POST /webhook/set/{instance} to register the webhook URL and
+    the list of events to forward. Falls back to simulated mode when
+    EVOLUTION_API_URL is not configured.
+    """
+    inst = instance or _default_instance()
+    if events is None:
+        events = ["MESSAGES_UPSERT", "CONNECTION_UPDATE"]
+
+    if not _is_configured():
+        LOGGER.info(
+            "evolution_api_configure_webhook_simulated",
+            extra={"instance": inst, "webhook_url": webhook_url},
+        )
+        return {"configured": True, "url": webhook_url, "simulated": True}
+
+    import httpx
+
+    base = (_base_url() or "").rstrip("/")
+    url = f"{base}/webhook/set/{inst}"
+    payload = {
+        "webhook": {
+            "enabled": True,
+            "url": webhook_url,
+            "webhookBase64": False,
+            "webhookByEvents": False,
+            "events": events,
+        }
     }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url, json=payload, headers=_headers())
+        if resp.status_code in (200, 201):
+            return {"configured": True, "url": webhook_url, "simulated": False}
+        LOGGER.warning(
+            "evolution_api_configure_webhook_failed",
+            extra={"status": resp.status_code, "body": resp.text[:200]},
+        )
+        raise EvolutionApiError(resp.status_code, resp.text[:500])
+    except EvolutionApiError:
+        raise
+    except Exception as exc:
+        LOGGER.error("evolution_api_configure_webhook_error", extra={"error": str(exc)})
+        raise EvolutionApiError(0, str(exc)) from exc

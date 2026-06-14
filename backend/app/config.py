@@ -2,6 +2,22 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
+
+
+def _load_dotenv() -> None:
+    """Load .env from project root if python-dotenv is available."""
+    try:
+        from dotenv import load_dotenv  # type: ignore[import]
+        root = Path(__file__).parent.parent.parent
+        env_file = root / ".env"
+        if env_file.exists():
+            load_dotenv(env_file, override=False)
+    except ImportError:
+        pass
+
+
+_load_dotenv()
 
 
 @dataclass(frozen=True)

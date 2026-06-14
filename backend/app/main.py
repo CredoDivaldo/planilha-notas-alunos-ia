@@ -6,17 +6,25 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
+import os
+
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.config import Settings, get_settings
 from backend.app.database import build_engine, ensure_sqlite_directory, inspect_sqlite_runtime
 from backend.app.portal.routes import router as portal_router
+from backend.app.routers.academic_contexts import router as academic_contexts_router
 from backend.app.routers.auth import router as auth_router
+from backend.app.routers.calendar import router as calendar_router
 from backend.app.routers.chatbot import router as chatbot_router
+from backend.app.routers.delegado import router as delegado_router
+from backend.app.routers.grades import router as grades_router
 from backend.app.routers.ingest import router as ingest_router
 from backend.app.routers.professor import router as professor_router
+from backend.app.routers.whatsapp_setup import router as whatsapp_setup_router
 
 LOGGER = logging.getLogger("backend.app")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
@@ -42,6 +50,7 @@ class ErrorResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sqlalchemy.orm import sessionmaker
+    from backend.app.models import Base
 
     settings = getattr(app.state, "settings", None) or get_settings()
     ensure_sqlite_directory(settings.database_url)
@@ -50,6 +59,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.engine = engine
     app.state.database_runtime = inspect_sqlite_runtime(engine)
     app.state.session_factory = sessionmaker(bind=engine)
+
+    # Alembic migrations run before uvicorn starts (see Dockerfile CMD).
+    # create_all covers any ORM-only models not in migrations (idempotent).
+    Base.metadata.create_all(engine)
+
     LOGGER.info(
         "backend_startup",
         extra={
@@ -103,6 +117,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Register professor router (Story 8.2: match / broadcast / WhatsApp)
     app.include_router(professor_router)
 
+    # Academic contexts CRUD (missing routes — sprint fix)
+    app.include_router(academic_contexts_router)
+
+    # Grades router (missing routes — sprint fix)
+    app.include_router(grades_router)
+
+    # Calendar events router (missing routes — sprint fix)
+    app.include_router(calendar_router)
+
+    # Delegado portal router (missing routes — sprint fix)
+    app.include_router(delegado_router)
+
+    # Per-professor WhatsApp instance setup
+    app.include_router(whatsapp_setup_router)
+
+    # Health endpoint — must be registered BEFORE the SPA catch-all below
     @app.get(f"{resolved_settings.api_prefix}/health", response_model=HealthResponse)
     async def health(request: Request) -> HealthResponse:
         database_runtime = getattr(request.app.state, "database_runtime", None)
@@ -120,6 +150,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             database=database_runtime,
             request_id=_request_id_from(request) or "",
         )
+
+    # Serve built frontend static files (production: public/app).
+    # The SPA catch-all /{full_path:path} must come LAST so it never shadows API routes.
+    static_dir = os.path.join(os.path.dirname(__file__), "..", "..", "public", "app")
+    static_dir = os.path.abspath(static_dir)
+    if os.path.isdir(static_dir):
+        # Mount /assets and /favicon.svg explicitly so the browser can load them.
+        assets_dir = os.path.join(static_dir, "assets")
+        if os.path.isdir(assets_dir):
+            app.mount("/assets", StaticFiles(directory=assets_dir), name="spa-assets")
+
+        _API_PREFIXES = ("api/", "auth/", "whatsapp/", "students/", "grades/",
+                         "broadcast/", "academic-contexts/", "portal/")
+
+        @app.get("/", include_in_schema=False)
+        async def root_redirect() -> FileResponse:
+            return FileResponse(os.path.join(static_dir, "index.html"))
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def spa_fallback(full_path: str) -> FileResponse:
+            from fastapi import HTTPException as _HTTPException
+            if full_path.startswith(_API_PREFIXES):
+                raise _HTTPException(status_code=404)
+            # Serve real static files (favicon, icons, manifests) if they exist.
+            candidate = os.path.join(static_dir, full_path)
+            if os.path.isfile(candidate):
+                return FileResponse(candidate)
+            # Everything else is a React Router path → return index.html.
+            return FileResponse(os.path.join(static_dir, "index.html"))
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:

@@ -177,7 +177,7 @@ function PortalContent({ userName }: { userName: string }) {
     <StudentPortalLayout studentNumber={gradesData?.student_number}>
       {/* AC3: Welcome banner */}
       <div className="bg-card rounded-lg border border-border px-5 py-3 mb-5 flex flex-wrap items-center gap-x-4 gap-y-1">
-        <span className="text-base font-semibold text-slate-800">
+        <span className="text-base font-semibold text-foreground">
           👋 Olá, {firstName}!
         </span>
         {contextInfo && (
