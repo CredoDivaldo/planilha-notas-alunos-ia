@@ -545,8 +545,12 @@ export default function ProfessorDashboardPage() {
       if (!res.ok) {
         let detail = `Broadcast falhou: ${res.status}`
         try {
-          const body = (await res.json()) as { detail?: string }
-          if (body?.detail) detail = body.detail
+          const body = (await res.json()) as { detail?: unknown }
+          if (body?.detail) {
+            detail = typeof body.detail === 'string'
+              ? body.detail
+              : JSON.stringify(body.detail)
+          }
         } catch {
           // body wasn't JSON — keep status-only message
         }

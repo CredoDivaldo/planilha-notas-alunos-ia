@@ -216,7 +216,11 @@ async def setup_create(request: Request) -> SetupCreateResponse:
         if app_domain:
             if not app_domain.startswith("http"):
                 app_domain = f"https://{app_domain}"
+            # Append token as query param — Evolution API doesn't support custom headers
+            chatbot_token = os.getenv("CHATBOT_WEBHOOK_TOKEN") or ""
             webhook_url = f"{app_domain.rstrip('/')}/api/v1/chatbot/webhook"
+            if chatbot_token:
+                webhook_url = f"{webhook_url}?token={chatbot_token}"
             try:
                 await configure_webhook(instance=instance_name, webhook_url=webhook_url)
                 LOGGER.info("whatsapp_webhook_auto_configured", extra={"webhook_url": webhook_url, "instance": instance_name})

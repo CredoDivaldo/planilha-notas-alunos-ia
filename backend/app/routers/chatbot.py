@@ -148,7 +148,11 @@ async def validate_webhook_token(request: Request) -> str:
         HTTPException: 401 if token missing or incorrect
     """
     settings = request.app.state.settings
-    provided_token = request.headers.get("X-Webhook-Token")
+    # Accept token from header OR query param (Evolution API cannot set custom headers)
+    provided_token = (
+        request.headers.get("X-Webhook-Token")
+        or request.query_params.get("token")
+    )
 
     if not provided_token:
         LOGGER.warning(

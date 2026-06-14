@@ -67,6 +67,8 @@ export default function GradesPage() {
   useEffect(() => {
     if (activeContextId) {
       void loadData(activeContextId)
+    } else {
+      setLoading(false)
     }
   }, [activeContextId, loadData])
 
