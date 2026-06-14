@@ -350,7 +350,8 @@ async def get_qrcode(
             resp = await client.get(url, headers=_headers())
         if resp.status_code == 200:
             data = resp.json()
-            code = data.get("code") or data.get("qrcode") or data.get("base64")
+            # Prefer "base64" (rendered PNG data URL) over "code" (raw QR string like "2@...")
+            code = data.get("base64") or data.get("qrcode") or data.get("code")
             pairing = data.get("pairingCode") or data.get("pairing_code")
             return {
                 "instance_name": inst,

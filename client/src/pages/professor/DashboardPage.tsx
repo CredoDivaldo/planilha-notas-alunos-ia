@@ -280,7 +280,8 @@ export default function ProfessorDashboardPage() {
       const data = await apiFetch<{ code: string | null; simulated?: boolean }>(
         '/api/v1/whatsapp/setup/qr',
       )
-      if (data.code) {
+      const isImageCode = data.code && (data.code.startsWith('data:') || data.code.startsWith('http'))
+      if (isImageCode) {
         setQrCode(data.code)
         setQrExpired(false)
         if (countdownRef.current) clearInterval(countdownRef.current)
@@ -298,6 +299,10 @@ export default function ProfessorDashboardPage() {
       } else if (data.simulated) {
         setQrCode(null)
         setQrError('Evolution API não configurada. Defina EVOLUTION_API_URL nas variáveis de ambiente do Railway.')
+      } else if (data.code) {
+        // code exists but is not a renderable image (raw QR string from Evolution API)
+        setQrCode(null)
+        setQrError('QR recebido num formato não suportado. Verifique a versão da Evolution API.')
       } else {
         setQrCode(null)
         setQrError('Evolution API não respondeu. Verifique se o serviço está a correr.')
