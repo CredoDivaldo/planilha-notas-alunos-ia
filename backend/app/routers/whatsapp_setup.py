@@ -110,6 +110,11 @@ def _save_professor_instance(engine, prof_id: int, instance_name: str) -> None:
 # Schemas
 # ---------------------------------------------------------------------------
 
+class ConfigStatusResponse(BaseModel):
+    configured: bool
+    reachable: bool
+
+
 class SetupStatusResponse(BaseModel):
     connected: bool
     instance_name: str
@@ -148,6 +153,27 @@ class SetupDisconnectResponse(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
+@router.get("/config-status", response_model=ConfigStatusResponse)
+async def setup_config_status() -> ConfigStatusResponse:
+    """Check whether Evolution API is configured and reachable (no auth required)."""
+    base_url = os.getenv("EVOLUTION_API_URL") or os.getenv("EVOLUTION_BASE_URL")
+    configured = bool(base_url)
+    reachable = False
+    if configured:
+        import httpx
+        api_key = os.getenv("EVOLUTION_API_KEY") or ""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    f"{base_url.rstrip('/')}/instance/fetchInstances",
+                    headers={"apikey": api_key, "Content-Type": "application/json"},
+                )
+            reachable = resp.status_code < 500
+        except Exception:
+            reachable = False
+    return ConfigStatusResponse(configured=configured, reachable=reachable)
+
+
 @router.get("/status", response_model=SetupStatusResponse)
 async def setup_status(request: Request) -> SetupStatusResponse:
     """Get the professor's WhatsApp instance connection status."""
@@ -183,6 +209,19 @@ async def setup_create(request: Request) -> SetupCreateResponse:
 
     # Save the instance name to the professor's profile
     _save_professor_instance(engine, prof_id, instance_name)
+
+    # Auto-configure webhook using RAILWAY_PUBLIC_DOMAIN or APP_URL env var
+    if not result.get("simulated"):
+        app_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN") or os.getenv("APP_URL") or ""
+        if app_domain:
+            if not app_domain.startswith("http"):
+                app_domain = f"https://{app_domain}"
+            webhook_url = f"{app_domain.rstrip('/')}/api/v1/chatbot/webhook"
+            try:
+                await configure_webhook(instance=instance_name, webhook_url=webhook_url)
+                LOGGER.info("whatsapp_webhook_auto_configured", extra={"webhook_url": webhook_url, "instance": instance_name})
+            except Exception as exc:
+                LOGGER.warning("whatsapp_webhook_auto_configure_failed", extra={"error": str(exc), "instance": instance_name})
 
     return SetupCreateResponse(
         instance_name=result.get("instance_name", instance_name),

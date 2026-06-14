@@ -187,7 +187,7 @@ export default function ProfessorDashboardPage() {
   const handleWaReconnect = useCallback(async () => {
     setWaReconnecting(true)
     try {
-      await apiFetch('/api/v1/whatsapp/instance/create', { method: 'POST' })
+      await apiFetch('/api/v1/whatsapp/setup/create', { method: 'POST' })
     } catch {
       // non-fatal
     } finally {
@@ -234,6 +234,8 @@ export default function ProfessorDashboardPage() {
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [qrLoading, setQrLoading] = useState(false)
   const [qrError, setQrError] = useState<string | null>(null)
+  const [waConfigStatus, setWaConfigStatus] = useState<{ configured: boolean; reachable: boolean } | null>(null)
+  const [waConfigChecking, setWaConfigChecking] = useState(false)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const qrPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -247,6 +249,25 @@ export default function ProfessorDashboardPage() {
   const [broadcastError, setBroadcastError] = useState<string | undefined>()
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmChecked, setConfirmChecked] = useState(false)
+
+  // ─── Config status check ────────────────────────────────────────────────
+
+  const checkConfigStatus = useCallback(async (): Promise<{ configured: boolean; reachable: boolean }> => {
+    setWaConfigChecking(true)
+    try {
+      const data = await apiFetch<{ configured: boolean; reachable: boolean }>(
+        '/api/v1/whatsapp/setup/config-status',
+      )
+      setWaConfigStatus(data)
+      return data
+    } catch {
+      const fallback = { configured: false, reachable: false }
+      setWaConfigStatus(fallback)
+      return fallback
+    } finally {
+      setWaConfigChecking(false)
+    }
+  }, [])
 
   // ─── QR fetch and polling ───────────────────────────────────────────────
 
@@ -262,7 +283,6 @@ export default function ProfessorDashboardPage() {
       if (data.code) {
         setQrCode(data.code)
         setQrExpired(false)
-        // Reset the 60s countdown each time we get a fresh QR
         if (countdownRef.current) clearInterval(countdownRef.current)
         setCountdown(60)
         countdownRef.current = setInterval(() => {
@@ -275,13 +295,16 @@ export default function ProfessorDashboardPage() {
             return prev - 1
           })
         }, 1000)
+      } else if (data.simulated) {
+        setQrCode(null)
+        setQrError('Evolution API não configurada. Defina EVOLUTION_API_URL nas variáveis de ambiente do Railway.')
       } else {
         setQrCode(null)
-        setQrError('Evolution API não respondeu. Verifique a configuração.')
+        setQrError('Evolution API não respondeu. Verifique se o serviço está a correr.')
       }
     } catch {
       setQrCode(null)
-      setQrError('Evolution API não respondeu. Verifique a configuração.')
+      setQrError('Erro ao contactar a Evolution API. Verifique a configuração.')
     } finally {
       setQrLoading(false)
     }
@@ -318,9 +341,11 @@ export default function ProfessorDashboardPage() {
 
   useEffect(() => {
     if (steps[3].status !== 'active') return
-    // Defer slightly so state updates land after render
-    const initTimer = setTimeout(() => {
-      if (!qrConnected) startCountdown()
+    const initTimer = setTimeout(async () => {
+      const cfg = await checkConfigStatus()
+      if (cfg.configured && cfg.reachable && !qrConnected) {
+        startCountdown()
+      }
     }, 0)
     return () => {
       clearTimeout(initTimer)
@@ -328,7 +353,6 @@ export default function ProfessorDashboardPage() {
       if (qrPollRef.current) clearInterval(qrPollRef.current)
       if (statusPollRef.current) clearInterval(statusPollRef.current)
     }
-    // Only re-run when step 4 status changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [steps[3].status])
 
@@ -775,6 +799,44 @@ export default function ProfessorDashboardPage() {
                 <div className="flex items-center gap-2 text-sm text-success">
                   <CheckCircle className="size-4 shrink-0" />
                   <span>WhatsApp conectado! A avançar para o passo seguinte…</span>
+                </div>
+              ) : waConfigChecking ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <RefreshCw className="size-4 animate-spin" />
+                  <span>A verificar configuração da Evolution API…</span>
+                </div>
+              ) : waConfigStatus && !waConfigStatus.configured ? (
+                <div className="flex flex-col gap-3">
+                  <div role="alert" className="bg-destructive/10 border border-destructive/20 rounded-md px-4 py-3 text-sm text-destructive">
+                    <p className="font-semibold mb-1">Evolution API não configurada</p>
+                    <p className="text-xs text-destructive/80">
+                      Para enviar notificações WhatsApp, é necessário adicionar um serviço Evolution API ao Railway e configurar as seguintes variáveis de ambiente neste serviço:
+                    </p>
+                  </div>
+                  <div className="bg-muted rounded-md px-4 py-3 text-xs font-mono space-y-1">
+                    <p><span className="text-primary">EVOLUTION_API_URL</span>=https://&lt;seu-serviço-evolution&gt;.railway.app</p>
+                    <p><span className="text-primary">EVOLUTION_API_KEY</span>=&lt;chave-secreta&gt;</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    No Railway: adicione um novo serviço com a imagem <code className="bg-muted px-1 rounded">atendai/evolution-api:latest</code>, configure as variáveis acima, e defina <code className="bg-muted px-1 rounded">RAILWAY_PUBLIC_DOMAIN</code> ou <code className="bg-muted px-1 rounded">APP_URL</code> neste serviço para que o webhook seja configurado automaticamente.
+                  </p>
+                </div>
+              ) : waConfigStatus && waConfigStatus.configured && !waConfigStatus.reachable ? (
+                <div className="flex flex-col gap-3">
+                  <div role="alert" className="bg-warning/10 border border-warning/20 rounded-md px-4 py-3 text-sm text-warning">
+                    <p className="font-semibold mb-1">Evolution API inacessível</p>
+                    <p className="text-xs">
+                      A variável <code className="bg-warning/20 px-1 rounded">EVOLUTION_API_URL</code> está definida mas o serviço não está a responder. Verifique se o serviço Evolution API está a correr no Railway.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { void checkConfigStatus().then((cfg) => { if (cfg.configured && cfg.reachable) startCountdown() }) }}
+                    className="self-start gap-2"
+                  >
+                    <RefreshCw className="size-4" /> Tentar novamente
+                  </Button>
                 </div>
               ) : (
                 <div className="flex flex-col items-start gap-4 sm:flex-row">
