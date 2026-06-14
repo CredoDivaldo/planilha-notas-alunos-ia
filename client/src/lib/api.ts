@@ -17,6 +17,12 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   })
 
   if (!res.ok) {
+    if (res.status === 401) {
+      // Session expired or invalidated — clear stale token and redirect to login
+      localStorage.removeItem('auth_user')
+      window.location.href = '/login'
+      throw new Error('Sessão expirada. Redireccionando para o login...')
+    }
     const err = await res.json().catch(() => ({ detail: res.statusText })) as { detail?: string }
     throw new Error(err.detail ?? `Request failed: ${res.status}`)
   }
