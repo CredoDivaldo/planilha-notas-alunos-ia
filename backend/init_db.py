@@ -17,7 +17,14 @@ LOGGER = logging.getLogger("backend.init_db")
 
 
 def main() -> None:
-    db_url = os.environ.get("ACADEMIC_DATABASE_URL", "sqlite:///data/app.sqlite3")
+    db_url = (
+        os.environ.get("ACADEMIC_DATABASE_URL")
+        or os.environ.get("DATABASE_URL")
+        or os.environ.get("POSTGRES_URL")
+        or "sqlite:///data/app.sqlite3"
+    )
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
 
     from sqlalchemy import create_engine, inspect as sa_inspect, text
 

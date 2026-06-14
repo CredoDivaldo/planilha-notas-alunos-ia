@@ -73,10 +73,11 @@ def _get_engine(request: Request):
 def _ensure_whatsapp_instance_column(engine) -> None:
     """Add whatsapp_instance column to users if it doesn't exist (idempotent)."""
     try:
-        with engine.connect() as conn:
-            columns = conn.execute(text("PRAGMA table_info(users)")).fetchall()
-            col_names = [c[1] for c in columns]
-            if "whatsapp_instance" not in col_names:
+        from sqlalchemy import inspect as sa_inspect
+        inspector = sa_inspect(engine)
+        col_names = [c["name"] for c in inspector.get_columns("users")]
+        if "whatsapp_instance" not in col_names:
+            with engine.connect() as conn:
                 conn.execute(text("ALTER TABLE users ADD COLUMN whatsapp_instance VARCHAR(120)"))
                 conn.commit()
     except Exception as exc:

@@ -56,9 +56,11 @@ def _get_engine(request: Request):
 def _ensure_context_id_column(engine) -> None:
     """Add context_id column to calendar_events if it does not yet exist."""
     try:
-        with engine.connect() as conn:
-            cols = [row[1] for row in conn.execute(text("PRAGMA table_info(calendar_events)")).fetchall()]
-            if "context_id" not in cols:
+        from sqlalchemy import inspect as sa_inspect
+        inspector = sa_inspect(engine)
+        cols = [c["name"] for c in inspector.get_columns("calendar_events")]
+        if "context_id" not in cols:
+            with engine.connect() as conn:
                 conn.execute(text("ALTER TABLE calendar_events ADD COLUMN context_id VARCHAR(120)"))
                 conn.commit()
                 LOGGER.info("calendar_events.context_id column added")

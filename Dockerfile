@@ -22,9 +22,10 @@ FROM python:3.12-slim AS backend
 
 WORKDIR /app
 
-# System deps
+# System deps (libpq-dev needed for psycopg2-binary)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Python deps
@@ -33,6 +34,7 @@ RUN pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache
     "fastapi>=0.115,<1" \
     "uvicorn[standard]>=0.30,<1" \
     "sqlalchemy>=2,<3" \
+    "psycopg2-binary>=2.9,<3" \
     "pydantic>=2,<3" \
     "argon2-cffi>=23,<25" \
     "python-multipart>=0.0.9,<1" \
@@ -47,10 +49,9 @@ COPY backend/ ./backend/
 COPY alembic.ini ./
 COPY --from=frontend-builder /app/public/ ./public/
 
-# Ensure data directory exists for SQLite
+# Keep data dir for SQLite fallback (when no PostgreSQL configured)
 RUN mkdir -p /app/data
 
-ENV ACADEMIC_DATABASE_URL="sqlite:////app/data/app.sqlite3"
 ENV PORT=8000
 
 EXPOSE 8000
