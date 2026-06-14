@@ -18,10 +18,13 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   if (!res.ok) {
     if (res.status === 401) {
-      // Session expired or invalidated — clear stale token and redirect to login
+      // Only redirect when there was a stored session and we're not already on /login
+      const hadToken = !!localStorage.getItem('auth_user')
       localStorage.removeItem('auth_user')
-      window.location.href = '/login'
-      throw new Error('Sessão expirada. Redireccionando para o login...')
+      if (hadToken && !window.location.pathname.includes('/login')) {
+        window.location.href = '/login'
+      }
+      throw new Error('Sessão expirada. Volta a fazer login.')
     }
     const err = await res.json().catch(() => ({ detail: res.statusText })) as { detail?: string }
     throw new Error(err.detail ?? `Request failed: ${res.status}`)
