@@ -274,6 +274,42 @@ async def setup_webhook(body: SetupWebhookRequest, request: Request) -> SetupWeb
     return SetupWebhookResponse(configured=True, webhook_url=body.webhook_url)
 
 
+class TestSendRequest(BaseModel):
+    phone: str
+    message: str = "UniGrade: mensagem de teste ✓"
+
+
+class TestSendResponse(BaseModel):
+    ok: bool
+    instance_used: str
+    detail: str
+
+
+@router.post("/test-send", response_model=TestSendResponse)
+async def test_send(body: TestSendRequest, request: Request) -> TestSendResponse:
+    """Debug: send a test message via the professor's instance."""
+    prof_id = _get_professor_id(request)
+    engine = _get_engine(request)
+    instance_name = _get_professor_instance(engine, prof_id)
+    base_url = os.getenv("EVOLUTION_API_URL") or os.getenv("EVOLUTION_BASE_URL")
+    api_key = os.getenv("EVOLUTION_API_KEY") or ""
+
+    if not base_url:
+        return TestSendResponse(ok=False, instance_used=instance_name, detail="Evolution não configurado")
+
+    import httpx
+    url = f"{base_url.rstrip('/')}/message/sendText/{instance_name}"
+    payload = {"number": body.phone, "textMessage": {"text": body.message}}
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(url, json=payload, headers={"apikey": api_key, "Content-Type": "application/json"})
+        if resp.status_code < 300:
+            return TestSendResponse(ok=True, instance_used=instance_name, detail=resp.text[:300])
+        return TestSendResponse(ok=False, instance_used=instance_name, detail=f"HTTP {resp.status_code}: {resp.text[:300]}")
+    except Exception as exc:
+        return TestSendResponse(ok=False, instance_used=instance_name, detail=str(exc)[:300])
+
+
 @router.post("/disconnect", response_model=SetupDisconnectResponse)
 async def setup_disconnect(request: Request) -> SetupDisconnectResponse:
     """Logout/disconnect the professor's WhatsApp instance."""
