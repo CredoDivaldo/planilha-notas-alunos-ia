@@ -144,7 +144,7 @@ async def get_grades(context_id: int, request: Request) -> GradesListOut:
                 " FROM class_enrollments ce"
                 " JOIN students st ON st.id = ce.student_id"
                 " WHERE ce.academic_context_id = :cid"
-                "   AND (ce.status IS NULL OR ce.status = 'active')"
+                "   AND (ce.enrollment_status IS NULL OR ce.enrollment_status = 'active')"
                 " ORDER BY st.student_number"
             ),
             {"cid": context_id},

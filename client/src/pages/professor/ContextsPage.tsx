@@ -181,7 +181,7 @@ export default function ContextsPage() {
         : null
       const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
       const res = await fetch(
-        `${base}/students/upload?context_id=${selectedContext.id}`,
+        `${base}/api/v1/students/upload?context_id=${selectedContext.id}`,
         {
           method: 'POST',
           headers: token ? { Authorization: `Bearer ${token}` } : {},
