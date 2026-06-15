@@ -24,16 +24,32 @@ from backend.app.models.publication import (
     PublicationSnapshot,
     PublishedCalendarSnapshot,
 )
+from backend.app.models.roster import (
+    AssessmentDefinition,
+    ClassGroup,
+    Course,
+    Professor,
+    Student,
+    Subject,
+    TeachingAssignment,
+)
 
 __all__ = [
     "AcademicContext",
+    "AssessmentDefinition",
     "AuditLog",
     "Base",
     "BroadcastJob",
     "CalculationResult",
     "ClassEnrollment",
+    "ClassGroup",
     "ContextSubjectConfiguration",
+    "Course",
     "GradeEntry",
+    "Professor",
+    "Student",
+    "Subject",
+    "TeachingAssignment",
     "LegacyGrade",
     "LegacyStudent",
     "LegacyUpload",

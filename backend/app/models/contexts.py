@@ -149,6 +149,8 @@ class AcademicContext(Base, TimestampMixin):
     )
     # Notes or additional metadata about this context
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # FK: teaching_assignments.id — 1:1 link to the normalized scoping entity
+    teaching_assignment_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class ClassEnrollment(Base, TimestampMixin):
