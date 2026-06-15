@@ -7,10 +7,12 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     ? (JSON.parse(stored) as { token: string }).token
     : null
 
+  // Don't set Content-Type for FormData — browser must set it with the multipart boundary
+  const isFormData = options.body instanceof FormData
   const res = await fetch(`${base}${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
@@ -26,8 +28,14 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
       }
       throw new Error('Sessão expirada. Volta a fazer login.')
     }
-    const err = await res.json().catch(() => ({ detail: res.statusText })) as { detail?: string }
-    throw new Error(err.detail ?? `Request failed: ${res.status}`)
+    const err = await res.json().catch(() => ({ detail: res.statusText })) as { detail?: unknown }
+    const detail = err.detail
+    const message = typeof detail === 'string'
+      ? detail
+      : Array.isArray(detail)
+        ? detail.map((e: { msg?: string }) => e?.msg ?? JSON.stringify(e)).join('; ')
+        : `Request failed: ${res.status}`
+    throw new Error(message)
   }
 
   if (res.status === 204) {

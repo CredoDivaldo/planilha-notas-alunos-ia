@@ -126,9 +126,7 @@ export default function GradesPage() {
       try {
         const formData = new FormData()
         formData.append('file', file)
-        formData.append('component_id', componentId)
-        formData.append('context_id', contextItem.id)
-        const res = await apiFetch<{ imported: number; unmatched: number }>('/api/v1/grades/upload', {
+        const res = await apiFetch<{ count: number; grades: unknown[] }>(`/api/v1/grades/upload?context_id=${contextItem.id}`, {
           method: 'POST',
           body: formData,
           headers: {},
@@ -137,12 +135,12 @@ export default function GradesPage() {
           id: crypto.randomUUID(),
           componentName: compName,
           timestamp: new Date().toISOString(),
-          count: res.imported,
+          count: res.count,
         }
         setImportHistory((prev) => [entry, ...prev].slice(0, 10))
-        showStatus(`${res.imported} notas importadas para ${compName}`, 'success')
+        showStatus(`${res.count} notas importadas para ${compName}`, 'success')
         if (activeContextId) void loadData(activeContextId)
-        return res
+        return { imported: res.count, unmatched: 0 }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Erro ao importar notas'
         showStatus(`Erro: ${errorMsg}`, 'error')
