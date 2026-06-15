@@ -150,6 +150,19 @@ async def get_grades(context_id: int, request: Request) -> GradesListOut:
             {"cid": context_id},
         ).fetchall()
 
+        # Fall back to legacy_students when no class_enrollments exist for this context
+        use_legacy = len(enrolled_rows) == 0
+        if use_legacy:
+            legacy_rows = conn.execute(
+                text(
+                    "SELECT id, student_number, name, whatsapp"
+                    " FROM legacy_students WHERE academic_context_id = :cid"
+                    " ORDER BY student_number"
+                ),
+                {"cid": context_id},
+            ).fetchall()
+            enrolled_rows = [(r[0], r[1], r[2], r[3]) for r in legacy_rows]
+
         # Build student rows
         student_rows: list[StudentRowOut] = []
         for student_id, student_number, full_name, phone in enrolled_rows:
@@ -159,9 +172,24 @@ async def get_grades(context_id: int, request: Request) -> GradesListOut:
             for ad_id, _ in assessment_defs:
                 components[ad_id] = GradeValueOut(gradeId="", value=None)
 
-            # Fill in actual grades
+            # Fill legacy grade value when using legacy path
             grade_rows = []
-            if ta_row:
+            if use_legacy:
+                lg_rows = conn.execute(
+                    text(
+                        "SELECT id, subject, value FROM legacy_grades"
+                        " WHERE academic_context_id = :cid AND student_number = :sn"
+                    ),
+                    {"cid": context_id, "sn": student_number},
+                ).fetchall()
+                if lg_rows and assessment_defs:
+                    for i, (lg_id, lg_subject, lg_value) in enumerate(lg_rows):
+                        ad_id = assessment_defs[i][0] if i < len(assessment_defs) else str(i)
+                        try:
+                            components[ad_id] = GradeValueOut(gradeId=str(lg_id), value=float(lg_value))
+                        except (TypeError, ValueError):
+                            components[ad_id] = GradeValueOut(gradeId=str(lg_id), value=None)
+            elif ta_row:
                 grade_rows = conn.execute(
                     text(
                         "SELECT id, assessment_definition_id, raw_value, status"
@@ -178,7 +206,6 @@ async def get_grades(context_id: int, request: Request) -> GradesListOut:
                             value=float(raw_value) if raw_value is not None else None,
                         )
 
-            # A student is published only when at least one grade has been formally approved
             published = any(gs == "approved" for _, _, _, gs in grade_rows)
 
             student_rows.append(StudentRowOut(

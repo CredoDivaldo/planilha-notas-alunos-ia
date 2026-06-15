@@ -203,6 +203,7 @@ async def _legacy_broadcast(
     context_id: int,
     dry_run: bool,
     message_template: str | None,
+    prof_user_id: int | None = None,
 ) -> dict[str, Any]:
     """Broadcast grades using LegacyGrade + LegacyStudent when no GradeEntry exists.
 
@@ -226,7 +227,19 @@ async def _legacy_broadcast(
 
     sent = 0
     failures: list[dict] = []
+    # Use the professor's own WhatsApp instance (prof-{id}) if available
     instance = _default_instance()
+    if prof_user_id is not None:
+        try:
+            from sqlalchemy import text as _text
+            row = session.execute(
+                _text("SELECT whatsapp_instance FROM users WHERE id = :uid LIMIT 1"),
+                {"uid": prof_user_id},
+            ).fetchone()
+            if row and row[0]:
+                instance = row[0]
+        except Exception:
+            pass
 
     for grade in grades:
         if not grade.student_number:
@@ -332,6 +345,24 @@ async def broadcast(request: Request, payload: BroadcastRequest) -> BroadcastRes
     session = _get_session(request)
     dry_run = payload.dry_run or payload.mode == "simulation"
 
+    # Extract authenticated professor's user_id from Bearer token
+    _prof_user_id: int | None = None
+    try:
+        from datetime import UTC, datetime
+        from sqlalchemy import text as _text
+        _auth = request.headers.get("authorization", "")
+        _sid = _auth.removeprefix("Bearer ").strip() if _auth.startswith("Bearer ") else None
+        if _sid:
+            _now = datetime.now(UTC).replace(tzinfo=None)
+            _row = session.execute(
+                _text("SELECT user_id FROM user_sessions WHERE id = :sid AND is_active = true AND expires_at > :now LIMIT 1"),
+                {"sid": _sid, "now": _now},
+            ).fetchone()
+            if _row:
+                _prof_user_id = int(_row[0])
+    except Exception:
+        pass
+
     teaching_assignment_id = payload.teaching_assignment_id
     if teaching_assignment_id is None and payload.context_id is not None:
         teaching_assignment_id = _resolve_teaching_assignment_id(
@@ -346,6 +377,7 @@ async def broadcast(request: Request, payload: BroadcastRequest) -> BroadcastRes
                 context_id=payload.context_id,
                 dry_run=dry_run,
                 message_template=payload.message_template,
+                prof_user_id=_prof_user_id,
             )
         except Exception as exc:
             LOGGER.exception("legacy_broadcast_failed")
