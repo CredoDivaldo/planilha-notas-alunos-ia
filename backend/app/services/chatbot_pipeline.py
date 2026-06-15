@@ -117,7 +117,7 @@ class ChatbotPipeline:
             self._log_interaction(session, normalized_phone, None, "unknown_number", request_id)
             return outcome_dict
 
-        student_id, student_number, full_name = student_row
+        student_id, student_number, full_name, is_legacy = student_row
 
         # AC-2: Check rate limit
         if self.rate_limiter.is_blocked(normalized_phone):
@@ -145,7 +145,8 @@ class ChatbotPipeline:
 
         # Story 6.2: Generate AI response
         ai_result = self.ai_service.generate_grade_response(
-            session, student_id, student_number, message_text, request_id=request_id
+            session, student_id, student_number, message_text,
+            request_id=request_id, is_legacy=is_legacy,
         )
 
         response_message = ai_result["response"]
@@ -200,18 +201,15 @@ class ChatbotPipeline:
         session: Session,
         normalized_phone: str,
         request_id: str | None = None,
-    ) -> tuple[int, str, str] | None:
+    ) -> tuple[int, str, str, bool] | None:
         """Identify student by phone.
 
-        AC-4: Lookup student in database.
-
-        Args:
-            session: SQLAlchemy session
-            normalized_phone: Normalized phone number
-            request_id: Optional correlation ID
+        AC-4: Lookup student in database. Tries the normalised ``students``
+        table first, then falls back to the legacy CSV ``legacy_students``
+        table (matched on the digits of the stored whatsapp number).
 
         Returns:
-            Tuple (student_id, student_number, full_name) or None if not found
+            Tuple (student_id, student_number, full_name, is_legacy) or None.
         """
         try:
             from sqlalchemy import text
@@ -222,15 +220,27 @@ class ChatbotPipeline:
                 ),
                 {"phone": normalized_phone},
             ).fetchone()
+            if row:
+                return (row[0], row[1], row[2], False)
 
-            if not row:
-                LOGGER.debug(
-                    "chatbot_student_not_found",
-                    extra={"normalized_phone": normalized_phone, "request_id": request_id},
+            # Fallback: legacy_students. The whatsapp column may contain
+            # formatting, so compare on digits only.
+            legacy_rows = session.execute(
+                text(
+                    "SELECT id, student_number, name, whatsapp FROM legacy_students"
+                    " WHERE whatsapp IS NOT NULL"
                 )
-                return None
+            ).fetchall()
+            for lr in legacy_rows:
+                digits = "".join(ch for ch in str(lr[3] or "") if ch.isdigit())
+                if digits and digits == normalized_phone:
+                    return (lr[0], lr[1], lr[2], True)
 
-            return tuple(row)
+            LOGGER.debug(
+                "chatbot_student_not_found",
+                extra={"normalized_phone": normalized_phone, "request_id": request_id},
+            )
+            return None
 
         except Exception as exc:
             LOGGER.error(

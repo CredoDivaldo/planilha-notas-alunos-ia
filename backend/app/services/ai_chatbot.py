@@ -217,6 +217,7 @@ class AIGradeQueryService:
         message: str,
         *,
         request_id: str | None = None,
+        is_legacy: bool = False,
     ) -> dict[str, Any]:
         """Generate AI response to student's grade question.
 
@@ -243,9 +244,14 @@ class AIGradeQueryService:
             }
         """
         # AC-1: Fetch student's published grades (publication_snapshots)
-        grades_context = self._fetch_grades_context(
-            session, student_id, request_id=request_id
-        )
+        if is_legacy:
+            grades_context = self._fetch_legacy_grades_context(
+                session, student_number, request_id=request_id
+            )
+        else:
+            grades_context = self._fetch_grades_context(
+                session, student_id, request_id=request_id
+            )
 
         # AC-4: If no published grades, return graceful message
         if not grades_context or grades_context.strip() == "":
@@ -396,6 +402,115 @@ class AIGradeQueryService:
                 "grades_context_fetch_error",
                 extra={
                     "student_id": student_id,
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                    "request_id": request_id,
+                },
+            )
+            return ""
+
+    def _fetch_legacy_grades_context(
+        self,
+        session: Session,
+        student_number: str,
+        *,
+        request_id: str | None = None,
+    ) -> str:
+        """Fetch grades for a legacy (CSV-imported) student.
+
+        Reads ``legacy_grades`` grouped by academic context, computes the
+        weighted final grade from each context's ``components_json``, and
+        formats a context string for the AI prompt.
+        """
+        try:
+            import json as _json
+
+            from sqlalchemy import text
+
+            from backend.app.services.legacy_grades_helper import (
+                compute_final_grade,
+                map_legacy_grades_to_components,
+            )
+
+            grade_rows = session.execute(
+                text(
+                    "SELECT academic_context_id, subject, value FROM legacy_grades"
+                    " WHERE student_number = :sn"
+                ),
+                {"sn": student_number},
+            ).fetchall()
+
+            if not grade_rows:
+                return ""
+
+            # Group by academic_context_id
+            by_context: dict[int, list[tuple]] = {}
+            for ctx_id, subject, value in grade_rows:
+                by_context.setdefault(ctx_id, []).append((subject, value))
+
+            context_lines: list[str] = []
+            for ctx_id, rows in by_context.items():
+                ctx_row = session.execute(
+                    text(
+                        "SELECT subject, turma, semester_id, components_json"
+                        " FROM academic_contexts WHERE id = :cid LIMIT 1"
+                    ),
+                    {"cid": ctx_id},
+                ).fetchone()
+                if ctx_row is None:
+                    continue
+                disciplina = ctx_row[0] or ""
+                turma = ctx_row[1] or ""
+                components: list[dict] = []
+                if ctx_row[3]:
+                    try:
+                        components = _json.loads(ctx_row[3])
+                    except Exception:
+                        components = []
+                semestre = ""
+                if ctx_row[2]:
+                    sem_row = session.execute(
+                        text("SELECT name FROM semesters WHERE id = :sid LIMIT 1"),
+                        {"sid": ctx_row[2]},
+                    ).fetchone()
+                    semestre = (sem_row[0] if sem_row else "") or ""
+
+                comp_values = map_legacy_grades_to_components(rows, components)
+                nota_final = compute_final_grade(comp_values, components)
+
+                # Per-component breakdown for richer answers
+                breakdown_parts = []
+                for i, c in enumerate(components):
+                    v = comp_values.get(str(i))
+                    if v is not None:
+                        name = c.get("name", f"C{i+1}")
+                        breakdown_parts.append(f"{name}: {v:g}")
+                breakdown = ", ".join(breakdown_parts) if breakdown_parts else "—"
+
+                if nota_final is None:
+                    nota_str = "Incompleta"
+                    estado = "Incompleta"
+                else:
+                    nota_str = f"{nota_final:g}"
+                    estado = "Aprovado" if nota_final >= 10 else "Reprovado"
+
+                line = (
+                    f"- {disciplina} | "
+                    f"Semestre {semestre} | "
+                    f"Turma {turma} | "
+                    f"Componentes: {breakdown} | "
+                    f"Nota Final: {nota_str} | "
+                    f"Estado: {estado}"
+                )
+                context_lines.append(line)
+
+            return "\n".join(context_lines) if context_lines else ""
+
+        except Exception as exc:
+            LOGGER.error(
+                "legacy_grades_context_fetch_error",
+                extra={
+                    "student_number": student_number,
                     "error_type": type(exc).__name__,
                     "error_message": str(exc),
                     "request_id": request_id,

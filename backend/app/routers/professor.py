@@ -207,58 +207,96 @@ async def _legacy_broadcast(
 ) -> dict[str, Any]:
     """Broadcast grades using LegacyGrade + LegacyStudent when no GradeEntry exists.
 
-    Matches students by student_number and sends a WhatsApp message per matched pair.
+    Groups grades per student, computes the weighted final grade from the
+    context's components_json, and sends ONE WhatsApp message per student
+    with the template placeholders substituted.
     """
-    from sqlalchemy import select
+    import json as _json
+
+    from sqlalchemy import select, text as _text
 
     from backend.app.models.legacy_roster import LegacyGrade, LegacyStudent
+    from backend.app.services.legacy_grades_helper import (
+        compute_final_grade,
+        map_legacy_grades_to_components,
+        render_message_template,
+    )
 
-    grades = session.execute(
-        select(LegacyGrade).where(LegacyGrade.academic_context_id == context_id)
-    ).scalars().all()
+    # Context info: disciplina (subject), semester name, components_json
+    ctx_row = session.execute(
+        _text(
+            "SELECT subject, semester_id, components_json"
+            " FROM academic_contexts WHERE id = :cid LIMIT 1"
+        ),
+        {"cid": context_id},
+    ).fetchone()
+    disciplina = (ctx_row[0] if ctx_row else "") or ""
+    components: list[dict] = []
+    if ctx_row and ctx_row[2]:
+        try:
+            components = _json.loads(ctx_row[2])
+        except Exception:
+            components = []
+    semestre = ""
+    if ctx_row and ctx_row[1]:
+        sem_row = session.execute(
+            _text("SELECT name FROM semesters WHERE id = :sid LIMIT 1"),
+            {"sid": ctx_row[1]},
+        ).fetchone()
+        semestre = (sem_row[0] if sem_row else "") or ""
 
     students = session.execute(
         select(LegacyStudent).where(LegacyStudent.academic_context_id == context_id)
     ).scalars().all()
+    grades = session.execute(
+        select(LegacyGrade).where(LegacyGrade.academic_context_id == context_id)
+    ).scalars().all()
 
-    student_by_number: dict[str, LegacyStudent] = {
-        s.student_number: s for s in students if s.student_number
-    }
+    # Group (subject, value) rows by student_number
+    grades_by_student: dict[str, list[tuple]] = {}
+    for g in grades:
+        if g.student_number:
+            grades_by_student.setdefault(g.student_number, []).append((g.subject, g.value))
 
+    instance = instance_name or _default_instance()
     sent = 0
     failures: list[dict] = []
-    instance = instance_name or _default_instance()
+    recipients = 0
 
-    for grade in grades:
-        if not grade.student_number:
-            continue
-        student = student_by_number.get(grade.student_number)
-        if student is None or not student.whatsapp:
+    for student in students:
+        student_grades = grades_by_student.get(student.student_number or "", [])
+        if not student_grades:
+            continue  # no grades for this student — skip silently
+        recipients += 1
+
+        if not student.whatsapp:
             failures.append({
-                "student_id": str(grade.id),
-                "student_name": grade.name or "",
-                "student_number": grade.student_number or "",
+                "student_id": str(student.id),
+                "student_name": student.name or "",
+                "student_number": student.student_number or "",
                 "reason": "Sem número WhatsApp cadastrado",
             })
             continue
 
-        template = message_template or "Olá {nome}! A sua nota de {disciplina} é {nota}. - UniGrade"
-        student_name = student.name or grade.name or ""
-        subject = grade.subject or ""
-        value = str(grade.value or "")
-        number = grade.student_number or ""
-        msg = (
-            template
-            # Portuguese placeholders (used by the frontend template)
-            .replace("{nome}", student_name)
-            .replace("{disciplina}", subject)
-            .replace("{nota}", value)
-            .replace("{numero}", number)
-            # English aliases (kept for backwards compatibility)
-            .replace("{name}", student_name)
-            .replace("{subject}", subject)
-            .replace("{grade}", value)
-            .replace("{student_number}", number)
+        comp_values = map_legacy_grades_to_components(student_grades, components)
+        nota_final = compute_final_grade(comp_values, components)
+        nota_str = (str(int(nota_final)) if nota_final is not None and nota_final == int(nota_final)
+                    else str(nota_final)) if nota_final is not None else "—"
+        if nota_final is None:
+            resultado = "—"
+        elif nota_final >= 10:
+            resultado = "Aprovado"
+        else:
+            resultado = "Reprovado"
+
+        msg = render_message_template(
+            message_template,
+            nome=student.name or "",
+            disciplina=disciplina,
+            semestre=semestre,
+            nota=nota_str,
+            resultado=resultado,
+            numero=student.student_number or "",
         )
 
         if dry_run:
@@ -271,9 +309,9 @@ async def _legacy_broadcast(
         except Exception as exc:
             LOGGER.warning("legacy_broadcast_send_failed", extra={"error": str(exc), "student": student.student_number})
             failures.append({
-                "student_id": str(grade.id),
-                "student_name": grade.name or "",
-                "student_number": grade.student_number or "",
+                "student_id": str(student.id),
+                "student_name": student.name or "",
+                "student_number": student.student_number or "",
                 "reason": str(exc)[:200],
             })
 
@@ -283,7 +321,7 @@ async def _legacy_broadcast(
         "whatsapp_sent": sent,
         "failures": len(failures),
         "failure_list": failures,
-        "total_recipients": len(grades),
+        "total_recipients": recipients,
     }
 
 

@@ -310,6 +310,52 @@ async def test_send(body: TestSendRequest, request: Request) -> TestSendResponse
         return TestSendResponse(ok=False, instance_used=instance_name, detail=str(exc)[:300])
 
 
+class ReconfigureWebhookResponse(BaseModel):
+    configured: bool
+    instance_name: str
+    webhook_url: str
+    token_set: bool
+
+
+@router.post("/reconfigure-webhook", response_model=ReconfigureWebhookResponse)
+async def reconfigure_webhook(request: Request) -> ReconfigureWebhookResponse:
+    """Re-point the Evolution webhook at the chatbot endpoint for this professor.
+
+    Useful when the instance was created before webhook auto-config existed,
+    or when CHATBOT_WEBHOOK_TOKEN changed. Does NOT recreate the instance,
+    so the existing WhatsApp connection is preserved.
+    """
+    prof_id = _get_professor_id(request)
+    engine = _get_engine(request)
+    instance_name = _get_professor_instance(engine, prof_id)
+
+    app_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN") or os.getenv("APP_URL") or ""
+    if app_domain and not app_domain.startswith("http"):
+        app_domain = f"https://{app_domain}"
+    chatbot_token = os.getenv("CHATBOT_WEBHOOK_TOKEN") or ""
+    webhook_url = f"{app_domain.rstrip('/')}/api/v1/chatbot/webhook"
+    if chatbot_token:
+        webhook_url = f"{webhook_url}?token={chatbot_token}"
+
+    configured = False
+    try:
+        result = await configure_webhook(
+            instance=instance_name,
+            webhook_url=webhook_url,
+            events=["MESSAGES_UPSERT", "CONNECTION_UPDATE"],
+        )
+        configured = result.get("configured", False)
+    except EvolutionApiError as exc:
+        raise HTTPException(status_code=502, detail=f"Evolution API error: {exc.status_code}") from exc
+
+    return ReconfigureWebhookResponse(
+        configured=configured,
+        instance_name=instance_name,
+        webhook_url=webhook_url,
+        token_set=bool(chatbot_token),
+    )
+
+
 @router.post("/disconnect", response_model=SetupDisconnectResponse)
 async def setup_disconnect(request: Request) -> SetupDisconnectResponse:
     """Logout/disconnect the professor's WhatsApp instance."""

@@ -322,6 +322,20 @@ async def receive_webhook(
             {"phone": normalized_phone},
         ).fetchone()
 
+        # Fallback: legacy_students (digits-only comparison)
+        if student_row is None:
+            legacy_rows = session.execute(
+                text(
+                    "SELECT id, student_number, name, whatsapp FROM legacy_students"
+                    " WHERE whatsapp IS NOT NULL"
+                )
+            ).fetchall()
+            for lr in legacy_rows:
+                digits = "".join(ch for ch in str(lr[3] or "") if ch.isdigit())
+                if digits and digits == normalized_phone:
+                    student_row = (lr[0], lr[1], lr[2])
+                    break
+
         # AC-4: Unknown phone — return immediately, no AI call, no data exposed
         if student_row is None:
             LOGGER.warning(
