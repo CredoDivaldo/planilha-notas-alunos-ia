@@ -247,6 +247,7 @@ export default function ProfessorDashboardPage() {
   )
   const [broadcastLoading, setBroadcastLoading] = useState(false)
   const [broadcastError, setBroadcastError] = useState<string | undefined>()
+  const [broadcastFailures, setBroadcastFailures] = useState<Array<{studentName: string; studentNumber: string; reason: string}>>([])
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmChecked, setConfirmChecked] = useState(false)
 
@@ -556,12 +557,13 @@ export default function ProfessorDashboardPage() {
         }
         throw new Error(detail)
       }
-      const data = (await res.json()) as { whatsapp_sent: number; failures: number }
+      const data = (await res.json()) as { whatsapp_sent: number; failures: number; failure_list?: Array<{student_name: string; student_number: string; reason: string}> }
       setStats((prev) => ({
         ...prev,
         enviados: data.whatsapp_sent,
         falhas: data.failures,
       }))
+      setBroadcastFailures((data.failure_list || []).map(f => ({ studentName: f.student_name, studentNumber: f.student_number, reason: f.reason })))
       dispatch({ type: 'COMPLETE', index: 4 })
     } catch (err) {
       setBroadcastError(err instanceof Error ? err.message : 'Erro ao disparar.')
@@ -1012,6 +1014,22 @@ export default function ProfessorDashboardPage() {
                     >
                       {broadcastError}
                     </p>
+                  )}
+
+                  {broadcastFailures.length > 0 && (
+                    <div className="rounded-md border border-destructive/30 overflow-hidden text-sm">
+                      <div className="bg-destructive/10 px-3 py-2 font-medium text-destructive">
+                        {broadcastFailures.length} falha(s) de envio
+                      </div>
+                      <div className="divide-y divide-border max-h-48 overflow-y-auto">
+                        {broadcastFailures.map((f, i) => (
+                          <div key={i} className="px-3 py-2 flex items-start justify-between gap-2">
+                            <span className="text-foreground">{f.studentName} <span className="text-muted-foreground font-mono text-xs">({f.studentNumber})</span></span>
+                            <span className="text-destructive text-xs shrink-0">{f.reason}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
 
                   <div className="flex items-center gap-3 flex-wrap">
