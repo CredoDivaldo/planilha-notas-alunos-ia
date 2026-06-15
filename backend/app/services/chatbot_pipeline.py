@@ -64,6 +64,7 @@ class ChatbotPipeline:
         instance: str = "default",
         *,
         request_id: str | None = None,
+        push_name: str | None = None,
     ) -> dict[str, Any]:
         """Process a chatbot message end-to-end.
 
@@ -93,17 +94,21 @@ class ChatbotPipeline:
         """
         timestamp = datetime.now(UTC).isoformat()
 
-        # AC-4: Identify student by phone
-        student_row = self._identify_student(session, normalized_phone, request_id)
+        # AC-4: Identify student by phone (or pushName when WhatsApp sends @lid)
+        student_row = self._identify_student(
+            session, normalized_phone, push_name=push_name, request_id=request_id
+        )
 
         if not student_row:
-            # Unknown number: send registration message
-            await send_whatsapp_text(
-                instance=instance,
-                phone_number=normalized_phone,
-                message=UNKNOWN_NUMBER_MSG,
-                request_id=request_id,
-            )
+            # Unknown number: send registration message (only if we have a
+            # destination phone — with @lid and no match we can't reply)
+            if normalized_phone:
+                await send_whatsapp_text(
+                    instance=instance,
+                    phone_number=normalized_phone,
+                    message=UNKNOWN_NUMBER_MSG,
+                    request_id=request_id,
+                )
 
             outcome_dict = {
                 "outcome": "unknown_number",
@@ -117,7 +122,10 @@ class ChatbotPipeline:
             self._log_interaction(session, normalized_phone, None, "unknown_number", request_id)
             return outcome_dict
 
-        student_id, student_number, full_name, is_legacy = student_row
+        student_id, student_number, full_name, is_legacy, reply_phone = student_row
+        # Use the phone from the matched record as the reply destination
+        # (the inbound @lid is not a real phone number).
+        normalized_phone = reply_phone or normalized_phone
 
         # AC-2: Check rate limit
         if self.rate_limiter.is_blocked(normalized_phone):
@@ -200,45 +208,71 @@ class ChatbotPipeline:
     def _identify_student(
         session: Session,
         normalized_phone: str,
+        push_name: str | None = None,
         request_id: str | None = None,
-    ) -> tuple[int, str, str, bool] | None:
-        """Identify student by phone.
+    ) -> tuple[int, str, str, bool, str] | None:
+        """Identify student by phone, or by WhatsApp pushName when the
+        inbound JID is a @lid (Linked ID) with no real phone number.
 
-        AC-4: Lookup student in database. Tries the normalised ``students``
-        table first, then falls back to the legacy CSV ``legacy_students``
-        table (matched on the digits of the stored whatsapp number).
+        Resolution order:
+          1. ``students`` table by phone
+          2. ``legacy_students`` by phone (digits-only compare)
+          3. ``legacy_students`` by normalised pushName (unambiguous match)
 
         Returns:
-            Tuple (student_id, student_number, full_name, is_legacy) or None.
+            (student_id, student_number, full_name, is_legacy, reply_phone)
+            where ``reply_phone`` is the destination number to answer on,
+            taken from the matched record. None if not identified.
         """
         try:
             from sqlalchemy import text
 
-            row = session.execute(
-                text(
-                    "SELECT id, student_number, full_name FROM students WHERE phone = :phone"
-                ),
-                {"phone": normalized_phone},
-            ).fetchone()
-            if row:
-                return (row[0], row[1], row[2], False)
+            if normalized_phone:
+                row = session.execute(
+                    text(
+                        "SELECT id, student_number, full_name, phone FROM students WHERE phone = :phone"
+                    ),
+                    {"phone": normalized_phone},
+                ).fetchone()
+                if row:
+                    return (row[0], row[1], row[2], False, row[3] or normalized_phone)
 
-            # Fallback: legacy_students. The whatsapp column may contain
-            # formatting, so compare on digits only.
             legacy_rows = session.execute(
                 text(
                     "SELECT id, student_number, name, whatsapp FROM legacy_students"
-                    " WHERE whatsapp IS NOT NULL"
                 )
             ).fetchall()
-            for lr in legacy_rows:
-                digits = "".join(ch for ch in str(lr[3] or "") if ch.isdigit())
-                if digits and digits == normalized_phone:
-                    return (lr[0], lr[1], lr[2], True)
+
+            # 2. Phone match (digits only)
+            if normalized_phone:
+                for lr in legacy_rows:
+                    digits = "".join(ch for ch in str(lr[3] or "") if ch.isdigit())
+                    if digits and digits == normalized_phone:
+                        return (lr[0], lr[1], lr[2], True, digits)
+
+            # 3. pushName match (for the @lid case). Requires an unambiguous,
+            # single name match with a usable reply phone on record.
+            if push_name:
+                from backend.app.services.legacy_import import normalize_name
+
+                target = normalize_name(push_name)
+                matches = [
+                    lr for lr in legacy_rows
+                    if target and normalize_name(lr[2] or "") == target
+                ]
+                if len(matches) == 1:
+                    lr = matches[0]
+                    reply = "".join(ch for ch in str(lr[3] or "") if ch.isdigit())
+                    if reply:
+                        LOGGER.info(
+                            "chatbot_identified_by_pushname",
+                            extra={"push_name": push_name, "student_number": lr[1], "request_id": request_id},
+                        )
+                        return (lr[0], lr[1], lr[2], True, reply)
 
             LOGGER.debug(
                 "chatbot_student_not_found",
-                extra={"normalized_phone": normalized_phone, "request_id": request_id},
+                extra={"normalized_phone": normalized_phone, "push_name": push_name, "request_id": request_id},
             )
             return None
 

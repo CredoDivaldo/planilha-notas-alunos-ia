@@ -258,13 +258,6 @@ async def receive_webhook(
             request_id=request_id,
         )
 
-    # DEBUG: dump the full payload to find where the real phone number lives
-    try:
-        import json as _json
-        LOGGER.warning("webhook_full_payload %s", _json.dumps(payload_data)[:2000])
-    except Exception:
-        pass
-
     # Extract sender phone from remoteJid
     data = payload_data.get("data", {})
     key = data.get("key", {})
@@ -334,7 +327,11 @@ async def receive_webhook(
         if normalized_phone:
             break
 
-    if not normalized_phone:
+    # WhatsApp pushName — used to identify the student when the inbound JID
+    # is a @lid and no real phone number is present in the payload.
+    push_name = data.get("pushName") or ""
+
+    if not normalized_phone and not push_name:
         LOGGER.warning(
             "webhook_invalid_phone",
             extra={
@@ -351,25 +348,35 @@ async def receive_webhook(
     # Get database session
     session = get_db_session(request)
     try:
-        # Query students table by normalized phone
-        student_row = session.execute(
-            text("SELECT id, student_number, full_name FROM students WHERE phone = :phone"),
-            {"phone": normalized_phone},
-        ).fetchone()
+        from backend.app.services.legacy_import import normalize_name
 
-        # Fallback: legacy_students (digits-only comparison)
+        # Query students table by normalized phone
+        student_row = None
+        if normalized_phone:
+            student_row = session.execute(
+                text("SELECT id, student_number, full_name FROM students WHERE phone = :phone"),
+                {"phone": normalized_phone},
+            ).fetchone()
+
+        # Fallback: legacy_students by phone (digits), then by pushName
         if student_row is None:
             legacy_rows = session.execute(
-                text(
-                    "SELECT id, student_number, name, whatsapp FROM legacy_students"
-                    " WHERE whatsapp IS NOT NULL"
-                )
+                text("SELECT id, student_number, name, whatsapp FROM legacy_students")
             ).fetchall()
-            for lr in legacy_rows:
-                digits = "".join(ch for ch in str(lr[3] or "") if ch.isdigit())
-                if digits and digits == normalized_phone:
-                    student_row = (lr[0], lr[1], lr[2])
-                    break
+            if normalized_phone:
+                for lr in legacy_rows:
+                    digits = "".join(ch for ch in str(lr[3] or "") if ch.isdigit())
+                    if digits and digits == normalized_phone:
+                        student_row = (lr[0], lr[1], lr[2])
+                        break
+            if student_row is None and push_name:
+                target = normalize_name(push_name)
+                name_matches = [
+                    lr for lr in legacy_rows
+                    if target and normalize_name(lr[2] or "") == target
+                ]
+                if len(name_matches) == 1:
+                    student_row = (name_matches[0][0], name_matches[0][1], name_matches[0][2])
 
         # AC-4: Unknown phone — return immediately, no AI call, no data exposed
         if student_row is None:
@@ -377,6 +384,7 @@ async def receive_webhook(
                 "webhook_unknown_phone",
                 extra={
                     "normalized_phone": normalized_phone,
+                    "push_name": push_name,
                     "request_id": request_id,
                 },
             )
@@ -403,6 +411,7 @@ async def receive_webhook(
                 message_text,
                 instance=instance,
                 request_id=request_id,
+                push_name=push_name,
             )
 
             LOGGER.info(
