@@ -22,7 +22,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.app.publication.service import compute_match, trigger_broadcast
 from backend.app.services.evolution_api_client import (
@@ -75,7 +75,14 @@ class BroadcastFailureItem(BaseModel):
 class BroadcastRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    context_id: int = Field(..., description="Academic context identifier")
+    context_id: int | None = Field(None, description="Academic context identifier")
+
+    @field_validator("context_id", mode="before")
+    @classmethod
+    def _coerce_empty_string(cls, v: object) -> object:
+        if v == "" or v is None:
+            return None
+        return v
     audience: Any | None = None  # 'all' | 'approved' | 'rejected' | list[str]
     channels: list[str] = Field(default_factory=lambda: ["portal"])
     message_template: str | None = None

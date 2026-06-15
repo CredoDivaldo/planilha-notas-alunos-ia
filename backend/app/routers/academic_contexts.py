@@ -106,6 +106,45 @@ class ContextUpdateRequest(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _get_or_create_default_ids(conn: Any, sem_id_hint: int | None, shift_id_hint: int | None) -> tuple[int, int]:
+    """Return valid (semester_id, shift_id), creating stub records if the DB is empty."""
+    now = datetime.now(UTC).replace(tzinfo=None)
+
+    if sem_id_hint:
+        sem_id = sem_id_hint
+    else:
+        row = conn.execute(text("SELECT id FROM semesters ORDER BY id LIMIT 1")).fetchone()
+        if row:
+            sem_id = row[0]
+        else:
+            r = conn.execute(
+                text(
+                    "INSERT INTO semesters (code, name, is_active, status, created_at, updated_at)"
+                    " VALUES ('2026', '2026', true, 'active', :now, :now) RETURNING id"
+                ),
+                {"now": now},
+            )
+            sem_id = r.scalar_one()
+
+    if shift_id_hint:
+        shift_id = shift_id_hint
+    else:
+        row = conn.execute(text("SELECT id FROM shifts ORDER BY id LIMIT 1")).fetchone()
+        if row:
+            shift_id = row[0]
+        else:
+            r = conn.execute(
+                text(
+                    "INSERT INTO shifts (code, name, status, created_at, updated_at)"
+                    " VALUES ('DIURNO', 'Diurno', 'active', :now, :now) RETURNING id"
+                ),
+                {"now": now},
+            )
+            shift_id = r.scalar_one()
+
+    return sem_id, shift_id
+
+
 def _build_context_item(conn: Any, row: Any, prof_id: int) -> ContextItemOut:
     ctx_id = row[0]
 
@@ -242,35 +281,30 @@ async def get_context(context_id: int, request: Request) -> ContextItemOut:
 @router.post("/academic-contexts/", status_code=status.HTTP_201_CREATED, response_model=ContextItemOut)
 async def create_context(body: ContextCreateRequest, request: Request) -> ContextItemOut:
     prof_id = _get_professor_id(request)
-    now = datetime.now(UTC).replace(tzinfo=None).isoformat()
-    # Use defaults if not provided
-    sem_id = body.semestre_id or 1
-    shift_id = body.turno_id or 1
-    academic_year = body.academic_year or str(datetime.now(UTC).year)
+    now = datetime.now(UTC).replace(tzinfo=None)
+    academic_year = int(body.academic_year) if body.academic_year else datetime.now(UTC).year
     with _get_conn(request) as conn:
-        # Find or use default class_group_id
-        cg_row = conn.execute(text("SELECT id FROM class_groups LIMIT 1")).fetchone()
-        class_group_id = cg_row[0] if cg_row else 1
+        sem_id, shift_id = _get_or_create_default_ids(conn, body.semestre_id, body.turno_id)
         result = conn.execute(
             text(
                 "INSERT INTO academic_contexts"
-                " (professor_id, academic_year, semester_id, class_group_id, subject,"
+                " (professor_id, academic_year, semester_id, subject,"
                 "  turma, shift_id, created_at, updated_at)"
-                " VALUES (:pid, :ay, :semid, :cgid, :subj, :turma, :shid, :now, :now)"
+                " VALUES (:pid, :ay, :semid, :subj, :turma, :shid, :now, :now)"
+                " RETURNING id"
             ),
             {
                 "pid": prof_id,
                 "ay": academic_year,
                 "semid": sem_id,
-                "cgid": class_group_id,
                 "subj": body.disciplina,
                 "turma": body.turma,
                 "shid": shift_id,
                 "now": now,
             },
         )
+        new_id = result.scalar_one()
         conn.commit()
-        new_id = result.lastrowid
         row = conn.execute(
             text(
                 "SELECT id, professor_id, academic_year, semester_id, class_group_id,"
