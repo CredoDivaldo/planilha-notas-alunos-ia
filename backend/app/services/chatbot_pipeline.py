@@ -271,20 +271,23 @@ class ChatbotPipeline:
         return None
 
     @staticmethod
-    def _get_lid_link(session: Session, lid: str, instance: str | None) -> str | None:
-        """Return the linked student_number for a @lid, or None."""
+    def _get_lid_link(session: Session, lid: str, instance: str | None = None) -> str | None:
+        """Return the linked student_number for a @lid, or None.
+
+        The @lid is unique per contact, so we match on it alone (the saved
+        row carries the instance, but a given @lid maps to one student)."""
         from sqlalchemy import text
         try:
             row = session.execute(
                 text(
                     "SELECT student_number FROM chatbot_lid_links"
-                    " WHERE lid = :lid AND (instance = :inst OR instance IS NULL)"
-                    " ORDER BY (instance = :inst) DESC LIMIT 1"
+                    " WHERE lid = :lid ORDER BY id DESC LIMIT 1"
                 ),
-                {"lid": lid, "inst": instance},
+                {"lid": lid},
             ).fetchone()
             return row[0] if row else None
-        except Exception:
+        except Exception as exc:
+            LOGGER.warning("chatbot_get_lid_link_failed", extra={"error": str(exc), "lid": lid})
             return None
 
     @staticmethod
