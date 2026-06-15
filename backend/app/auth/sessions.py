@@ -72,7 +72,7 @@ def create_session(
         text(
             "INSERT INTO user_sessions (id, user_id, created_at, expires_at, is_active,"
             " ip_address, user_agent)"
-            " VALUES (:id, :user_id, :created_at, :expires_at, 1, :ip_address, :user_agent)"
+            " VALUES (:id, :user_id, :created_at, :expires_at, true, :ip_address, :user_agent)"
         ),
         {
             "id": session_id,
@@ -108,8 +108,8 @@ def rotate_session(
     # Invalidate old session
     conn.execute(
         text(
-            "UPDATE user_sessions SET is_active = 0, rotated_at = :now"
-            " WHERE id = :old_id AND is_active = 1"
+            "UPDATE user_sessions SET is_active = false, rotated_at = :now"
+            " WHERE id = :old_id AND is_active = true"
         ),
         {"now": now.replace(tzinfo=None), "old_id": old_session_id},
     )
@@ -125,7 +125,7 @@ def rotate_session(
 def invalidate_session(conn: Connection, *, session_id: str) -> None:
     """Mark *session_id* as inactive (logout)."""
     conn.execute(
-        text("UPDATE user_sessions SET is_active = 0 WHERE id = :sid"),
+        text("UPDATE user_sessions SET is_active = false WHERE id = :sid"),
         {"sid": session_id},
     )
 
@@ -142,7 +142,7 @@ def get_active_session(conn: Connection, *, session_id: str) -> dict | None:
     row = conn.execute(
         text(
             "SELECT id, user_id, expires_at FROM user_sessions"
-            " WHERE id = :sid AND is_active = 1 AND expires_at > :now"
+            " WHERE id = :sid AND is_active = true AND expires_at > :now"
         ),
         {"sid": session_id, "now": now},
     ).fetchone()

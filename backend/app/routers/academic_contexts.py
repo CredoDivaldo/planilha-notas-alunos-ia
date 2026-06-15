@@ -42,7 +42,7 @@ def _get_professor_id(request: Request) -> int:
         row = conn.execute(
             text(
                 "SELECT user_id FROM user_sessions"
-                " WHERE id = :sid AND is_active = 1 AND expires_at > :now LIMIT 1"
+                " WHERE id = :sid AND is_active = true AND expires_at > :now LIMIT 1"
             ),
             {"sid": session_id, "now": now},
         ).fetchone()

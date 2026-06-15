@@ -155,7 +155,8 @@ async def register(body: RegisterRequest, request: Request, conn: DbConn):
             "  must_change_password, is_active, created_at, updated_at)"
             " VALUES"
             " (:username, :pw_hash, 'professor', :display_name, :institution, :faculty,"
-            "  :disciplines, 0, 1, :now, :now)"
+            "  :disciplines, false, true, :now, :now)"
+            " RETURNING id"
         ),
         {
             "username": username,
@@ -167,7 +168,7 @@ async def register(body: RegisterRequest, request: Request, conn: DbConn):
             "now": now,
         },
     )
-    user_id = result.lastrowid
+    user_id = result.scalar_one()
 
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
@@ -209,7 +210,7 @@ async def change_password(body: ChangePasswordRequest, request: Request, conn: D
     session_row = conn.execute(
         text(
             "SELECT user_id FROM user_sessions"
-            " WHERE id = :sid AND is_active = 1 AND expires_at > :now LIMIT 1"
+            " WHERE id = :sid AND is_active = true AND expires_at > :now LIMIT 1"
         ),
         {"sid": session_id, "now": now},
     ).fetchone()
@@ -219,7 +220,7 @@ async def change_password(body: ChangePasswordRequest, request: Request, conn: D
     new_hash = hash_password(body.new_password)
     conn.execute(
         text(
-            "UPDATE users SET password_hash = :ph, must_change_password = 0,"
+            "UPDATE users SET password_hash = :ph, must_change_password = false,"
             " updated_at = :now WHERE id = :uid"
         ),
         {"ph": new_hash, "now": now, "uid": session_row.user_id},
