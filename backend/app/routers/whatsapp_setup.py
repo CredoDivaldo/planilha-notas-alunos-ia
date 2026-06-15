@@ -329,9 +329,12 @@ async def reconfigure_webhook(request: Request) -> ReconfigureWebhookResponse:
     engine = _get_engine(request)
     instance_name = _get_professor_instance(engine, prof_id)
 
+    # Prefer env var, fall back to the real request domain (robust on Railway)
     app_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN") or os.getenv("APP_URL") or ""
     if app_domain and not app_domain.startswith("http"):
         app_domain = f"https://{app_domain}"
+    if not app_domain:
+        app_domain = str(request.base_url).rstrip("/")
     chatbot_token = os.getenv("CHATBOT_WEBHOOK_TOKEN") or ""
     webhook_url = f"{app_domain.rstrip('/')}/api/v1/chatbot/webhook"
     if chatbot_token:
@@ -346,7 +349,10 @@ async def reconfigure_webhook(request: Request) -> ReconfigureWebhookResponse:
         )
         configured = result.get("configured", False)
     except EvolutionApiError as exc:
-        raise HTTPException(status_code=502, detail=f"Evolution API error: {exc.status_code}") from exc
+        raise HTTPException(
+            status_code=502,
+            detail=f"Evolution API error {exc.status_code}: {exc.body[:200]} (url={webhook_url})",
+        ) from exc
 
     return ReconfigureWebhookResponse(
         configured=configured,
