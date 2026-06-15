@@ -9,6 +9,7 @@ Routes (no /api/v1 prefix — matches frontend apiFetch paths):
 """
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -87,12 +88,21 @@ class ContextItemOut(BaseModel):
     components: list[GradeComponentOut]
 
 
+class ComponentIn(BaseModel):
+    name: str
+    weight: float
+
+
 class ContextCreateRequest(BaseModel):
     turma: str
     disciplina: str
     semestre_id: int | None = None
     turno_id: int | None = None
     academic_year: str | None = None
+    # Frontend sends string labels; accepted alongside ids
+    semestre: str | None = None
+    turno: str | None = None
+    components: list[ComponentIn] = []
 
 
 class ContextUpdateRequest(BaseModel):
@@ -100,6 +110,9 @@ class ContextUpdateRequest(BaseModel):
     disciplina: str | None = None
     semestre_id: int | None = None
     turno_id: int | None = None
+    semestre: str | None = None
+    turno: str | None = None
+    components: list[ComponentIn] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +175,7 @@ def _build_context_item(conn: Any, row: Any, prof_id: int) -> ContextItemOut:
     ).fetchone()
     turno = shift_row[0] if shift_row else str(row[8])
 
-    # Enrolled students count
+    # Enrolled students count (also count legacy students for this context)
     count_row = conn.execute(
         text(
             "SELECT count(*) FROM class_enrollments"
@@ -172,42 +185,25 @@ def _build_context_item(conn: Any, row: Any, prof_id: int) -> ContextItemOut:
         {"cid": ctx_id},
     ).fetchone()
     alunos_count = count_row[0] if count_row else 0
+    if alunos_count == 0:
+        legacy_row = conn.execute(
+            text("SELECT count(*) FROM legacy_students WHERE academic_context_id = :cid"),
+            {"cid": ctx_id},
+        ).fetchone()
+        alunos_count = legacy_row[0] if legacy_row else 0
 
-    # Assessment definitions (components) via teaching assignment
-    ta_rows = conn.execute(
-        text(
-            "SELECT ta.id FROM teaching_assignments ta"
-            " JOIN subjects s ON s.id = ta.subject_id"
-            " WHERE ta.professor_id = :pid"
-            "   AND ta.class_group_id = :cgid"
-            "   AND ta.semester_id = :semid"
-            "   AND ta.shift_id = :shid"
-            "   AND (s.name = :subj OR s.code = :code)"
-            " LIMIT 1"
-        ),
-        {
-            "pid": prof_id,
-            "cgid": row[4],
-            "semid": row[3],
-            "shid": row[8],
-            "subj": row[5],
-            "code": row[6] if row[6] else "",
-        },
-    ).fetchone()
-
+    # Components: read from components_json column (col index 11)
     components: list[GradeComponentOut] = []
-    if ta_rows:
-        ad_rows = conn.execute(
-            text(
-                "SELECT id, name, weight FROM assessment_definitions"
-                " WHERE teaching_assignment_id = :ta ORDER BY sort_order, id"
-            ),
-            {"ta": ta_rows[0]},
-        ).fetchall()
-        components = [
-            GradeComponentOut(id=str(r[0]), name=r[1] or "", weight=float(r[2] or 1))
-            for r in ad_rows
-        ]
+    components_json = row[11] if len(row) > 11 else None
+    if components_json:
+        try:
+            raw = json.loads(components_json)
+            components = [
+                GradeComponentOut(id=str(i), name=c.get("name", ""), weight=float(c.get("weight", 0)))
+                for i, c in enumerate(raw)
+            ]
+        except (json.JSONDecodeError, TypeError):
+            components = []
 
     # Delegado (if any active delegate assignment for this context)
     delg_row = conn.execute(
@@ -287,6 +283,9 @@ async def create_context(body: ContextCreateRequest, request: Request) -> Contex
         academic_year = int(body.academic_year) if body.academic_year else datetime.now(UTC).year
     except (ValueError, TypeError):
         academic_year = datetime.now(UTC).year
+    components_json = json.dumps(
+        [{"name": c.name, "weight": c.weight} for c in body.components]
+    ) if body.components else None
     try:
         with _get_conn(request) as conn:
             sem_id, shift_id = _get_or_create_default_ids(conn, body.semestre_id, body.turno_id)
@@ -294,8 +293,8 @@ async def create_context(body: ContextCreateRequest, request: Request) -> Contex
                 text(
                     "INSERT INTO academic_contexts"
                     " (professor_id, academic_year, semester_id, subject,"
-                    "  turma, shift_id, created_at, updated_at)"
-                    " VALUES (:pid, :ay, :semid, :subj, :turma, :shid, :now, :now)"
+                    "  turma, shift_id, components_json, created_at, updated_at)"
+                    " VALUES (:pid, :ay, :semid, :subj, :turma, :shid, :cjson, :now, :now)"
                     " RETURNING id"
                 ),
                 {
@@ -305,6 +304,7 @@ async def create_context(body: ContextCreateRequest, request: Request) -> Contex
                     "subj": body.disciplina,
                     "turma": body.turma,
                     "shid": shift_id,
+                    "cjson": components_json,
                     "now": now,
                 },
             )
@@ -313,7 +313,7 @@ async def create_context(body: ContextCreateRequest, request: Request) -> Contex
             row = conn.execute(
                 text(
                     "SELECT id, professor_id, academic_year, semester_id, class_group_id,"
-                    "       subject, subject_code, turma, shift_id, created_at, updated_at"
+                    "       subject, subject_code, turma, shift_id, created_at, updated_at, components_json"
                     " FROM academic_contexts WHERE id = :id"
                 ),
                 {"id": new_id},
@@ -375,6 +375,11 @@ async def update_context(context_id: int, body: ContextUpdateRequest, request: R
         if body.turno_id is not None:
             updates["shid"] = body.turno_id
             set_clauses.append("shift_id = :shid")
+        if body.components is not None:
+            updates["cjson"] = json.dumps(
+                [{"name": c.name, "weight": c.weight} for c in body.components]
+            )
+            set_clauses.append("components_json = :cjson")
         updates["pid"] = prof_id
         conn.execute(
             text(f"UPDATE academic_contexts SET {', '.join(set_clauses)} WHERE id = :cid AND professor_id = :pid"),
