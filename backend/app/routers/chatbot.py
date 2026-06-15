@@ -258,6 +258,13 @@ async def receive_webhook(
             request_id=request_id,
         )
 
+    # DEBUG: dump the full payload to find where the real phone number lives
+    try:
+        import json as _json
+        LOGGER.warning("webhook_full_payload %s", _json.dumps(payload_data)[:2000])
+    except Exception:
+        pass
+
     # Extract sender phone from remoteJid
     data = payload_data.get("data", {})
     key = data.get("key", {})
