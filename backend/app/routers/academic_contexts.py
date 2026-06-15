@@ -250,7 +250,7 @@ async def list_contexts(request: Request) -> list[ContextItemOut]:
         rows = conn.execute(
             text(
                 "SELECT id, professor_id, academic_year, semester_id, class_group_id,"
-                "       subject, subject_code, turma, shift_id, created_at, updated_at"
+                "       subject, subject_code, turma, shift_id, created_at, updated_at, components_json"
                 " FROM academic_contexts WHERE professor_id = :pid ORDER BY id"
             ),
             {"pid": prof_id},
@@ -265,7 +265,7 @@ async def get_context(context_id: int, request: Request) -> ContextItemOut:
         row = conn.execute(
             text(
                 "SELECT id, professor_id, academic_year, semester_id, class_group_id,"
-                "       subject, subject_code, turma, shift_id, created_at, updated_at"
+                "       subject, subject_code, turma, shift_id, created_at, updated_at, components_json"
                 " FROM academic_contexts WHERE id = :cid AND professor_id = :pid LIMIT 1"
             ),
             {"cid": context_id, "pid": prof_id},
@@ -389,7 +389,7 @@ async def update_context(context_id: int, body: ContextUpdateRequest, request: R
         updated = conn.execute(
             text(
                 "SELECT id, professor_id, academic_year, semester_id, class_group_id,"
-                "       subject, subject_code, turma, shift_id, created_at, updated_at"
+                "       subject, subject_code, turma, shift_id, created_at, updated_at, components_json"
                 " FROM academic_contexts WHERE id = :cid"
             ),
             {"cid": context_id},

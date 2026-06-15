@@ -203,13 +203,13 @@ async def _legacy_broadcast(
     context_id: int,
     dry_run: bool,
     message_template: str | None,
-    prof_user_id: int | None = None,
+    instance_name: str | None = None,
 ) -> dict[str, Any]:
     """Broadcast grades using LegacyGrade + LegacyStudent when no GradeEntry exists.
 
     Matches students by student_number and sends a WhatsApp message per matched pair.
     """
-    from sqlalchemy import select, text
+    from sqlalchemy import select
 
     from backend.app.models.legacy_roster import LegacyGrade, LegacyStudent
 
@@ -227,19 +227,7 @@ async def _legacy_broadcast(
 
     sent = 0
     failures: list[dict] = []
-    # Use the professor's own WhatsApp instance (prof-{id}) if available
-    instance = _default_instance()
-    if prof_user_id is not None:
-        try:
-            from sqlalchemy import text as _text
-            row = session.execute(
-                _text("SELECT whatsapp_instance FROM users WHERE id = :uid LIMIT 1"),
-                {"uid": prof_user_id},
-            ).fetchone()
-            if row and row[0]:
-                instance = row[0]
-        except Exception:
-            pass
+    instance = instance_name or _default_instance()
 
     for grade in grades:
         if not grade.student_number:
@@ -345,21 +333,31 @@ async def broadcast(request: Request, payload: BroadcastRequest) -> BroadcastRes
     session = _get_session(request)
     dry_run = payload.dry_run or payload.mode == "simulation"
 
-    # Extract authenticated professor's user_id from Bearer token
+    # Extract authenticated professor's user_id and WhatsApp instance via raw engine
     _prof_user_id: int | None = None
+    _prof_instance: str | None = None
     try:
         from datetime import UTC, datetime
         from sqlalchemy import text as _text
-        _auth = request.headers.get("authorization", "")
-        _sid = _auth.removeprefix("Bearer ").strip() if _auth.startswith("Bearer ") else None
-        if _sid:
-            _now = datetime.now(UTC).replace(tzinfo=None)
-            _row = session.execute(
-                _text("SELECT user_id FROM user_sessions WHERE id = :sid AND is_active = true AND expires_at > :now LIMIT 1"),
-                {"sid": _sid, "now": _now},
-            ).fetchone()
-            if _row:
-                _prof_user_id = int(_row[0])
+        _engine = getattr(request.app.state, "engine", None)
+        if _engine:
+            _auth = request.headers.get("authorization", "")
+            _sid = _auth.removeprefix("Bearer ").strip() if _auth.startswith("Bearer ") else None
+            if _sid:
+                _now = datetime.now(UTC).replace(tzinfo=None)
+                with _engine.connect() as _conn:
+                    _row = _conn.execute(
+                        _text("SELECT user_id FROM user_sessions WHERE id = :sid AND is_active = true AND expires_at > :now LIMIT 1"),
+                        {"sid": _sid, "now": _now},
+                    ).fetchone()
+                    if _row:
+                        _prof_user_id = int(_row[0])
+                        _inst_row = _conn.execute(
+                            _text("SELECT whatsapp_instance FROM users WHERE id = :uid LIMIT 1"),
+                            {"uid": _prof_user_id},
+                        ).fetchone()
+                        if _inst_row and _inst_row[0]:
+                            _prof_instance = _inst_row[0]
     except Exception:
         pass
 
@@ -377,7 +375,7 @@ async def broadcast(request: Request, payload: BroadcastRequest) -> BroadcastRes
                 context_id=payload.context_id,
                 dry_run=dry_run,
                 message_template=payload.message_template,
-                prof_user_id=_prof_user_id,
+                instance_name=_prof_instance,
             )
         except Exception as exc:
             LOGGER.exception("legacy_broadcast_failed")
