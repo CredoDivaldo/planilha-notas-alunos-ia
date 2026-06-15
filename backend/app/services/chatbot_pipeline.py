@@ -35,6 +35,15 @@ UNKNOWN_NUMBER_MSG = "O teu número não está registado na plataforma. Fala com
 RATE_LIMIT_MSG = "Atingiste o limite de mensagens para hoje. Tenta novamente amanhã."
 AI_FAILURE_MSG = "Não foi possível processar o teu pedido agora. Tenta mais tarde."
 NO_GRADES_MSG = "Ainda não tens notas publicadas. Aguarda a notificação do teu professor."
+ASK_NUMBER_MSG = (
+    "Olá! 👋 Sou o assistente de notas. Para te identificar, envia o teu "
+    "*número de estudante* (ex: 2026001)."
+)
+LINK_OK_MSG = "Registado com sucesso, {name}! ✅ Agora podes perguntar sobre as tuas notas."
+LINK_NOT_FOUND_MSG = (
+    "Não encontrei o número de estudante *{number}*. Verifica e tenta de novo, "
+    "ou fala com o teu professor."
+)
 
 
 class ChatbotPipeline:
@@ -65,6 +74,7 @@ class ChatbotPipeline:
         *,
         request_id: str | None = None,
         push_name: str | None = None,
+        lid: str | None = None,
     ) -> dict[str, Any]:
         """Process a chatbot message end-to-end.
 
@@ -94,38 +104,72 @@ class ChatbotPipeline:
         """
         timestamp = datetime.now(UTC).isoformat()
 
-        # AC-4: Identify student by phone (or pushName when WhatsApp sends @lid)
+        # AC-4: Identify student by phone / saved @lid link / pushName
         student_row = self._identify_student(
-            session, normalized_phone, push_name=push_name, request_id=request_id
+            session, normalized_phone, push_name=push_name, lid=lid, request_id=request_id
         )
 
+        # Not identified yet — try the self-registration flow: if the message
+        # text is a valid student number, link this @lid to that student.
+        if not student_row and lid:
+            candidate = "".join(ch for ch in (message_text or "") if ch.isdigit())
+            if candidate:
+                rec = self._find_student_by_number(session, candidate)
+                if rec:
+                    self._save_lid_link(session, lid, instance, rec[1])
+                    reply = rec[3]
+                    if reply:
+                        await send_whatsapp_text(
+                            instance=instance,
+                            phone_number=reply,
+                            message=LINK_OK_MSG.format(name=rec[2] or ""),
+                            request_id=request_id,
+                        )
+                    self._log_interaction(session, reply or candidate, rec[0], "linked", request_id)
+                    return {
+                        "outcome": "linked", "student_id": rec[0], "phone": reply or "",
+                        "message_sent": LINK_OK_MSG, "ai_called": False, "timestamp": timestamp,
+                    }
+                else:
+                    # Looks like a number but no match — tell them, if we can reply
+                    # (we have no phone here, so this only works once linked). Skip.
+                    pass
+
         if not student_row:
-            # Unknown number: send registration message (only if we have a
-            # destination phone — with @lid and no match we can't reply)
+            # Unknown sender. If we have a real phone (non-@lid student) we can
+            # ask them to register; with @lid-only we cannot reply yet.
+            sent_msg = ASK_NUMBER_MSG
             if normalized_phone:
                 await send_whatsapp_text(
                     instance=instance,
                     phone_number=normalized_phone,
-                    message=UNKNOWN_NUMBER_MSG,
+                    message=ASK_NUMBER_MSG,
                     request_id=request_id,
                 )
-
-            outcome_dict = {
-                "outcome": "unknown_number",
-                "student_id": None,
-                "phone": normalized_phone,
-                "message_sent": UNKNOWN_NUMBER_MSG,
-                "ai_called": False,
-                "timestamp": timestamp,
-            }
+            else:
+                sent_msg = ""  # could not deliver
 
             self._log_interaction(session, normalized_phone, None, "unknown_number", request_id)
-            return outcome_dict
+            return {
+                "outcome": "unknown_number", "student_id": None, "phone": normalized_phone,
+                "message_sent": sent_msg, "ai_called": False, "timestamp": timestamp,
+            }
 
         student_id, student_number, full_name, is_legacy, reply_phone = student_row
+        # Persist the @lid link for instant future recognition
+        if lid:
+            self._save_lid_link(session, lid, instance, student_number)
         # Use the phone from the matched record as the reply destination
         # (the inbound @lid is not a real phone number).
         normalized_phone = reply_phone or normalized_phone
+
+        # Without a deliverable phone we cannot reply
+        if not normalized_phone:
+            self._log_interaction(session, "", student_id, "no_reply_phone", request_id)
+            return {
+                "outcome": "no_reply_phone", "student_id": student_id, "phone": "",
+                "message_sent": "", "ai_called": False, "timestamp": timestamp,
+            }
 
         # AC-2: Check rate limit
         if self.rate_limiter.is_blocked(normalized_phone):
@@ -205,53 +249,124 @@ class ChatbotPipeline:
         return outcome_dict
 
     @staticmethod
+    def _find_student_by_number(
+        session: Session, student_number: str
+    ) -> tuple[int, str, str, str] | None:
+        """Return (id, student_number, name, reply_phone) for a student number,
+        checking ``students`` then ``legacy_students``. None if not found."""
+        from sqlalchemy import text
+
+        row = session.execute(
+            text("SELECT id, student_number, full_name, phone FROM students WHERE student_number = :sn LIMIT 1"),
+            {"sn": student_number},
+        ).fetchone()
+        if row:
+            return (row[0], row[1], row[2], "".join(ch for ch in str(row[3] or "") if ch.isdigit()))
+        row = session.execute(
+            text("SELECT id, student_number, name, whatsapp FROM legacy_students WHERE student_number = :sn LIMIT 1"),
+            {"sn": student_number},
+        ).fetchone()
+        if row:
+            return (row[0], row[1], row[2], "".join(ch for ch in str(row[3] or "") if ch.isdigit()))
+        return None
+
+    @staticmethod
+    def _get_lid_link(session: Session, lid: str, instance: str | None) -> str | None:
+        """Return the linked student_number for a @lid, or None."""
+        from sqlalchemy import text
+        try:
+            row = session.execute(
+                text(
+                    "SELECT student_number FROM chatbot_lid_links"
+                    " WHERE lid = :lid AND (instance = :inst OR instance IS NULL)"
+                    " ORDER BY (instance = :inst) DESC LIMIT 1"
+                ),
+                {"lid": lid, "inst": instance},
+            ).fetchone()
+            return row[0] if row else None
+        except Exception:
+            return None
+
+    @staticmethod
+    def _save_lid_link(session: Session, lid: str, instance: str | None, student_number: str) -> None:
+        """Upsert a @lid -> student_number mapping."""
+        from sqlalchemy import text
+        try:
+            existing = session.execute(
+                text("SELECT id FROM chatbot_lid_links WHERE lid = :lid AND instance = :inst LIMIT 1"),
+                {"lid": lid, "inst": instance},
+            ).fetchone()
+            if existing:
+                session.execute(
+                    text("UPDATE chatbot_lid_links SET student_number = :sn WHERE id = :id"),
+                    {"sn": student_number, "id": existing[0]},
+                )
+            else:
+                session.execute(
+                    text(
+                        "INSERT INTO chatbot_lid_links (lid, instance, student_number, created_at)"
+                        " VALUES (:lid, :inst, :sn, :now)"
+                    ),
+                    {"lid": lid, "inst": instance, "sn": student_number, "now": datetime.now(UTC).replace(tzinfo=None)},
+                )
+            session.commit()
+        except Exception as exc:
+            LOGGER.warning("chatbot_save_lid_link_failed", extra={"error": str(exc), "lid": lid})
+            session.rollback()
+
     def _identify_student(
+        self,
         session: Session,
         normalized_phone: str,
         push_name: str | None = None,
+        lid: str | None = None,
         request_id: str | None = None,
     ) -> tuple[int, str, str, bool, str] | None:
-        """Identify student by phone, or by WhatsApp pushName when the
-        inbound JID is a @lid (Linked ID) with no real phone number.
+        """Identify student by phone, saved @lid link, or pushName.
 
         Resolution order:
-          1. ``students`` table by phone
-          2. ``legacy_students`` by phone (digits-only compare)
+          1. ``students`` / ``legacy_students`` by phone
+          2. saved ``chatbot_lid_links`` (@lid -> student_number)
           3. ``legacy_students`` by normalised pushName (unambiguous match)
 
-        Returns:
-            (student_id, student_number, full_name, is_legacy, reply_phone)
-            where ``reply_phone`` is the destination number to answer on,
-            taken from the matched record. None if not identified.
+        Returns (student_id, student_number, full_name, is_legacy, reply_phone)
+        or None.
         """
         try:
             from sqlalchemy import text
 
             if normalized_phone:
                 row = session.execute(
-                    text(
-                        "SELECT id, student_number, full_name, phone FROM students WHERE phone = :phone"
-                    ),
+                    text("SELECT id, student_number, full_name, phone FROM students WHERE phone = :phone"),
                     {"phone": normalized_phone},
                 ).fetchone()
                 if row:
                     return (row[0], row[1], row[2], False, row[3] or normalized_phone)
 
             legacy_rows = session.execute(
-                text(
-                    "SELECT id, student_number, name, whatsapp FROM legacy_students"
-                )
+                text("SELECT id, student_number, name, whatsapp FROM legacy_students")
             ).fetchall()
 
-            # 2. Phone match (digits only)
+            # 1b. Phone match in legacy (digits only)
             if normalized_phone:
                 for lr in legacy_rows:
                     digits = "".join(ch for ch in str(lr[3] or "") if ch.isdigit())
                     if digits and digits == normalized_phone:
                         return (lr[0], lr[1], lr[2], True, digits)
 
-            # 3. pushName match (for the @lid case). Requires an unambiguous,
-            # single name match with a usable reply phone on record.
+            # 2. Saved @lid link
+            if lid:
+                linked_number = self._get_lid_link(session, lid, None)
+                if linked_number:
+                    rec = self._find_student_by_number(session, linked_number)
+                    if rec:
+                        LOGGER.info(
+                            "chatbot_identified_by_lid",
+                            extra={"lid": lid, "student_number": rec[1], "request_id": request_id},
+                        )
+                        return (rec[0], rec[1], rec[2], True, rec[3])
+
+            # 3. pushName match (unambiguous) — convenience for real names
             if push_name:
                 from backend.app.services.legacy_import import normalize_name
 
@@ -272,7 +387,7 @@ class ChatbotPipeline:
 
             LOGGER.debug(
                 "chatbot_student_not_found",
-                extra={"normalized_phone": normalized_phone, "push_name": push_name, "request_id": request_id},
+                extra={"normalized_phone": normalized_phone, "push_name": push_name, "lid": lid, "request_id": request_id},
             )
             return None
 

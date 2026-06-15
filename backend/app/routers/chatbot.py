@@ -348,45 +348,13 @@ async def receive_webhook(
     # Get database session
     session = get_db_session(request)
     try:
-        from backend.app.services.legacy_import import normalize_name
-
-        # Query students table by normalized phone
-        student_row = None
-        if normalized_phone:
-            student_row = session.execute(
-                text("SELECT id, student_number, full_name FROM students WHERE phone = :phone"),
-                {"phone": normalized_phone},
-            ).fetchone()
-
-        # Fallback: legacy_students by phone (digits), then by pushName
-        if student_row is None:
-            legacy_rows = session.execute(
-                text("SELECT id, student_number, name, whatsapp FROM legacy_students")
-            ).fetchall()
-            if normalized_phone:
-                for lr in legacy_rows:
-                    digits = "".join(ch for ch in str(lr[3] or "") if ch.isdigit())
-                    if digits and digits == normalized_phone:
-                        student_row = (lr[0], lr[1], lr[2])
-                        break
-            if student_row is None and push_name:
-                target = normalize_name(push_name)
-                name_matches = [
-                    lr for lr in legacy_rows
-                    if target and normalize_name(lr[2] or "") == target
-                ]
-                if len(name_matches) == 1:
-                    student_row = (name_matches[0][0], name_matches[0][1], name_matches[0][2])
-
-        # AC-4: Unknown phone — return immediately, no AI call, no data exposed
-        if student_row is None:
+        # Identification + self-registration is fully handled by the pipeline
+        # (by phone, saved @lid link, pushName, or the student sending their
+        # student number). We only need a usable identifier to proceed.
+        if not normalized_phone and not push_name and "@lid" not in str(remote_jid):
             LOGGER.warning(
-                "webhook_unknown_phone",
-                extra={
-                    "normalized_phone": normalized_phone,
-                    "push_name": push_name,
-                    "request_id": request_id,
-                },
+                "webhook_no_identifier",
+                extra={"remote_jid": remote_jid, "request_id": request_id},
             )
             return WebhookResponse(
                 status="ok",
@@ -412,6 +380,7 @@ async def receive_webhook(
                 instance=instance,
                 request_id=request_id,
                 push_name=push_name,
+                lid=remote_jid if "@lid" in str(remote_jid) else None,
             )
 
             LOGGER.info(
