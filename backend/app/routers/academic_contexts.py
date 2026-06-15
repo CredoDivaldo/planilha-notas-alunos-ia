@@ -282,38 +282,49 @@ async def get_context(context_id: int, request: Request) -> ContextItemOut:
 async def create_context(body: ContextCreateRequest, request: Request) -> ContextItemOut:
     prof_id = _get_professor_id(request)
     now = datetime.now(UTC).replace(tzinfo=None)
-    academic_year = int(body.academic_year) if body.academic_year else datetime.now(UTC).year
-    with _get_conn(request) as conn:
-        sem_id, shift_id = _get_or_create_default_ids(conn, body.semestre_id, body.turno_id)
-        result = conn.execute(
-            text(
-                "INSERT INTO academic_contexts"
-                " (professor_id, academic_year, semester_id, subject,"
-                "  turma, shift_id, created_at, updated_at)"
-                " VALUES (:pid, :ay, :semid, :subj, :turma, :shid, :now, :now)"
-                " RETURNING id"
-            ),
-            {
-                "pid": prof_id,
-                "ay": academic_year,
-                "semid": sem_id,
-                "subj": body.disciplina,
-                "turma": body.turma,
-                "shid": shift_id,
-                "now": now,
-            },
-        )
-        new_id = result.scalar_one()
-        conn.commit()
-        row = conn.execute(
-            text(
-                "SELECT id, professor_id, academic_year, semester_id, class_group_id,"
-                "       subject, subject_code, turma, shift_id, created_at, updated_at"
-                " FROM academic_contexts WHERE id = :id"
-            ),
-            {"id": new_id},
-        ).fetchone()
-        return _build_context_item(conn, row, prof_id)
+    try:
+        academic_year = int(body.academic_year) if body.academic_year else datetime.now(UTC).year
+    except (ValueError, TypeError):
+        academic_year = datetime.now(UTC).year
+    try:
+        with _get_conn(request) as conn:
+            sem_id, shift_id = _get_or_create_default_ids(conn, body.semestre_id, body.turno_id)
+            result = conn.execute(
+                text(
+                    "INSERT INTO academic_contexts"
+                    " (professor_id, academic_year, semester_id, subject,"
+                    "  turma, shift_id, created_at, updated_at)"
+                    " VALUES (:pid, :ay, :semid, :subj, :turma, :shid, :now, :now)"
+                    " RETURNING id"
+                ),
+                {
+                    "pid": prof_id,
+                    "ay": academic_year,
+                    "semid": sem_id,
+                    "subj": body.disciplina,
+                    "turma": body.turma,
+                    "shid": shift_id,
+                    "now": now,
+                },
+            )
+            new_id = result.scalar_one()
+            conn.commit()
+            row = conn.execute(
+                text(
+                    "SELECT id, professor_id, academic_year, semester_id, class_group_id,"
+                    "       subject, subject_code, turma, shift_id, created_at, updated_at"
+                    " FROM academic_contexts WHERE id = :id"
+                ),
+                {"id": new_id},
+            ).fetchone()
+            if row is None:
+                raise HTTPException(status_code=500, detail=f"Contexto criado (id={new_id}) mas não encontrado na BD")
+            return _build_context_item(conn, row, prof_id)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        LOGGER.exception("create_context_failed")
+        raise HTTPException(status_code=500, detail=f"Erro ao criar contexto: {exc}") from exc
 
 
 @router.put("/academic-contexts/{context_id}", response_model=ContextItemOut)

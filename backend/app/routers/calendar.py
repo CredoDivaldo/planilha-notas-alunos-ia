@@ -143,6 +143,7 @@ async def create_event(body: EventCreateRequest, request: Request) -> CalendarEv
                 " (title, starts_at, ends_at, event_type, location, context_id, created_by_user_id,"
                 "  internal_status, created_at, updated_at)"
                 " VALUES (:title, :starts, :ends, :etype, :loc, :ctx_id, :uid, 'published', :now, :now)"
+                " RETURNING id"
             ),
             {
                 "title": body.title,
@@ -155,8 +156,8 @@ async def create_event(body: EventCreateRequest, request: Request) -> CalendarEv
                 "now": now,
             },
         )
+        new_id = result.scalar_one()
         conn.commit()
-        new_id = result.lastrowid
         row = conn.execute(
             text(
                 "SELECT id, title, starts_at, event_type, location, ends_at, context_id"

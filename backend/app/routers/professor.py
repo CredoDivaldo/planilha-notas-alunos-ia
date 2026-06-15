@@ -32,6 +32,7 @@ from backend.app.services.evolution_api_client import (
     connection_state,
     create_instance,
     get_qrcode,
+    send_whatsapp_text,
 )
 
 LOGGER = logging.getLogger("backend.professor.routes")
@@ -197,6 +198,84 @@ def _safe_detail(message: str) -> str:
     return message
 
 
+async def _legacy_broadcast(
+    session: Any,
+    context_id: int,
+    dry_run: bool,
+    message_template: str | None,
+) -> dict[str, Any]:
+    """Broadcast grades using LegacyGrade + LegacyStudent when no GradeEntry exists.
+
+    Matches students by student_number and sends a WhatsApp message per matched pair.
+    """
+    from sqlalchemy import select, text
+
+    from backend.app.models.legacy_roster import LegacyGrade, LegacyStudent
+
+    grades = session.execute(
+        select(LegacyGrade).where(LegacyGrade.academic_context_id == context_id)
+    ).scalars().all()
+
+    students = session.execute(
+        select(LegacyStudent).where(LegacyStudent.academic_context_id == context_id)
+    ).scalars().all()
+
+    student_by_number: dict[str, LegacyStudent] = {
+        s.student_number: s for s in students if s.student_number
+    }
+
+    sent = 0
+    failures: list[dict] = []
+    instance = _default_instance()
+
+    for grade in grades:
+        if not grade.student_number:
+            continue
+        student = student_by_number.get(grade.student_number)
+        if student is None or not student.whatsapp:
+            failures.append({
+                "student_id": str(grade.id),
+                "student_name": grade.name or "",
+                "student_number": grade.student_number or "",
+                "reason": "Sem número WhatsApp cadastrado",
+            })
+            continue
+
+        template = message_template or "Olá {name}, a sua nota de {subject} é {grade}. - UniGrade"
+        msg = (
+            template
+            .replace("{name}", student.name or grade.name or "")
+            .replace("{subject}", grade.subject or "")
+            .replace("{grade}", str(grade.value or ""))
+            .replace("{student_number}", grade.student_number or "")
+        )
+
+        if dry_run:
+            sent += 1
+            continue
+
+        try:
+            await send_whatsapp_text(instance, student.whatsapp, msg)
+            sent += 1
+        except Exception as exc:
+            LOGGER.warning("legacy_broadcast_send_failed", extra={"error": str(exc), "student": student.student_number})
+            failures.append({
+                "student_id": str(grade.id),
+                "student_name": grade.name or "",
+                "student_number": grade.student_number or "",
+                "reason": str(exc)[:200],
+            })
+
+    return {
+        "simulated": dry_run,
+        "portal_published": 0,
+        "whatsapp_sent": sent,
+        "failures": len(failures),
+        "failure_list": failures,
+        "total_recipients": len(grades),
+    }
+
+
 # ---------------------------------------------------------------------------
 # POST /api/v1/grades/match
 # ---------------------------------------------------------------------------
@@ -254,14 +333,39 @@ async def broadcast(request: Request, payload: BroadcastRequest) -> BroadcastRes
     dry_run = payload.dry_run or payload.mode == "simulation"
 
     teaching_assignment_id = payload.teaching_assignment_id
-    if teaching_assignment_id is None:
+    if teaching_assignment_id is None and payload.context_id is not None:
         teaching_assignment_id = _resolve_teaching_assignment_id(
             session, payload.context_id
         )
+
+    # Legacy fallback: no GradeEntry teaching assignment — use LegacyGrade/LegacyStudent
+    if teaching_assignment_id is None and payload.context_id is not None:
+        try:
+            result = await _legacy_broadcast(
+                session,
+                context_id=payload.context_id,
+                dry_run=dry_run,
+                message_template=payload.message_template,
+            )
+        except Exception as exc:
+            LOGGER.exception("legacy_broadcast_failed")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=_safe_detail(f"Broadcast legacy failed: {exc.__class__.__name__}: {exc}"),
+            ) from exc
+        return BroadcastResponse(
+            simulated=result.get("simulated", False),
+            portal_published=0,
+            whatsapp_sent=result.get("whatsapp_sent", 0),
+            failures=result.get("failures", 0),
+            failure_list=[BroadcastFailureItem(**f) for f in result.get("failure_list", [])],
+            total_recipients=result.get("total_recipients"),
+        )
+
     if teaching_assignment_id is None and not dry_run:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No teaching assignment for this context",
+            detail="Nenhum contexto selecionado. Selecione um contexto académico antes de disparar.",
         )
 
     actor_user_id = payload.actor_user_id or 1  # demo default
