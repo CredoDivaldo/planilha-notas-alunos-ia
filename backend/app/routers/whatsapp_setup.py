@@ -326,10 +326,11 @@ async def debug_contacts(request: Request, lid: str | None = None) -> dict:
     results: dict = {"instance": instance_name, "probes": {}}
 
     probes = [
-        ("findContacts_POST_empty", "POST", f"/chat/findContacts/{instance_name}", {}),
-        ("findContacts_POST_where", "POST", f"/chat/findContacts/{instance_name}", {"where": {}}),
-        ("findChats_POST", "POST", f"/chat/findChats/{instance_name}", {}),
-        ("findChats_GET", "GET", f"/chat/findChats/{instance_name}", None),
+        ("findMessages_POST", "POST", f"/chat/findMessages/{instance_name}", {"where": {}}),
+        ("findMessages_POST_limit", "POST", f"/chat/findMessages/{instance_name}", {"where": {}, "limit": 5}),
+        ("fetchInstances", "GET", "/instance/fetchInstances", None),
+        ("findContacts_lid", "POST", f"/chat/findContacts/{instance_name}", {"where": {"remoteJid": lid + "@lid"} if lid else {}}),
+        ("whatsappNumbers", "POST", f"/chat/whatsappNumbers/{instance_name}", {"numbers": [lid]} if lid else {"numbers": []}),
     ]
     async with httpx.AsyncClient(timeout=15.0) as client:
         for name, method, path, body in probes:
