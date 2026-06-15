@@ -468,8 +468,14 @@ async def test_chatbot(
 
         student_id, student_number, _full_name = student_row
 
-        # Initialize AI service
-        ai_service = AIGradeQueryService()
+        # Initialize AI service (surface config errors clearly)
+        try:
+            ai_service = AIGradeQueryService()
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=f"AI provider não configurado: {exc}",
+            ) from exc
 
         # Generate AI response with grade context
         result = ai_service.generate_grade_response(
