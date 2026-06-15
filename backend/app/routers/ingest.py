@@ -1,43 +1,28 @@
-"""Legacy CSV ingest router (Story 8.1 — Epic 8 cutover).
+"""CSV ingest router — students roster and grades upload.
 
 Two endpoints, both ``multipart/form-data`` with a single ``file`` field:
 
-* ``POST /api/v1/students/upload`` — students roster CSV
-* ``POST /api/v1/grades/upload``   — grades CSV
+* ``POST /api/v1/students/upload?context_id=...``                — students roster CSV
+* ``POST /api/v1/grades/upload?context_id=...&component_id=...`` — grades CSV
 
-The implementation reuses the pure helpers in
-``backend.app.services.legacy_import`` and persists into the narrow
-``legacy_students`` / ``legacy_grades`` / ``legacy_uploads`` tables
-defined in ``backend.app.models.legacy_roster``.
-
-Acceptance criteria mapping (see plan file §Story 8.1):
-
-* AC1 — students upload returns ``{count, students}``
-* AC2 — grades upload returns ``{count, grades}``
-* AC3 — invalid CSV returns 400 with sanitised detail
-* AC4 — file > 2 MB returns 400
-* AC5 — bulk insert is transactional (single ``session.commit()``)
-* AC6 — ``pytest backend/tests/test_ingest.py`` covers all of the above
+Persists into the normalized relational model via
+``backend.app.services.academic_provisioning`` (``students`` /
+``class_enrollments`` / ``grade_entries``). CSV parsing/validation reuses the
+pure helpers in ``backend.app.services.legacy_import``.
 """
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from backend.app.models import (
-    LegacyGrade,
-    LegacyStudent,
-    LegacyUpload,
-    UPLOAD_STATUS_FAILED,
-    UPLOAD_STATUS_OK,
-)
 from backend.app.routers.chatbot import get_db_session
+from backend.app.services import academic_provisioning as ap
 from backend.app.services.legacy_import import (
     check_file_size,
     normalize_grade,
@@ -51,11 +36,8 @@ LOGGER = logging.getLogger("backend.ingest.routes")
 
 router = APIRouter(prefix="/api/v1", tags=["ingest"])
 
-MAX_UPLOAD_BYTES = 2 * 1024 * 1024  # AC-4: 2 MB cap
+MAX_UPLOAD_BYTES = 2 * 1024 * 1024  # 2 MB cap
 
-# MIME types browsers may send for a CSV upload. We are permissive here
-# because real-world uploads sometimes come through as ``text/plain`` or
-# ``application/vnd.ms-excel`` depending on the OS.
 ACCEPTED_CSV_MIME = {
     "text/csv",
     "application/csv",
@@ -101,7 +83,6 @@ class GradesUploadResponse(BaseModel):
 
 
 def _coerce_context_id(raw: str | int | None) -> int | None:
-    """Accept ``?context_id=12`` query param; return ``int | None``."""
     if raw is None or raw == "":
         return None
     try:
@@ -114,7 +95,6 @@ def _coerce_context_id(raw: str | int | None) -> int | None:
 
 
 def _validate_upload_file(file: UploadFile) -> None:
-    """AC-3/AC-4: file size and MIME checks. Raises 400 on failure."""
     if file.content_type and file.content_type not in ACCEPTED_CSV_MIME:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -128,36 +108,24 @@ def _validate_upload_file(file: UploadFile) -> None:
 
 
 def _safe_detail(message: str) -> str:
-    """Story 3.6 — keep error messages short; no internals leaked."""
     if len(message) > 240:
         return message[:237] + "..."
     return message
 
 
-# ---------------------------------------------------------------------------
-# Students upload
-# ---------------------------------------------------------------------------
+def _context_info(session: Session, context_id: int) -> tuple[int | None, int | None]:
+    """Return (teaching_assignment_id, class_group_id) for a context."""
+    row = session.execute(
+        text(
+            "SELECT teaching_assignment_id, class_group_id FROM academic_contexts"
+            " WHERE id = :cid LIMIT 1"
+        ),
+        {"cid": context_id},
+    ).fetchone()
+    return (row[0], row[1]) if row else (None, None)
 
 
-@router.post(
-    "/students/upload",
-    response_model=StudentsUploadResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def upload_students(
-    request: Request,
-    file: UploadFile = File(...),
-    context_id: str | None = Query(default=None),
-) -> StudentsUploadResponse:
-    """AC-1: parse students CSV and persist idempotently.
-
-    Bulk insert is transactional: a single ``session.commit()`` after all
-    upserts (AC-5). Idempotency is provided by deleting prior rows for the
-    same ``(academic_context_id, student_number)`` tuple before re-inserting.
-    """
-    _validate_upload_file(file)
-    context_pk = _coerce_context_id(context_id)
-
+async def _read_csv(file: UploadFile) -> str:
     raw_bytes = await file.read()
     size_check = check_file_size(len(raw_bytes))
     if not size_check.valid:
@@ -165,73 +133,59 @@ async def upload_students(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_safe_detail(size_check.error or "Invalid file"),
         )
-
     try:
-        text = raw_bytes.decode("utf-8")
+        return raw_bytes.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid CSV encoding; expected UTF-8",
         ) from exc
 
-    parsed = parse_csv(text)
+
+# ---------------------------------------------------------------------------
+# Students upload
+# ---------------------------------------------------------------------------
+
+
+@router.post("/students/upload", response_model=StudentsUploadResponse, status_code=status.HTTP_200_OK)
+async def upload_students(
+    request: Request,
+    file: UploadFile = File(...),
+    context_id: str | None = Query(default=None),
+) -> StudentsUploadResponse:
+    """Parse a students CSV and persist into students + class_enrollments."""
+    _validate_upload_file(file)
+    context_pk = _coerce_context_id(context_id)
+    if context_pk is None:
+        raise HTTPException(status_code=400, detail="context_id é obrigatório.")
+
+    text_data = await _read_csv(file)
+    parsed = parse_csv(text_data)
     validation = validate_students_csv(parsed.headers, parsed.rows)
     if not validation.valid:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=_safe_detail(validation.error or "Invalid CSV"),
-        )
+        raise HTTPException(status_code=400, detail=_safe_detail(validation.error or "Invalid CSV"))
 
     normalised = [normalize_student(row) for row in parsed.rows]
-    # Drop rows that are missing the required identifier — matches the
-    # legacy behaviour where the dashboard simply skipped them.
     normalised = [n for n in normalised if n.get("numero_estudante") and n.get("nome")]
 
     session: Session = get_db_session(request)
-    audit = LegacyUpload(
-        kind="students",
-        academic_context_id=context_pk,
-        filename=file.filename,
-        status=UPLOAD_STATUS_FAILED,
-        rows_received=len(normalised),
-        rows_persisted=0,
-    )
     try:
-        # Idempotent re-upload: remove the old rows for this tuple.
-        if normalised:
-            existing_numbers = [n["numero_estudante"] for n in normalised]
-            q = session.query(LegacyStudent).filter(
-                LegacyStudent.student_number.in_(existing_numbers)
+        ta_id, cg_id = _context_info(session, context_pk)
+        if ta_id is None:
+            raise HTTPException(status_code=404, detail="Contexto não encontrado.")
+        for n in normalised:
+            sid = ap.ensure_student(
+                session, n["numero_estudante"], n["nome"], n.get("whatsapp") or None, cg_id
             )
-            if context_pk is not None:
-                q = q.filter(LegacyStudent.academic_context_id == context_pk)
-            else:
-                q = q.filter(LegacyStudent.academic_context_id.is_(None))
-            q.delete(synchronize_session=False)
-        for n, raw in zip(normalised, parsed.rows):
-            session.add(
-                LegacyStudent(
-                    academic_context_id=context_pk,
-                    student_number=n["numero_estudante"],
-                    name=n["nome"],
-                    turma=n.get("turma") or None,
-                    whatsapp=n.get("whatsapp") or None,
-                    raw_row_json=json.dumps(raw, ensure_ascii=False),
-                )
-            )
-        session.add(audit)
+            ap.enroll_student(session, context_pk, sid)
         session.commit()
+    except HTTPException:
+        session.rollback()
+        raise
     except SQLAlchemyError as exc:
         session.rollback()
         LOGGER.exception("students_upload_failed")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=_safe_detail(f"Database error: {exc.__class__.__name__}"),
-        ) from exc
-
-    audit.status = UPLOAD_STATUS_OK
-    audit.rows_persisted = len(normalised)
-    session.commit()
+        raise HTTPException(status_code=400, detail=_safe_detail(f"Database error: {exc.__class__.__name__}")) from exc
 
     return StudentsUploadResponse(
         count=len(normalised),
@@ -252,101 +206,67 @@ async def upload_students(
 # ---------------------------------------------------------------------------
 
 
-@router.post(
-    "/grades/upload",
-    response_model=GradesUploadResponse,
-    status_code=status.HTTP_200_OK,
-)
+@router.post("/grades/upload", response_model=GradesUploadResponse, status_code=status.HTTP_200_OK)
 async def upload_grades(
     request: Request,
     file: UploadFile = File(...),
     context_id: str | None = Query(default=None),
     component_id: str | None = Query(default=None),
 ) -> GradesUploadResponse:
-    """AC-2: parse grades CSV and persist idempotently.
-
-    Same transactional / idempotent contract as ``/students/upload``.
-    """
+    """Parse a grades CSV and persist into grade_entries for one component."""
     _validate_upload_file(file)
     context_pk = _coerce_context_id(context_id)
+    if context_pk is None:
+        raise HTTPException(status_code=400, detail="context_id é obrigatório.")
+    if component_id is None or component_id == "":
+        raise HTTPException(status_code=400, detail="component_id é obrigatório.")
 
-    raw_bytes = await file.read()
-    size_check = check_file_size(len(raw_bytes))
-    if not size_check.valid:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=_safe_detail(size_check.error or "Invalid file"),
-        )
-
-    try:
-        text = raw_bytes.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid CSV encoding; expected UTF-8",
-        ) from exc
-
-    parsed = parse_csv(text)
+    text_data = await _read_csv(file)
+    parsed = parse_csv(text_data)
     validation = validate_grades_csv(parsed.headers, parsed.rows)
     if not validation.valid:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=_safe_detail(validation.error or "Invalid CSV"),
-        )
+        raise HTTPException(status_code=400, detail=_safe_detail(validation.error or "Invalid CSV"))
 
     normalised = [normalize_grade(row) for row in parsed.rows]
     normalised = [n for n in normalised if n.get("numero_estudante") and n.get("nota")]
 
     session: Session = get_db_session(request)
-    audit = LegacyUpload(
-        kind="grades",
-        academic_context_id=context_pk,
-        filename=file.filename,
-        status=UPLOAD_STATUS_FAILED,
-        rows_received=len(normalised),
-        rows_persisted=0,
-    )
     try:
-        if context_pk is not None and normalised:
-            existing_numbers = [n["numero_estudante"] for n in normalised]
-            q = (
-                session.query(LegacyGrade)
-                .filter(LegacyGrade.academic_context_id == context_pk)
-                .filter(LegacyGrade.student_number.in_(existing_numbers))
-            )
-            # Scope idempotency to this component so other components aren't wiped
-            if component_id is not None:
-                q = q.filter(LegacyGrade.subject == component_id)
-            q.delete(synchronize_session=False)
-        for n, raw in zip(normalised, parsed.rows):
-            session.add(
-                LegacyGrade(
-                    academic_context_id=context_pk,
-                    student_number=n["numero_estudante"],
-                    name=n.get("nome") or None,
-                    turma=n.get("turma") or None,
-                    # Store component_id as subject so GET /grades/ can map correctly
-                    subject=component_id if component_id is not None else (n.get("disciplina") or None),
-                    value=n["nota"],
-                    raw_row_json=json.dumps(raw, ensure_ascii=False),
-                )
-            )
-        session.add(audit)
+        ta_id, cg_id = _context_info(session, context_pk)
+        if ta_id is None:
+            raise HTTPException(status_code=404, detail="Contexto não encontrado.")
+        component_ids = ap.get_component_ids(session, ta_id)
+        try:
+            idx = int(component_id)
+        except (TypeError, ValueError):
+            idx = 0
+        if not component_ids or idx >= len(component_ids):
+            raise HTTPException(status_code=400, detail="Componente de avaliação inválido.")
+        ad_id = component_ids[idx]
+
+        user_id = _resolve_user_id(request, session)
+        count = 0
+        for n in normalised:
+            sid = ap.ensure_student(session, n["numero_estudante"], n.get("nome") or "", None, cg_id)
+            ap.enroll_student(session, context_pk, sid)
+            # numeric coercion: store decimal value
+            try:
+                value = float(str(n["nota"]).replace(",", "."))
+            except (TypeError, ValueError):
+                continue
+            ap.upsert_grade(session, sid, ta_id, ad_id, value, user_id)
+            count += 1
         session.commit()
+    except HTTPException:
+        session.rollback()
+        raise
     except SQLAlchemyError as exc:
         session.rollback()
         LOGGER.exception("grades_upload_failed")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=_safe_detail(f"Database error: {exc.__class__.__name__}"),
-        ) from exc
-
-    audit.status = UPLOAD_STATUS_OK
-    audit.rows_persisted = len(normalised)
-    session.commit()
+        raise HTTPException(status_code=400, detail=_safe_detail(f"Database error: {exc.__class__.__name__}")) from exc
 
     return GradesUploadResponse(
-        count=len(normalised),
+        count=count,
         grades=[
             GradeRow(
                 student_number=n["numero_estudante"],
@@ -360,16 +280,23 @@ async def upload_grades(
     )
 
 
-# ---------------------------------------------------------------------------
-# Compatibility shims for the legacy path shape
-# ---------------------------------------------------------------------------
-#
-# The legacy dashboard (Express, ``src/routes/students.js``) exposed:
-#     GET /students/upload      -> HTML upload form
-#     GET /grades/upload        -> HTML upload form
-# These were the *browsable* entry points. The new router does not need
-# to expose a GET handler (uploads are POST + multipart), but we keep the
-# routes out of the API to make the cutover regression test in Story 8.6
-# trivial: a GET to the legacy shape should still 404, and a POST to the
-# new shape should be the only accepted verb.
+def _resolve_user_id(request: Request, session: Session) -> int | None:
+    """Resolve the acting professor user_id from the Bearer session token."""
+    from datetime import UTC, datetime
+
+    auth = request.headers.get("authorization", "")
+    sid = auth.removeprefix("Bearer ").strip() if auth.startswith("Bearer ") else None
+    if not sid:
+        return None
+    now = datetime.now(UTC).replace(tzinfo=None)
+    row = session.execute(
+        text(
+            "SELECT user_id FROM user_sessions"
+            " WHERE id = :sid AND is_active = true AND expires_at > :now LIMIT 1"
+        ),
+        {"sid": sid, "now": now},
+    ).fetchone()
+    return int(row[0]) if row else None
+
+
 __all__: list[Any] = ["router"]
