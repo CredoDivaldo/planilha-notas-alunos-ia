@@ -194,29 +194,37 @@ async def get_grades(context_id: int, request: Request) -> GradesListOut:
                     ),
                     {"cid": context_id, "sn": student_number},
                 ).fetchall()
-                for i, (lg_id, lg_subject, lg_value) in enumerate(lg_rows):
-                    # subject stores the component index (e.g. "0", "1") when imported via modal
+                # Pass 1: direct index match or name match (order-independent)
+                unmatched_grades: list[tuple] = []
+                for lg_id, lg_subject, lg_value in lg_rows:
                     matched_id: str | None = None
                     if lg_subject is not None:
-                        # Direct index match ("0", "1", ...)
-                        for ad_id, ad_name in assessment_defs:
+                        for ad_id, _ in assessment_defs:
                             if lg_subject == ad_id:
                                 matched_id = ad_id
                                 break
-                        # Name match fallback
                         if matched_id is None:
                             for ad_id, ad_name in assessment_defs:
                                 if ad_name and lg_subject.lower() == ad_name.lower():
                                     matched_id = ad_id
                                     break
-                    # Position fallback (old imports without component_id)
-                    if matched_id is None and i < len(assessment_defs):
-                        matched_id = assessment_defs[i][0]
                     if matched_id is not None:
                         try:
                             components[matched_id] = GradeValueOut(gradeId=str(lg_id), value=float(lg_value))
                         except (TypeError, ValueError):
                             components[matched_id] = GradeValueOut(gradeId=str(lg_id), value=None)
+                    else:
+                        unmatched_grades.append((lg_id, lg_value))
+                # Pass 2: fill still-empty components with unmatched rows by position
+                # (backwards compat for old imports that stored no component_id)
+                empty_ids = [ad_id for ad_id, _ in assessment_defs
+                             if components.get(ad_id) is None or components[ad_id].value is None]
+                for j, (lg_id, lg_value) in enumerate(unmatched_grades):
+                    if j < len(empty_ids):
+                        try:
+                            components[empty_ids[j]] = GradeValueOut(gradeId=str(lg_id), value=float(lg_value))
+                        except (TypeError, ValueError):
+                            components[empty_ids[j]] = GradeValueOut(gradeId=str(lg_id), value=None)
             elif ta_row:
                 grade_rows = conn.execute(
                     text(
