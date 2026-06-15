@@ -81,7 +81,7 @@ async def get_students(request: Request) -> list[DelegateStudent]:
                 " WHERE da.user_id = :uid"
                 "   AND da.context_type = 'academic_context'"
                 "   AND da.state = 'active'"
-                "   AND (ce.status IS NULL OR ce.status = 'active')"
+                "   AND (ce.enrollment_status IS NULL OR ce.enrollment_status = 'active')"
                 " ORDER BY s.student_number LIMIT 100"
             ),
             {"uid": user_id},

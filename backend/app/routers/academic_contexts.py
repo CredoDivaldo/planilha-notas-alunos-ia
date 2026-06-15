@@ -166,7 +166,8 @@ def _build_context_item(conn: Any, row: Any, prof_id: int) -> ContextItemOut:
     count_row = conn.execute(
         text(
             "SELECT count(*) FROM class_enrollments"
-            " WHERE academic_context_id = :cid AND (status IS NULL OR status = 'active')"
+            " WHERE academic_context_id = :cid"
+            " AND (enrollment_status IS NULL OR enrollment_status = 'active')"
         ),
         {"cid": ctx_id},
     ).fetchone()
@@ -323,6 +324,25 @@ async def create_context(body: ContextCreateRequest, request: Request) -> Contex
     except HTTPException:
         raise
     except Exception as exc:
+        # Duplicate context → return the existing one
+        exc_str = str(exc)
+        if "UniqueViolation" in exc_str or "unique constraint" in exc_str.lower():
+            try:
+                with _get_conn(request) as conn:
+                    row = conn.execute(
+                        text(
+                            "SELECT id, professor_id, academic_year, semester_id, class_group_id,"
+                            "       subject, subject_code, turma, shift_id, created_at, updated_at"
+                            " FROM academic_contexts"
+                            " WHERE professor_id = :pid AND turma = :turma AND subject = :subj"
+                            " ORDER BY id LIMIT 1"
+                        ),
+                        {"pid": prof_id, "turma": body.turma, "subj": body.disciplina},
+                    ).fetchone()
+                    if row:
+                        return _build_context_item(conn, row, prof_id)
+            except Exception:
+                pass
         LOGGER.exception("create_context_failed")
         raise HTTPException(status_code=500, detail=f"Erro ao criar contexto: {exc}") from exc
 
