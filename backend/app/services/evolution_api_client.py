@@ -392,7 +392,11 @@ async def configure_webhook(
 
     base = (_base_url() or "").rstrip("/")
     url = f"{base}/webhook/set/{inst}"
-    payload = {
+
+    # Evolution API has two payload shapes across versions. Try the v2
+    # wrapped shape first, then fall back to the flat (url at root) shape
+    # used by other builds (error: 'instance requires property "url"').
+    payload_wrapped = {
         "webhook": {
             "enabled": True,
             "url": webhook_url,
@@ -401,16 +405,30 @@ async def configure_webhook(
             "events": events,
         }
     }
+    payload_flat = {
+        "enabled": True,
+        "url": webhook_url,
+        "webhookByEvents": False,
+        "webhook_by_events": False,
+        "webhookBase64": False,
+        "events": events,
+    }
+
+    last_status = 0
+    last_body = ""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(url, json=payload, headers=_headers())
-        if resp.status_code in (200, 201):
-            return {"configured": True, "url": webhook_url, "simulated": False}
-        LOGGER.warning(
-            "evolution_api_configure_webhook_failed",
-            extra={"status": resp.status_code, "body": resp.text[:200]},
-        )
-        raise EvolutionApiError(resp.status_code, resp.text[:500])
+            for payload in (payload_wrapped, payload_flat):
+                resp = await client.post(url, json=payload, headers=_headers())
+                if resp.status_code in (200, 201):
+                    return {"configured": True, "url": webhook_url, "simulated": False}
+                last_status = resp.status_code
+                last_body = resp.text[:500]
+                LOGGER.warning(
+                    "evolution_api_configure_webhook_attempt_failed",
+                    extra={"status": resp.status_code, "body": resp.text[:200]},
+                )
+        raise EvolutionApiError(last_status, last_body)
     except EvolutionApiError:
         raise
     except Exception as exc:

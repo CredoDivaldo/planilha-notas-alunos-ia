@@ -438,11 +438,20 @@ async def test_chatbot(
     # Get database session
     session = get_db_session(request)
     try:
-        # Look up student by student_number
+        # Look up student by student_number (students first, then legacy)
+        is_legacy = False
         student_row = session.execute(
             text("SELECT id, student_number, full_name FROM students WHERE student_number = :sn"),
             {"sn": payload.student_number},
         ).fetchone()
+        if not student_row:
+            legacy_row = session.execute(
+                text("SELECT id, student_number, name FROM legacy_students WHERE student_number = :sn LIMIT 1"),
+                {"sn": payload.student_number},
+            ).fetchone()
+            if legacy_row:
+                student_row = legacy_row
+                is_legacy = True
 
         if not student_row:
             LOGGER.warning(
@@ -469,6 +478,7 @@ async def test_chatbot(
             student_number,
             payload.message,
             request_id=request_id,
+            is_legacy=is_legacy,
         )
 
         LOGGER.info(
