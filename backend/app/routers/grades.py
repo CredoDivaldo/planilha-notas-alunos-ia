@@ -135,7 +135,19 @@ async def get_grades(context_id: int, request: Request) -> GradesListOut:
             ).fetchall()
             assessment_defs = [(str(r[0]), r[1]) for r in ad_rows]
         else:
+            # Fall back to components_json on the context itself (legacy path)
+            import json as _json
+            cjson_row = conn.execute(
+                text("SELECT components_json FROM academic_contexts WHERE id = :cid LIMIT 1"),
+                {"cid": context_id},
+            ).fetchone()
             assessment_defs = []
+            if cjson_row and cjson_row[0]:
+                try:
+                    raw_comps = _json.loads(cjson_row[0])
+                    assessment_defs = [(str(i), c.get("name", "")) for i, c in enumerate(raw_comps)]
+                except Exception:
+                    pass
 
         # Get enrolled students for this context
         enrolled_rows = conn.execute(
@@ -182,13 +194,29 @@ async def get_grades(context_id: int, request: Request) -> GradesListOut:
                     ),
                     {"cid": context_id, "sn": student_number},
                 ).fetchall()
-                if lg_rows and assessment_defs:
-                    for i, (lg_id, lg_subject, lg_value) in enumerate(lg_rows):
-                        ad_id = assessment_defs[i][0] if i < len(assessment_defs) else str(i)
+                for i, (lg_id, lg_subject, lg_value) in enumerate(lg_rows):
+                    # subject stores the component index (e.g. "0", "1") when imported via modal
+                    matched_id: str | None = None
+                    if lg_subject is not None:
+                        # Direct index match ("0", "1", ...)
+                        for ad_id, ad_name in assessment_defs:
+                            if lg_subject == ad_id:
+                                matched_id = ad_id
+                                break
+                        # Name match fallback
+                        if matched_id is None:
+                            for ad_id, ad_name in assessment_defs:
+                                if ad_name and lg_subject.lower() == ad_name.lower():
+                                    matched_id = ad_id
+                                    break
+                    # Position fallback (old imports without component_id)
+                    if matched_id is None and i < len(assessment_defs):
+                        matched_id = assessment_defs[i][0]
+                    if matched_id is not None:
                         try:
-                            components[ad_id] = GradeValueOut(gradeId=str(lg_id), value=float(lg_value))
+                            components[matched_id] = GradeValueOut(gradeId=str(lg_id), value=float(lg_value))
                         except (TypeError, ValueError):
-                            components[ad_id] = GradeValueOut(gradeId=str(lg_id), value=None)
+                            components[matched_id] = GradeValueOut(gradeId=str(lg_id), value=None)
             elif ta_row:
                 grade_rows = conn.execute(
                     text(

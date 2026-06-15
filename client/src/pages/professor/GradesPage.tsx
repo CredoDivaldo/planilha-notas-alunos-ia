@@ -30,7 +30,15 @@ export default function GradesPage() {
   const [contextItem, setContextItem] = useState<ContextItem | null>(null)
   const [rows, setRows] = useState<StudentRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [importHistory, setImportHistory] = useState<ImportHistoryEntry[]>([])
+  const [importHistory, setImportHistory] = useState<ImportHistoryEntry[]>(() => {
+    if (!activeContextId) return []
+    try {
+      const stored = localStorage.getItem(`import_history_${activeContextId}`)
+      return stored ? (JSON.parse(stored) as ImportHistoryEntry[]) : []
+    } catch {
+      return []
+    }
+  })
   const [historyExpanded, setHistoryExpanded] = useState(false)
 
   // UI
@@ -67,6 +75,12 @@ export default function GradesPage() {
   useEffect(() => {
     if (activeContextId) {
       void loadData(activeContextId)
+      try {
+        const stored = localStorage.getItem(`import_history_${activeContextId}`)
+        setImportHistory(stored ? (JSON.parse(stored) as ImportHistoryEntry[]) : [])
+      } catch {
+        setImportHistory([])
+      }
     } else {
       setLoading(false)
     }
@@ -126,7 +140,8 @@ export default function GradesPage() {
       try {
         const formData = new FormData()
         formData.append('file', file)
-        const res = await apiFetch<{ count: number; grades: unknown[] }>(`/api/v1/grades/upload?context_id=${contextItem.id}`, {
+        const url = `/api/v1/grades/upload?context_id=${contextItem.id}&component_id=${encodeURIComponent(componentId)}`
+        const res = await apiFetch<{ count: number; grades: unknown[] }>(url, {
           method: 'POST',
           body: formData,
           headers: {},
@@ -137,7 +152,11 @@ export default function GradesPage() {
           timestamp: new Date().toISOString(),
           count: res.count,
         }
-        setImportHistory((prev) => [entry, ...prev].slice(0, 10))
+        setImportHistory((prev) => {
+          const next = [entry, ...prev].slice(0, 10)
+          try { localStorage.setItem(`import_history_${contextItem.id}`, JSON.stringify(next)) } catch { /* ignore */ }
+          return next
+        })
         showStatus(`${res.count} notas importadas para ${compName}`, 'success')
         if (activeContextId) void loadData(activeContextId)
         return { imported: res.count, unmatched: 0 }

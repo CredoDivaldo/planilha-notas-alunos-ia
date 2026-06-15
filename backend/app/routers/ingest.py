@@ -261,6 +261,7 @@ async def upload_grades(
     request: Request,
     file: UploadFile = File(...),
     context_id: str | None = Query(default=None),
+    component_id: str | None = Query(default=None),
 ) -> GradesUploadResponse:
     """AC-2: parse grades CSV and persist idempotently.
 
@@ -308,12 +309,15 @@ async def upload_grades(
     try:
         if context_pk is not None and normalised:
             existing_numbers = [n["numero_estudante"] for n in normalised]
-            (
+            q = (
                 session.query(LegacyGrade)
                 .filter(LegacyGrade.academic_context_id == context_pk)
                 .filter(LegacyGrade.student_number.in_(existing_numbers))
-                .delete(synchronize_session=False)
             )
+            # Scope idempotency to this component so other components aren't wiped
+            if component_id is not None:
+                q = q.filter(LegacyGrade.subject == component_id)
+            q.delete(synchronize_session=False)
         for n, raw in zip(normalised, parsed.rows):
             session.add(
                 LegacyGrade(
@@ -321,7 +325,8 @@ async def upload_grades(
                     student_number=n["numero_estudante"],
                     name=n.get("nome") or None,
                     turma=n.get("turma") or None,
-                    subject=n.get("disciplina") or None,
+                    # Store component_id as subject so GET /grades/ can map correctly
+                    subject=component_id if component_id is not None else (n.get("disciplina") or None),
                     value=n["nota"],
                     raw_row_json=json.dumps(raw, ensure_ascii=False),
                 )
