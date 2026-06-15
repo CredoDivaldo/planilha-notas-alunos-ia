@@ -1,6 +1,6 @@
-numero_estudante,nome,nota,turma
-2026001,Credo Lopes,17,10A
-11297725,Djenabu Kaba,15,10A
-11190525,Eunice Domingos,19,10A
-11191325,Magno Cândido,16,10A
-11207325,Nathalia Garcia,18,10A
+numero_estudante,nome,nota,turma,disciplina
+2026001,Credo Lopes,17,10A,Matemática
+11297725,Djenabu Kaba,15,10A,Matemática
+11190525,Eunice Domingos,19,10A,Matemática
+11191325,Magno Cândido,16,10A,Matemática
+11207325,Nathalia Garcia,18,10A,Matemática
