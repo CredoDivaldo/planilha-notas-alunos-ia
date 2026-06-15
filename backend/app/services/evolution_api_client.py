@@ -117,7 +117,7 @@ async def send_whatsapp_text(
     headers = {"apikey": api_key, "Content-Type": "application/json"}
     payload = {
         "number": phone_number,
-        "text": message,
+        "textMessage": {"text": message},
     }
 
     try:
