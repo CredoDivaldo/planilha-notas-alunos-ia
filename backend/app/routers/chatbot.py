@@ -296,8 +296,36 @@ async def receive_webhook(
             request_id=request_id,
         )
 
-    # AC-3: Normalize phone and lookup student
-    normalized_phone = normalize_phone(remote_jid)
+    # Modern WhatsApp may send remoteJid as "<id>@lid" (Linked ID), which is
+    # NOT the phone number. Try several fields Evolution exposes for the real
+    # phone number, in priority order.
+    phone_candidates = [
+        key.get("senderPn"),
+        key.get("senderPhoneNumber"),
+        data.get("senderPn"),
+        key.get("participantPn"),
+        key.get("participant"),
+        remote_jid,
+    ]
+    # Log the raw shape so we can see exactly what Evolution sends
+    LOGGER.warning(
+        "webhook_phone_extraction remoteJid=%s senderPn=%s participant=%s candidates=%s",
+        remote_jid,
+        key.get("senderPn"),
+        key.get("participant"),
+        [c for c in phone_candidates if c],
+    )
+
+    # AC-3: Normalize phone — pick the first candidate that is NOT a @lid id
+    normalized_phone = ""
+    for cand in phone_candidates:
+        if not cand:
+            continue
+        if "@lid" in str(cand):
+            continue  # skip Linked-ID, not a real phone
+        normalized_phone = normalize_phone(str(cand))
+        if normalized_phone:
+            break
 
     if not normalized_phone:
         LOGGER.warning(
