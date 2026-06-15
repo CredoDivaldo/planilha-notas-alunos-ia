@@ -30,6 +30,16 @@ from backend.app.utils.phone import normalize_phone
 
 LOGGER = logging.getLogger("backend.chatbot.pipeline")
 
+
+def _norm_name(name: str) -> str:
+    """Strip diacritics + lowercase + trim, for pushName matching."""
+    import re
+    import unicodedata
+
+    decomposed = unicodedata.normalize("NFD", str(name or ""))
+    no_accents = "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
+    return re.sub(r"\s+", " ", no_accents).lower().strip()
+
 # Canned messages (Portuguese)
 UNKNOWN_NUMBER_MSG = "O teu número não está registado na plataforma. Fala com o teu professor para registares o teu contacto."
 RATE_LIMIT_MSG = "Atingiste o limite de mensagens para hoje. Tenta novamente amanhã."
@@ -155,7 +165,7 @@ class ChatbotPipeline:
                 "message_sent": sent_msg, "ai_called": False, "timestamp": timestamp,
             }
 
-        student_id, student_number, full_name, is_legacy, reply_phone = student_row
+        student_id, student_number, full_name, reply_phone = student_row
         # Persist the @lid link for instant future recognition
         if lid:
             self._save_lid_link(session, lid, instance, student_number)
@@ -198,7 +208,7 @@ class ChatbotPipeline:
         # Story 6.2: Generate AI response
         ai_result = self.ai_service.generate_grade_response(
             session, student_id, student_number, message_text,
-            request_id=request_id, is_legacy=is_legacy,
+            request_id=request_id,
         )
 
         response_message = ai_result["response"]
@@ -252,18 +262,11 @@ class ChatbotPipeline:
     def _find_student_by_number(
         session: Session, student_number: str
     ) -> tuple[int, str, str, str] | None:
-        """Return (id, student_number, name, reply_phone) for a student number,
-        checking ``students`` then ``legacy_students``. None if not found."""
+        """Return (id, student_number, name, reply_phone) from ``students``."""
         from sqlalchemy import text
 
         row = session.execute(
             text("SELECT id, student_number, full_name, phone FROM students WHERE student_number = :sn LIMIT 1"),
-            {"sn": student_number},
-        ).fetchone()
-        if row:
-            return (row[0], row[1], row[2], "".join(ch for ch in str(row[3] or "") if ch.isdigit()))
-        row = session.execute(
-            text("SELECT id, student_number, name, whatsapp FROM legacy_students WHERE student_number = :sn LIMIT 1"),
             {"sn": student_number},
         ).fetchone()
         if row:
@@ -324,42 +327,33 @@ class ChatbotPipeline:
         push_name: str | None = None,
         lid: str | None = None,
         request_id: str | None = None,
-    ) -> tuple[int, str, str, bool, str] | None:
+    ) -> tuple[int, str, str, str] | None:
         """Identify student by phone, saved @lid link, or pushName.
 
         Resolution order:
-          1. ``students`` / ``legacy_students`` by phone
+          1. ``students`` by phone (digits compare)
           2. saved ``chatbot_lid_links`` (@lid -> student_number)
-          3. ``legacy_students`` by normalised pushName (unambiguous match)
+          3. ``students`` by normalised pushName (unambiguous match)
 
-        Returns (student_id, student_number, full_name, is_legacy, reply_phone)
-        or None.
+        Returns (student_id, student_number, full_name, reply_phone) or None.
         """
         try:
             from sqlalchemy import text
 
-            if normalized_phone:
-                row = session.execute(
-                    text("SELECT id, student_number, full_name, phone FROM students WHERE phone = :phone"),
-                    {"phone": normalized_phone},
-                ).fetchone()
-                if row:
-                    return (row[0], row[1], row[2], False, row[3] or normalized_phone)
-
-            legacy_rows = session.execute(
-                text("SELECT id, student_number, name, whatsapp FROM legacy_students")
+            students = session.execute(
+                text("SELECT id, student_number, full_name, phone FROM students")
             ).fetchall()
 
-            # 1b. Phone match in legacy (digits only)
+            # 1. Phone match (digits only)
             if normalized_phone:
-                for lr in legacy_rows:
-                    digits = "".join(ch for ch in str(lr[3] or "") if ch.isdigit())
+                for s in students:
+                    digits = "".join(ch for ch in str(s[3] or "") if ch.isdigit())
                     if digits and digits == normalized_phone:
-                        return (lr[0], lr[1], lr[2], True, digits)
+                        return (s[0], s[1], s[2], digits)
 
             # 2. Saved @lid link
             if lid:
-                linked_number = self._get_lid_link(session, lid, None)
+                linked_number = self._get_lid_link(session, lid)
                 if linked_number:
                     rec = self._find_student_by_number(session, linked_number)
                     if rec:
@@ -367,26 +361,21 @@ class ChatbotPipeline:
                             "chatbot_identified_by_lid",
                             extra={"lid": lid, "student_number": rec[1], "request_id": request_id},
                         )
-                        return (rec[0], rec[1], rec[2], True, rec[3])
+                        return rec
 
             # 3. pushName match (unambiguous) — convenience for real names
             if push_name:
-                from backend.app.services.legacy_import import normalize_name
-
-                target = normalize_name(push_name)
-                matches = [
-                    lr for lr in legacy_rows
-                    if target and normalize_name(lr[2] or "") == target
-                ]
+                target = _norm_name(push_name)
+                matches = [s for s in students if target and _norm_name(s[2] or "") == target]
                 if len(matches) == 1:
-                    lr = matches[0]
-                    reply = "".join(ch for ch in str(lr[3] or "") if ch.isdigit())
+                    s = matches[0]
+                    reply = "".join(ch for ch in str(s[3] or "") if ch.isdigit())
                     if reply:
                         LOGGER.info(
                             "chatbot_identified_by_pushname",
-                            extra={"push_name": push_name, "student_number": lr[1], "request_id": request_id},
+                            extra={"push_name": push_name, "student_number": s[1], "request_id": request_id},
                         )
-                        return (lr[0], lr[1], lr[2], True, reply)
+                        return (s[0], s[1], s[2], reply)
 
             LOGGER.debug(
                 "chatbot_student_not_found",

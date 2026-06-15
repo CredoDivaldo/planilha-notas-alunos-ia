@@ -217,7 +217,6 @@ class AIGradeQueryService:
         message: str,
         *,
         request_id: str | None = None,
-        is_legacy: bool = False,
     ) -> dict[str, Any]:
         """Generate AI response to student's grade question.
 
@@ -244,14 +243,9 @@ class AIGradeQueryService:
             }
         """
         # AC-1: Fetch student's published grades (publication_snapshots)
-        if is_legacy:
-            grades_context = self._fetch_legacy_grades_context(
-                session, student_number, request_id=request_id
-            )
-        else:
-            grades_context = self._fetch_grades_context(
-                session, student_id, request_id=request_id
-            )
+        grades_context = self._fetch_grades_context(
+            session, student_id, request_id=request_id
+        )
 
         # AC-4: If no published grades, return graceful message
         if not grades_context or grades_context.strip() == "":
@@ -341,59 +335,34 @@ class AIGradeQueryService:
         | Publicado: 2026-05-28"
         """
         try:
-            from sqlalchemy import select
+            from sqlalchemy import text
 
-            # Query: student's enrollments + contexts + current snapshots
-            stmt = select(
-                AcademicContext.subject,
-                AcademicContext.turma,
-                Semester.code.label("semester_code"),
-                Semester.name.label("semester_name"),
-                PublicationSnapshot.id.label("snapshot_id"),
-                PublicationSnapshot.published_score,
-                PublicationSnapshot.published_state,
-                PublicationSnapshot.published_at,
-            ).select_from(ClassEnrollment).join(
-                AcademicContext,
-                ClassEnrollment.academic_context_id == AcademicContext.id,
-            ).join(
-                Semester,
-                AcademicContext.semester_id == Semester.id,
-            ).outerjoin(
-                PublicationSnapshot,
-                (PublicationSnapshot.student_id == ClassEnrollment.student_id)
-                & (PublicationSnapshot.teaching_assignment_id == AcademicContext.id)
-                & (PublicationSnapshot.is_current == True),  # noqa: E712
-            ).where(
-                ClassEnrollment.student_id == student_id
-            ).order_by(
-                AcademicContext.academic_year.desc(),
-                Semester.code.desc(),
-                AcademicContext.subject.asc(),
-            )
+            # Snapshots → academic_contexts (1:1 via teaching_assignment_id) → semester
+            rows = session.execute(
+                text(
+                    "SELECT ac.subject, ac.turma, sem.name,"
+                    "       ps.published_score, ps.published_state, ps.published_at"
+                    " FROM publication_snapshots ps"
+                    " JOIN academic_contexts ac"
+                    "   ON ac.teaching_assignment_id = ps.teaching_assignment_id"
+                    " LEFT JOIN semesters sem ON sem.id = ac.semester_id"
+                    " WHERE ps.student_id = :sid AND ps.is_current = true"
+                    " ORDER BY ac.academic_year DESC, ac.subject ASC"
+                ),
+                {"sid": student_id},
+            ).fetchall()
 
-            rows = session.execute(stmt).fetchall()
-
-            # Format grades context
             context_lines = []
-            for row in rows:
-                if row.snapshot_id:
-                    # AC-1: Only include published snapshots
-                    score_str = f"{row.published_score:.1f}".rstrip("0").rstrip(".") \
-                        if row.published_score is not None else "N/A"
-                    published_date = row.published_at.strftime("%Y-%m-%d") \
-                        if row.published_at else "Unknown"
-
-                    line = (
-                        f"- {row.subject} | "
-                        f"Semestre {row.semester_code} | "
-                        f"Turma {row.turma} | "
-                        f"Nota: {score_str} | "
-                        f"Estado: {row.published_state} | "
-                        f"Publicado: {published_date}"
-                    )
-                    context_lines.append(line)
-                # AC-3: Do NOT include entries without publication_snapshot
+            for subject, turma, sem_name, score, state, pub_at in rows:
+                try:
+                    score_str = f"{float(score):.1f}".rstrip("0").rstrip(".") if score is not None else "N/A"
+                except (TypeError, ValueError):
+                    score_str = "N/A"
+                estado = {"approved": "Aprovado", "rejected": "Reprovado"}.get(state, state or "")
+                context_lines.append(
+                    f"- {subject} | Semestre {sem_name or ''} | Turma {turma or ''} |"
+                    f" Nota: {score_str} | Estado: {estado}"
+                )
 
             return "\n".join(context_lines) if context_lines else ""
 
@@ -402,115 +371,6 @@ class AIGradeQueryService:
                 "grades_context_fetch_error",
                 extra={
                     "student_id": student_id,
-                    "error_type": type(exc).__name__,
-                    "error_message": str(exc),
-                    "request_id": request_id,
-                },
-            )
-            return ""
-
-    def _fetch_legacy_grades_context(
-        self,
-        session: Session,
-        student_number: str,
-        *,
-        request_id: str | None = None,
-    ) -> str:
-        """Fetch grades for a legacy (CSV-imported) student.
-
-        Reads ``legacy_grades`` grouped by academic context, computes the
-        weighted final grade from each context's ``components_json``, and
-        formats a context string for the AI prompt.
-        """
-        try:
-            import json as _json
-
-            from sqlalchemy import text
-
-            from backend.app.services.legacy_grades_helper import (
-                compute_final_grade,
-                map_legacy_grades_to_components,
-            )
-
-            grade_rows = session.execute(
-                text(
-                    "SELECT academic_context_id, subject, value FROM legacy_grades"
-                    " WHERE student_number = :sn"
-                ),
-                {"sn": student_number},
-            ).fetchall()
-
-            if not grade_rows:
-                return ""
-
-            # Group by academic_context_id
-            by_context: dict[int, list[tuple]] = {}
-            for ctx_id, subject, value in grade_rows:
-                by_context.setdefault(ctx_id, []).append((subject, value))
-
-            context_lines: list[str] = []
-            for ctx_id, rows in by_context.items():
-                ctx_row = session.execute(
-                    text(
-                        "SELECT subject, turma, semester_id, components_json"
-                        " FROM academic_contexts WHERE id = :cid LIMIT 1"
-                    ),
-                    {"cid": ctx_id},
-                ).fetchone()
-                if ctx_row is None:
-                    continue
-                disciplina = ctx_row[0] or ""
-                turma = ctx_row[1] or ""
-                components: list[dict] = []
-                if ctx_row[3]:
-                    try:
-                        components = _json.loads(ctx_row[3])
-                    except Exception:
-                        components = []
-                semestre = ""
-                if ctx_row[2]:
-                    sem_row = session.execute(
-                        text("SELECT name FROM semesters WHERE id = :sid LIMIT 1"),
-                        {"sid": ctx_row[2]},
-                    ).fetchone()
-                    semestre = (sem_row[0] if sem_row else "") or ""
-
-                comp_values = map_legacy_grades_to_components(rows, components)
-                nota_final = compute_final_grade(comp_values, components)
-
-                # Per-component breakdown for richer answers
-                breakdown_parts = []
-                for i, c in enumerate(components):
-                    v = comp_values.get(str(i))
-                    if v is not None:
-                        name = c.get("name", f"C{i+1}")
-                        breakdown_parts.append(f"{name}: {v:g}")
-                breakdown = ", ".join(breakdown_parts) if breakdown_parts else "—"
-
-                if nota_final is None:
-                    nota_str = "Incompleta"
-                    estado = "Incompleta"
-                else:
-                    nota_str = f"{nota_final:g}"
-                    estado = "Aprovado" if nota_final >= 10 else "Reprovado"
-
-                line = (
-                    f"- {disciplina} | "
-                    f"Semestre {semestre} | "
-                    f"Turma {turma} | "
-                    f"Componentes: {breakdown} | "
-                    f"Nota Final: {nota_str} | "
-                    f"Estado: {estado}"
-                )
-                context_lines.append(line)
-
-            return "\n".join(context_lines) if context_lines else ""
-
-        except Exception as exc:
-            LOGGER.error(
-                "legacy_grades_context_fetch_error",
-                extra={
-                    "student_number": student_number,
                     "error_type": type(exc).__name__,
                     "error_message": str(exc),
                     "request_id": request_id,

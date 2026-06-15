@@ -132,28 +132,45 @@ def get_db_session(request: Request) -> Generator[Session, None, None]:
 
 
 def get_authenticated_student_id(request: Request) -> int:
-    """Extract authenticated student ID from session.
+    """Resolve the authenticated student's ``students.id`` from the session.
 
-    AC-2: Enforces that student cannot override their own ID.
-
-    Returns the authenticated student_id from the session.
-    Raises HTTPException(401) if not authenticated or not a student.
-
-    Note: This is a placeholder. Full implementation requires:
-    - Session validation middleware
-    - Role checking (must be 'student', not 'professor')
+    Bearer token → user_sessions → users (role must be 'estudante') →
+    students (linked by user_id). Raises 401 if not an authenticated student.
     """
-    # Placeholder: Extract from session cookie (sid)
-    # In production:
-    # 1. Validate session cookie
-    # 2. Verify user role is 'student'
-    # 3. Return user_id from session
-    #
-    # For now, raise 401 to force implementation of session layer.
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Not authenticated. Session validation not yet implemented.",
-    )
+    from datetime import UTC, datetime
+
+    auth = request.headers.get("authorization", "")
+    session_id = auth.removeprefix("Bearer ").strip() if auth.startswith("Bearer ") else None
+    if not session_id:
+        raise HTTPException(status_code=401, detail="Não autenticado.")
+
+    engine = getattr(request.app.state, "engine", None)
+    if engine is None:
+        from backend.app.config import get_settings
+        from backend.app.database import build_engine
+        engine = build_engine(get_settings().database_url)
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT u.id, u.role FROM user_sessions us"
+                " JOIN users u ON u.id = us.user_id"
+                " WHERE us.id = :sid AND us.is_active = true AND us.expires_at > :now LIMIT 1"
+            ),
+            {"sid": session_id, "now": now},
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=401, detail="Sessão expirada.")
+        if row[1] != "estudante":
+            raise HTTPException(status_code=403, detail="Acesso reservado a estudantes.")
+        srow = conn.execute(
+            text("SELECT id FROM students WHERE user_id = :uid LIMIT 1"),
+            {"uid": row[0]},
+        ).fetchone()
+        if srow is None:
+            raise HTTPException(status_code=404, detail="Perfil de estudante não encontrado.")
+        return int(srow[0])
 
 
 # -----------------------------------------------------------------------
@@ -226,16 +243,90 @@ async def get_all_grades(
     request_id = getattr(request.state, "request_id", None)
 
     try:
-        service = PortalService()
-        summary = service.get_academic_summary(
-            session,
-            authenticated_student_id,
-            request_id=request_id,
-        )
+        sid = authenticated_student_id
+        snum_row = session.execute(
+            text("SELECT student_number FROM students WHERE id = :id LIMIT 1"),
+            {"id": sid},
+        ).fetchone()
+        student_number = snum_row[0] if snum_row else None
+
+        # Current published snapshots for this student
+        snaps = session.execute(
+            text(
+                "SELECT teaching_assignment_id, published_score, published_state"
+                " FROM publication_snapshots"
+                " WHERE student_id = :sid AND is_current = true"
+            ),
+            {"sid": sid},
+        ).fetchall()
+
+        subjects: list[dict[str, Any]] = []
+        for ta_id, score, state in snaps:
+            ctx = session.execute(
+                text(
+                    "SELECT ac.subject, ac.turma, ac.semester_id, sem.name"
+                    " FROM academic_contexts ac"
+                    " LEFT JOIN semesters sem ON sem.id = ac.semester_id"
+                    " WHERE ac.teaching_assignment_id = :ta LIMIT 1"
+                ),
+                {"ta": ta_id},
+            ).fetchone()
+            if ctx is None:
+                continue
+            disciplina, turma, _sem_id, semestre = ctx[0], ctx[1], ctx[2], ctx[3]
+
+            ad_rows = session.execute(
+                text(
+                    "SELECT id, name, weight FROM assessment_definitions"
+                    " WHERE teaching_assignment_id = :ta ORDER BY sort_order, id"
+                ),
+                {"ta": ta_id},
+            ).fetchall()
+            grade_rows = session.execute(
+                text(
+                    "SELECT assessment_definition_id, raw_value FROM grade_entries"
+                    " WHERE student_id = :sid AND teaching_assignment_id = :ta"
+                ),
+                {"sid": sid, "ta": ta_id},
+            ).fetchall()
+            values = {r[0]: (float(r[1]) if r[1] is not None else None) for r in grade_rows}
+            components = [
+                {
+                    "id": str(i),
+                    "name": ad[1] or "",
+                    "weight": float(ad[2] or 0),
+                    "value": values.get(ad[0]),
+                    "published": True,
+                }
+                for i, ad in enumerate(ad_rows)
+            ]
+            nota_final = float(score) if score is not None else None
+            resultado = (
+                "aprovado" if state == "approved"
+                else "reprovado" if state == "rejected"
+                else None
+            )
+            subjects.append({
+                "disciplina": disciplina or "",
+                "semestre": semestre or "",
+                "turma": turma or "",
+                "components": components,
+                "nota_final": nota_final,
+                "resultado": resultado,
+                "pendente": False,
+            })
+
+        first = subjects[0] if subjects else {}
         return {
-            "student_id": summary["student_id"],
-            "contexts": summary["contexts"],
+            "student_number": student_number,
+            "turma": first.get("turma"),
+            "disciplina": first.get("disciplina"),
+            "semestre": first.get("semestre"),
+            "turno": None,
+            "subjects": subjects,
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         LOGGER.exception(
             "get_all_grades_failed",
