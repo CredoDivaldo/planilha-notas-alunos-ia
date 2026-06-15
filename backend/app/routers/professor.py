@@ -242,13 +242,23 @@ async def _legacy_broadcast(
             })
             continue
 
-        template = message_template or "Olá {name}, a sua nota de {subject} é {grade}. - UniGrade"
+        template = message_template or "Olá {nome}! A sua nota de {disciplina} é {nota}. - UniGrade"
+        student_name = student.name or grade.name or ""
+        subject = grade.subject or ""
+        value = str(grade.value or "")
+        number = grade.student_number or ""
         msg = (
             template
-            .replace("{name}", student.name or grade.name or "")
-            .replace("{subject}", grade.subject or "")
-            .replace("{grade}", str(grade.value or ""))
-            .replace("{student_number}", grade.student_number or "")
+            # Portuguese placeholders (used by the frontend template)
+            .replace("{nome}", student_name)
+            .replace("{disciplina}", subject)
+            .replace("{nota}", value)
+            .replace("{numero}", number)
+            # English aliases (kept for backwards compatibility)
+            .replace("{name}", student_name)
+            .replace("{subject}", subject)
+            .replace("{grade}", value)
+            .replace("{student_number}", number)
         )
 
         if dry_run:
