@@ -57,7 +57,7 @@ def upgrade() -> None:
         sa.Column(
             "is_published",
             sa.Boolean(),
-            server_default=sa.text("0"),
+            server_default=sa.text("false"),
             nullable=False,
         ),
         sa.Column("published_at", sa.DateTime(), nullable=True),
@@ -140,7 +140,7 @@ def downgrade() -> None:
         sa.Column(
             "is_current",
             sa.Boolean(),
-            server_default=sa.text("1"),
+            server_default=sa.text("true"),
             nullable=False,
         ),
         sa.Column(

@@ -63,7 +63,7 @@ def upgrade() -> None:
         ),
         sa.Column("rotated_at", sa.DateTime(), nullable=True),
         sa.Column("expires_at", sa.DateTime(), nullable=False),
-        sa.Column("is_active", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         # Metadata — no secrets stored here
         sa.Column("ip_address", sa.String(length=64), nullable=True),
         sa.Column("user_agent", sa.String(length=512), nullable=True),
@@ -94,7 +94,7 @@ def upgrade() -> None:
         sa.Column(
             "requires_professor_validation",
             sa.Boolean(),
-            server_default=sa.text("1"),
+            server_default=sa.text("true"),
             nullable=False,
         ),
         sa.Column("assigned_by_user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=True),

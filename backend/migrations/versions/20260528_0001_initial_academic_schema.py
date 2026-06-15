@@ -48,7 +48,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("starts_on", sa.Date(), nullable=True),
         sa.Column("ends_on", sa.Date(), nullable=True),
-        sa.Column("is_active", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("status", sa.String(length=40), server_default="planned", nullable=False),
         *_timestamps(),
         sa.UniqueConstraint("code", name="uq_semesters_code"),
@@ -73,9 +73,9 @@ def upgrade() -> None:
         sa.Column("password_hash", sa.String(length=255), nullable=False),
         sa.Column("role", sa.String(length=40), nullable=False),
         sa.Column(
-            "must_change_password", sa.Boolean(), server_default=sa.text("1"), nullable=False
+            "must_change_password", sa.Boolean(), server_default=sa.text("true"), nullable=False
         ),
-        sa.Column("is_active", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column("last_login_at", sa.DateTime(), nullable=True),
         *_timestamps(),
         sa.UniqueConstraint("username", name="uq_users_username"),
@@ -148,7 +148,7 @@ def upgrade() -> None:
         sa.Column("subject_id", sa.Integer(), sa.ForeignKey("subjects.id"), nullable=False),
         sa.Column("semester_id", sa.Integer(), sa.ForeignKey("semesters.id"), nullable=False),
         sa.Column("shift_id", sa.Integer(), sa.ForeignKey("shifts.id"), nullable=False),
-        sa.Column("is_active", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         *_timestamps(),
         sa.UniqueConstraint(
             "professor_id",
@@ -331,7 +331,7 @@ def upgrade() -> None:
         sa.Column("published_score", sa.Numeric(precision=8, scale=2), nullable=True),
         sa.Column("published_state", sa.String(length=80), nullable=False),
         sa.Column("published_payload_json", sa.Text(), nullable=False),
-        sa.Column("is_current", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("is_current", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column(
             "published_at",
             sa.DateTime(),
@@ -356,6 +356,7 @@ def upgrade() -> None:
         ["student_id", "teaching_assignment_id"],
         unique=True,
         sqlite_where=sa.text("is_current = 1"),
+        postgresql_where=sa.text("is_current = true"),
     )
 
     op.create_table(
@@ -400,7 +401,7 @@ def upgrade() -> None:
         sa.Column("subject_id", sa.Integer(), sa.ForeignKey("subjects.id"), nullable=True),
         sa.Column("snapshot_version", sa.Integer(), nullable=False),
         sa.Column("published_payload_json", sa.Text(), nullable=False),
-        sa.Column("is_current", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("is_current", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column(
             "published_at",
             sa.DateTime(),
