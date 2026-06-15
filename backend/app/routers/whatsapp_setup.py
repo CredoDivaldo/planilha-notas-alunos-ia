@@ -310,6 +310,47 @@ async def test_send(body: TestSendRequest, request: Request) -> TestSendResponse
         return TestSendResponse(ok=False, instance_used=instance_name, detail=str(exc)[:300])
 
 
+@router.get("/debug-contacts")
+async def debug_contacts(request: Request, lid: str | None = None) -> dict:
+    """Debug: probe Evolution endpoints to find how it maps @lid -> phone."""
+    prof_id = _get_professor_id(request)
+    engine = _get_engine(request)
+    instance_name = _get_professor_instance(engine, prof_id)
+    base_url = (os.getenv("EVOLUTION_API_URL") or os.getenv("EVOLUTION_BASE_URL") or "").rstrip("/")
+    api_key = os.getenv("EVOLUTION_API_KEY") or ""
+    if not base_url:
+        return {"error": "Evolution não configurado"}
+
+    import httpx
+    headers = {"apikey": api_key, "Content-Type": "application/json"}
+    results: dict = {"instance": instance_name, "probes": {}}
+
+    probes = [
+        ("findContacts_POST_empty", "POST", f"/chat/findContacts/{instance_name}", {}),
+        ("findContacts_POST_where", "POST", f"/chat/findContacts/{instance_name}", {"where": {}}),
+        ("findChats_POST", "POST", f"/chat/findChats/{instance_name}", {}),
+        ("findChats_GET", "GET", f"/chat/findChats/{instance_name}", None),
+    ]
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for name, method, path, body in probes:
+            try:
+                url = f"{base_url}{path}"
+                if method == "POST":
+                    resp = await client.post(url, json=body, headers=headers)
+                else:
+                    resp = await client.get(url, headers=headers)
+                text_body = resp.text
+                # Keep it short but include lid-related rows if present
+                snippet = text_body[:1500]
+                if lid and lid in text_body:
+                    idx = text_body.find(lid)
+                    snippet = "...(lid found)... " + text_body[max(0, idx - 400):idx + 400]
+                results["probes"][name] = {"status": resp.status_code, "body": snippet}
+            except Exception as exc:
+                results["probes"][name] = {"error": str(exc)[:200]}
+    return results
+
+
 class ReconfigureWebhookResponse(BaseModel):
     configured: bool
     instance_name: str
