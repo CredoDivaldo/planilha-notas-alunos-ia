@@ -198,45 +198,39 @@ def _safe_detail(message: str) -> str:
     return message
 
 
-async def _legacy_broadcast(
+def _nota_str(nota_final: float) -> str:
+    return str(int(nota_final)) if nota_final == int(nota_final) else str(nota_final)
+
+
+async def _normalized_broadcast(
     session: Any,
     context_id: int,
+    teaching_assignment_id: int,
     dry_run: bool,
     message_template: str | None,
-    instance_name: str | None = None,
+    instance_name: str | None,
+    audience: Any,
+    channels: list[str],
+    actor_user_id: int | None,
 ) -> dict[str, Any]:
-    """Broadcast grades using LegacyGrade + LegacyStudent when no GradeEntry exists.
+    """Publish grades using the normalized model.
 
-    Groups grades per student, computes the weighted final grade from the
-    context's components_json, and sends ONE WhatsApp message per student
-    with the template placeholders substituted.
+    Computes each enrolled student's weighted final grade from
+    ``grade_entries`` + ``assessment_definitions``, creates
+    ``publication_snapshots`` (portal visibility), and sends one WhatsApp
+    message per recipient with placeholders substituted.
     """
-    import json as _json
+    from sqlalchemy import text as _text
 
-    from sqlalchemy import select, text as _text
+    from backend.app.publication.service import PublicationService
+    from backend.app.services.message_templates import render_message_template
 
-    from backend.app.models.legacy_roster import LegacyGrade, LegacyStudent
-    from backend.app.services.legacy_grades_helper import (
-        compute_final_grade,
-        map_legacy_grades_to_components,
-        render_message_template,
-    )
-
-    # Context info: disciplina (subject), semester name, components_json
+    # Context info: disciplina, semester name
     ctx_row = session.execute(
-        _text(
-            "SELECT subject, semester_id, components_json"
-            " FROM academic_contexts WHERE id = :cid LIMIT 1"
-        ),
+        _text("SELECT subject, semester_id FROM academic_contexts WHERE id = :cid LIMIT 1"),
         {"cid": context_id},
     ).fetchone()
     disciplina = (ctx_row[0] if ctx_row else "") or ""
-    components: list[dict] = []
-    if ctx_row and ctx_row[2]:
-        try:
-            components = _json.loads(ctx_row[2])
-        except Exception:
-            components = []
     semestre = ""
     if ctx_row and ctx_row[1]:
         sem_row = session.execute(
@@ -245,79 +239,110 @@ async def _legacy_broadcast(
         ).fetchone()
         semestre = (sem_row[0] if sem_row else "") or ""
 
-    students = session.execute(
-        select(LegacyStudent).where(LegacyStudent.academic_context_id == context_id)
-    ).scalars().all()
-    grades = session.execute(
-        select(LegacyGrade).where(LegacyGrade.academic_context_id == context_id)
-    ).scalars().all()
+    # Components and weights
+    ad_rows = session.execute(
+        _text(
+            "SELECT id, weight FROM assessment_definitions"
+            " WHERE teaching_assignment_id = :ta ORDER BY sort_order, id"
+        ),
+        {"ta": teaching_assignment_id},
+    ).fetchall()
+    comp_ids = [r[0] for r in ad_rows]
+    weights = {r[0]: float(r[1] or 0) for r in ad_rows}
 
-    # Group (subject, value) rows by student_number
-    grades_by_student: dict[str, list[tuple]] = {}
-    for g in grades:
-        if g.student_number:
-            grades_by_student.setdefault(g.student_number, []).append((g.subject, g.value))
+    # Enrolled students
+    students = session.execute(
+        _text(
+            "SELECT s.id, s.student_number, s.full_name, s.phone"
+            " FROM class_enrollments ce JOIN students s ON s.id = ce.student_id"
+            " WHERE ce.academic_context_id = :cid"
+            "   AND (ce.enrollment_status IS NULL OR ce.enrollment_status = 'active')"
+            " ORDER BY s.student_number"
+        ),
+        {"cid": context_id},
+    ).fetchall()
 
     instance = instance_name or _default_instance()
+    audience_list = audience if isinstance(audience, list) else None
     sent = 0
     failures: list[dict] = []
     recipients = 0
+    grade_data: list[dict] = []
 
-    for student in students:
-        student_grades = grades_by_student.get(student.student_number or "", [])
-        if not student_grades:
-            continue  # no grades for this student — skip silently
-        recipients += 1
+    for sid, snum, sname, sphone in students:
+        grows = session.execute(
+            _text(
+                "SELECT assessment_definition_id, raw_value FROM grade_entries"
+                " WHERE student_id = :s AND teaching_assignment_id = :ta"
+            ),
+            {"s": sid, "ta": teaching_assignment_id},
+        ).fetchall()
+        vals = {adid: (float(v) if v is not None else None) for adid, v in grows}
+        # Only complete students (all components present) are published
+        if not comp_ids or any(vals.get(cid) is None for cid in comp_ids):
+            continue
+        total = sum(vals[cid] * weights[cid] / 100 for cid in comp_ids)
+        nota_final = round(total * 10) / 10
+        approved = nota_final >= 10
 
-        if not student.whatsapp:
-            failures.append({
-                "student_id": str(student.id),
-                "student_name": student.name or "",
-                "student_number": student.student_number or "",
-                "reason": "Sem número WhatsApp cadastrado",
-            })
+        # Audience filter
+        if audience == "approved" and not approved:
+            continue
+        if audience == "rejected" and approved:
+            continue
+        if audience_list is not None and str(sid) not in audience_list and (snum or "") not in audience_list:
             continue
 
-        comp_values = map_legacy_grades_to_components(student_grades, components)
-        nota_final = compute_final_grade(comp_values, components)
-        nota_str = (str(int(nota_final)) if nota_final is not None and nota_final == int(nota_final)
-                    else str(nota_final)) if nota_final is not None else "—"
-        if nota_final is None:
-            resultado = "—"
-        elif nota_final >= 10:
-            resultado = "Aprovado"
-        else:
-            resultado = "Reprovado"
+        recipients += 1
+        grade_data.append({
+            "student_id": sid,
+            "published_score": nota_final,
+            "published_state": "approved" if approved else "rejected",
+            "payload": {"value": nota_final, "whatsapp": sphone},
+        })
 
+        if dry_run or "whatsapp" not in channels:
+            continue
+        if not sphone:
+            failures.append({
+                "student_id": str(sid), "student_name": sname or "",
+                "student_number": snum or "", "reason": "Sem número WhatsApp cadastrado",
+            })
+            continue
         msg = render_message_template(
             message_template,
-            nome=student.name or "",
-            disciplina=disciplina,
-            semestre=semestre,
-            nota=nota_str,
-            resultado=resultado,
-            numero=student.student_number or "",
+            nome=sname or "", disciplina=disciplina, semestre=semestre,
+            nota=_nota_str(nota_final), resultado="Aprovado" if approved else "Reprovado",
+            numero=snum or "",
         )
-
-        if dry_run:
-            sent += 1
-            continue
-
         try:
-            await send_whatsapp_text(instance, student.whatsapp, msg)
+            await send_whatsapp_text(instance, sphone, msg)
             sent += 1
         except Exception as exc:
-            LOGGER.warning("legacy_broadcast_send_failed", extra={"error": str(exc), "student": student.student_number})
+            LOGGER.warning("broadcast_send_failed", extra={"error": str(exc), "student": snum})
             failures.append({
-                "student_id": str(student.id),
-                "student_name": student.name or "",
-                "student_number": student.student_number or "",
-                "reason": str(exc)[:200],
+                "student_id": str(sid), "student_name": sname or "",
+                "student_number": snum or "", "reason": str(exc)[:200],
             })
+
+    # Publish snapshots (portal visibility) — real runs only
+    portal_published = 0
+    if not dry_run and grade_data:
+        svc = PublicationService()
+        job = svc.create_broadcast_job(
+            session,
+            teaching_assignment_id=teaching_assignment_id,
+            actor_user_id=actor_user_id or 1,
+            job_type="grade_publication",
+            channels=channels,
+        )
+        svc.create_publication_snapshots(session, job, grade_data)
+        session.commit()
+        portal_published = len(grade_data)
 
     return {
         "simulated": dry_run,
-        "portal_published": 0,
+        "portal_published": portal_published,
         "whatsapp_sent": sent,
         "failures": len(failures),
         "failure_list": failures,
@@ -409,59 +434,39 @@ async def broadcast(request: Request, payload: BroadcastRequest) -> BroadcastRes
     except Exception:
         pass
 
+    # Resolve the teaching assignment from the academic context (1:1 link)
     teaching_assignment_id = payload.teaching_assignment_id
     if teaching_assignment_id is None and payload.context_id is not None:
-        teaching_assignment_id = _resolve_teaching_assignment_id(
-            session, payload.context_id
-        )
+        from sqlalchemy import text as _t
+        _r = session.execute(
+            _t("SELECT teaching_assignment_id FROM academic_contexts WHERE id = :cid LIMIT 1"),
+            {"cid": payload.context_id},
+        ).fetchone()
+        teaching_assignment_id = _r[0] if _r and _r[0] else None
 
-    # Legacy fallback: no GradeEntry teaching assignment — use LegacyGrade/LegacyStudent
-    if teaching_assignment_id is None and payload.context_id is not None:
-        try:
-            result = await _legacy_broadcast(
-                session,
-                context_id=payload.context_id,
-                dry_run=dry_run,
-                message_template=payload.message_template,
-                instance_name=_prof_instance,
-            )
-        except Exception as exc:
-            LOGGER.exception("legacy_broadcast_failed")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=_safe_detail(f"Broadcast legacy failed: {exc.__class__.__name__}: {exc}"),
-            ) from exc
-        return BroadcastResponse(
-            simulated=result.get("simulated", False),
-            portal_published=0,
-            whatsapp_sent=result.get("whatsapp_sent", 0),
-            failures=result.get("failures", 0),
-            failure_list=[BroadcastFailureItem(**f) for f in result.get("failure_list", [])],
-            total_recipients=result.get("total_recipients"),
-        )
-
-    if teaching_assignment_id is None and not dry_run:
+    if teaching_assignment_id is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Nenhum contexto selecionado. Selecione um contexto académico antes de disparar.",
         )
 
-    actor_user_id = payload.actor_user_id or 1  # demo default
-
     try:
-        result = await trigger_broadcast(
+        result = await _normalized_broadcast(
             session,
-            teaching_assignment_id=teaching_assignment_id or 0,
-            actor_user_id=actor_user_id,
-            channels=payload.channels,
+            context_id=payload.context_id,
+            teaching_assignment_id=teaching_assignment_id,
             dry_run=dry_run,
-            class_group_id=payload.class_group_id,
+            message_template=payload.message_template,
+            instance_name=_prof_instance,
+            audience=payload.audience,
+            channels=payload.channels,
+            actor_user_id=_prof_user_id or payload.actor_user_id,
         )
     except Exception as exc:
         LOGGER.exception("broadcast_failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_safe_detail(f"Broadcast failed: {exc.__class__.__name__}"),
+            detail=_safe_detail(f"Broadcast failed: {exc.__class__.__name__}: {exc}"),
         ) from exc
 
     return BroadcastResponse(
@@ -472,11 +477,7 @@ async def broadcast(request: Request, payload: BroadcastRequest) -> BroadcastRes
         failure_list=[
             BroadcastFailureItem(**f) for f in result.get("failure_list", [])
         ],
-        broadcast_job_id=result.get("broadcast_job_id"),
         total_recipients=result.get("total_recipients"),
-        existing_current_snapshots=result.get("existing_current_snapshots"),
-        channels=result.get("channels"),
-        teaching_assignment_id=result.get("teaching_assignment_id"),
     )
 
 
