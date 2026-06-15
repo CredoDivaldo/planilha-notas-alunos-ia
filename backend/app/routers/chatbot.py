@@ -309,10 +309,10 @@ async def receive_webhook(
     ]
     # Log the raw shape so we can see exactly what Evolution sends
     LOGGER.warning(
-        "webhook_phone_extraction remoteJid=%s senderPn=%s participant=%s candidates=%s",
+        "webhook_phone_extraction remoteJid=%s pushName=%r senderPn=%s candidates=%s",
         remote_jid,
+        data.get("pushName"),
         key.get("senderPn"),
-        key.get("participant"),
         [c for c in phone_candidates if c],
     )
 
@@ -383,15 +383,13 @@ async def receive_webhook(
                 lid=remote_jid if "@lid" in str(remote_jid) else None,
             )
 
-            LOGGER.info(
-                "webhook_pipeline_result",
-                extra={
-                    "outcome": result["outcome"],
-                    "student_id": result["student_id"],
-                    "normalized_phone": normalized_phone,
-                    "ai_called": result["ai_called"],
-                    "request_id": request_id,
-                },
+            LOGGER.warning(
+                "webhook_pipeline_result outcome=%s student_id=%s ai_called=%s push_name=%r reply_phone=%s",
+                result["outcome"],
+                result["student_id"],
+                result["ai_called"],
+                push_name,
+                result.get("phone"),
             )
 
         except ValueError as exc:
