@@ -161,3 +161,11 @@ def test_full_professor_and_student_flow(app_client):
     assert res.status_code == 200, res.text
     events = res.json()["events"]
     assert any(e["title"] == "Exame Final" and e["date"] == "2026-07-01" for e in events)
+
+    # Professor's own calendar list must return a clean YYYY-MM-DD date (+ time)
+    res = client.get("/api/v1/calendar/events", headers=auth)
+    assert res.status_code == 200, res.text
+    prof_events = res.json()["events"]
+    ev = next(e for e in prof_events if e["title"] == "Exame Final")
+    assert ev["date"] == "2026-07-01"  # no time glued to the date
+    assert ev["time"] == "10:00"

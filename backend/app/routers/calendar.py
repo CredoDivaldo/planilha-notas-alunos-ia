@@ -72,6 +72,7 @@ class CalendarEventOut(BaseModel):
     id: str
     title: str
     date: str
+    time: str | None = None
     type: str
     location: str | None = None
     endsAt: str | None = None
@@ -100,14 +101,30 @@ class EventUpdateRequest(BaseModel):
     context_id: str | None = None
 
 
+def _split_dt(value) -> tuple[str, str | None]:
+    """Return (YYYY-MM-DD, HH:MM | None) from a datetime or timestamp string."""
+    if value is None:
+        return "", None
+    if hasattr(value, "strftime"):
+        return value.strftime("%Y-%m-%d"), value.strftime("%H:%M")
+    s = str(value)
+    date = s[:10]
+    time = s[11:16] if len(s) >= 16 else None
+    # treat midnight as "no time"
+    return date, (None if time in (None, "00:00") else time)
+
+
 def _row_to_out(row) -> CalendarEventOut:
+    date, time = _split_dt(row[2])
+    ends_date, ends_time = _split_dt(row[5]) if row[5] else ("", None)
     return CalendarEventOut(
         id=str(row[0]),
         title=row[1] or "",
-        date=str(row[2]) if row[2] else "",
+        date=date,
+        time=time,
         type=row[3] or "outro",
         location=row[4] if row[4] else None,
-        endsAt=str(row[5]) if row[5] else None,
+        endsAt=(ends_time or ends_date) if row[5] else None,
         context_id=row[6] if len(row) > 6 and row[6] else None,
     )
 
