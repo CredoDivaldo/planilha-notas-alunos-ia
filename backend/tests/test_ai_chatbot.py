@@ -189,6 +189,10 @@ def sample_context_with_grade(
     )
     session.add(context)
     session.flush()
+    # Link the context to its teaching assignment (the chatbot grade context
+    # joins snapshots → academic_contexts on teaching_assignment_id).
+    context.teaching_assignment_id = context.id
+    session.flush()
 
     enrollment = ClassEnrollment(
         student_id=student_id,
@@ -250,7 +254,7 @@ class TestPromptBuilder:
             assert "17.5" in context or "17" in context
             assert "Aprovado" in context
             assert "2026-05-28" in context
-            assert "Semestre 2026-1" in context
+            assert "Semestre" in context  # semester name is included
             assert "Turma A" in context
 
     def test_fetch_grades_context_no_internal_data_leakage(

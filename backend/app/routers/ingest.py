@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.routers.chatbot import get_db_session
 from backend.app.services import academic_provisioning as ap
-from backend.app.services.legacy_import import (
+from backend.app.services.csv_parsing import (
     check_file_size,
     normalize_grade,
     normalize_student,

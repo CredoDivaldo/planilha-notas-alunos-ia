@@ -24,7 +24,6 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.app.publication.service import compute_match, trigger_broadcast
 from backend.app.services.evolution_api_client import (
     EvolutionApiError,
     _default_instance,
@@ -43,27 +42,6 @@ router = APIRouter(prefix="/api/v1", tags=["professor"])
 # ---------------------------------------------------------------------------
 # Request / response models
 # ---------------------------------------------------------------------------
-
-
-class MatchRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    context_id: int | None = None
-
-
-class MatchItem(BaseModel):
-    numero_estudante: str
-    nome: str
-    turma: str
-    whatsapp: str
-    nota: str
-
-
-class MatchResponse(BaseModel):
-    matched: int
-    unmatched: int
-    invalid_phones: int
-    items: list[MatchItem]
 
 
 class BroadcastFailureItem(BaseModel):
@@ -160,35 +138,6 @@ def _get_session(request: Request):
             detail="Database session unavailable",
         )
     return sess
-
-
-def _resolve_teaching_assignment_id(
-    session: Any, context_id: int
-) -> int | None:
-    """Look up the canonical teaching assignment for a context.
-
-    The schema does not model ``TeachingAssignment`` as its own table —
-    ``teaching_assignment_id`` is a free ``Integer`` column on
-    ``GradeEntry`` / ``PublicationSnapshot``. We pick the smallest one
-    present in the DB as a stable default for the dashboard flow.
-
-    Returns ``None`` when no assignment exists (Story 8.2 keeps the
-    router permissive — the dashboard will display "no context" rather
-    than a 500).
-    """
-    try:
-        from sqlalchemy import func, select
-
-        from backend.app.models import GradeEntry
-
-        row = session.execute(
-            select(func.min(GradeEntry.teaching_assignment_id)).where(
-                GradeEntry.academic_context_id == context_id
-            )
-        ).scalar()
-    except Exception:
-        return None
-    return int(row) if row is not None else None
 
 
 def _safe_detail(message: str) -> str:
@@ -348,41 +297,6 @@ async def _normalized_broadcast(
         "failure_list": failures,
         "total_recipients": recipients,
     }
-
-
-# ---------------------------------------------------------------------------
-# POST /api/v1/grades/match
-# ---------------------------------------------------------------------------
-
-
-@router.post(
-    "/grades/match",
-    response_model=MatchResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def grades_match(request: Request, payload: MatchRequest | None = None) -> MatchResponse:
-    """AC-1: reconcile students × grades and return counts + items.
-
-    Body is optional (``{"context_id": <int>}``); when ``context_id`` is
-    omitted, the matcher runs against all un-scoped rows.
-    """
-    session = _get_session(request)
-    ctx_id = payload.context_id if payload else None
-    try:
-        result = compute_match(session, context_id=ctx_id)
-    except Exception as exc:  # DB errors / etc.
-        LOGGER.exception("grades_match_failed", extra={"context_id": ctx_id})
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_safe_detail(f"Match failed: {exc.__class__.__name__}"),
-        ) from exc
-
-    return MatchResponse(
-        matched=result["matched"],
-        unmatched=result["unmatched"],
-        invalid_phones=result["invalid_phones"],
-        items=[MatchItem(**item) for item in result["items"]],
-    )
 
 
 # ---------------------------------------------------------------------------

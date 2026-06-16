@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import csv
 import io
-import re
 import unicodedata
 from dataclasses import dataclass
 from typing import Any
@@ -174,84 +173,3 @@ def check_file_size(size: int) -> ValidationResult:
             ),
         )
     return ValidationResult(valid=True, error=None)
-
-
-# ---------------------------------------------------------------------------
-# Matcher helpers (re-used by Story 8.2)
-# ---------------------------------------------------------------------------
-
-_DIACRITICS_RE = re.compile(r"[̀-ͯ]")
-
-
-def normalize_name(name: str) -> str:
-    """Strip diacritics + lowercase + trim. Mirrors legacy ``normalizeName``."""
-    decomposed = unicodedata.normalize("NFD", str(name or ""))
-    return _DIACRITICS_RE.sub("", decomposed).lower().strip()
-
-
-def normalize_phone(phone: str) -> str:
-    """Keep digits only. Mirrors legacy ``normalizePhone``."""
-    return re.sub(r"\D", "", str(phone or ""))
-
-
-def is_valid_phone(phone: str) -> bool:
-    """10-15 digits, like the legacy module."""
-    cleaned = normalize_phone(phone)
-    return 10 <= len(cleaned) <= 15
-
-
-def build_match(
-    students: list[dict[str, str]],
-    grades: list[dict[str, str]],
-) -> dict[str, Any]:
-    """Reconcile students.csv with grades.csv.
-
-    Mirrors ``buildMatch(students, grades)`` in matcher.js. Returns the
-    same shape the front-end dashboard expects from ``POST /api/v1/grades/match``
-    (Story 8.2 will wire this up as the thin adapter over the match
-    endpoint). Pure function — no DB.
-    """
-    by_number: dict[str, dict[str, str]] = {}
-    by_name: dict[str, dict[str, str]] = {}
-    for s in students:
-        if s.get("numero_estudante"):
-            by_number[s["numero_estudante"]] = s
-        if s.get("nome"):
-            by_name[normalize_name(s["nome"])] = s
-
-    matched: list[dict[str, str]] = []
-    unmatched: list[dict[str, str]] = []
-    invalid_phones: list[dict[str, str]] = []
-
-    for g in grades:
-        student: dict[str, str] | None = None
-        if g.get("numero_estudante") and g["numero_estudante"] in by_number:
-            student = by_number[g["numero_estudante"]]
-        elif g.get("nome") and normalize_name(g["nome"]) in by_name:
-            student = by_name[normalize_name(g["nome"])]
-
-        if not student:
-            unmatched.append(g)
-            continue
-
-        if not is_valid_phone(student.get("whatsapp", "")):
-            invalid_phones.append(student)
-
-        matched.append(
-            {
-                "numero_estudante": student.get("numero_estudante", ""),
-                "nome": student.get("nome", ""),
-                "turma": student.get("turma", ""),
-                "whatsapp": student.get("whatsapp", ""),
-                "nota": g.get("nota", ""),
-            }
-        )
-
-    return {
-        "matched": len(matched),
-        "unmatched": len(unmatched),
-        "invalid_phones": len(invalid_phones),
-        "matched_items": matched,
-        "unmatched_items": unmatched,
-        "invalid_phone_items": invalid_phones,
-    }

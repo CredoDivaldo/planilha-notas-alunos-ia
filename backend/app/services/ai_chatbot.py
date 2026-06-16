@@ -359,9 +359,13 @@ class AIGradeQueryService:
                 except (TypeError, ValueError):
                     score_str = "N/A"
                 estado = {"approved": "Aprovado", "rejected": "Reprovado"}.get(state, state or "")
+                if hasattr(pub_at, "strftime"):
+                    pub_str = pub_at.strftime("%Y-%m-%d")
+                else:
+                    pub_str = str(pub_at)[:10] if pub_at else "—"
                 context_lines.append(
                     f"- {subject} | Semestre {sem_name or ''} | Turma {turma or ''} |"
-                    f" Nota: {score_str} | Estado: {estado}"
+                    f" Nota: {score_str} | Estado: {estado} | Publicado: {pub_str}"
                 )
 
             return "\n".join(context_lines) if context_lines else ""

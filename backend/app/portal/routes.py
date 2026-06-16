@@ -18,6 +18,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.portal.service import PortalAccessError, PortalService

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import json
 import sqlite3
 from pathlib import Path
 
-from backend.app.cli import bootstrap_db, inspect_legacy_json
+from backend.app.cli import bootstrap_db
 
 EXPECTED_TABLES = {
     "users",
@@ -58,31 +57,7 @@ def test_bootstrap_db_applies_initial_academic_schema(tmp_path: Path) -> None:
 
     assert EXPECTED_TABLES.issubset(table_names)
     assert journal_mode == "wal"
-    assert alembic_version == ("20260604_0005",)  # Story 5.6: published_calendar_snapshots rebuild
-
-
-def test_legacy_json_import_dry_run_reports_counts_without_mutating_files(tmp_path: Path) -> None:
-    students_path = tmp_path / "students.json"
-    grades_path = tmp_path / "grades-last-upload.json"
-    match_path = tmp_path / "match-last.json"
-
-    students_path.write_text(json.dumps({"students": [{"id": 1}, {"id": 2}]}), encoding="utf-8")
-    grades_path.write_text(json.dumps([{"student": "1"}]), encoding="utf-8")
-    match_path.write_text(json.dumps({"matches": [{"student": "1"}]}), encoding="utf-8")
-
-    original_payloads = {
-        path.name: path.read_text(encoding="utf-8")
-        for path in (students_path, grades_path, match_path)
-    }
-
-    report = inspect_legacy_json(tmp_path)
-
-    assert report["dry_run"] is True
-    assert report["applied"] is False
-    assert report["total_rows"] == 4
-    assert report["imported_rows"] == 0
-    assert report["rejected_rows"] == 0
-    assert {
-        path.name: path.read_text(encoding="utf-8")
-        for path in (students_path, grades_path, match_path)
-    } == original_payloads
+    # Migrations run to head; legacy tables are dropped by 0012.
+    assert alembic_version == ("20260616_0012",)
+    assert "legacy_students" not in table_names
+    assert "legacy_grades" not in table_names
