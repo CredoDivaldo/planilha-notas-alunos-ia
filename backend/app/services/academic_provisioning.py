@@ -211,16 +211,20 @@ def ensure_student(
 ) -> int:
     now = _now()
     row = conn.execute(
-        text("SELECT id FROM students WHERE student_number = :sn LIMIT 1"),
+        text("SELECT id, full_name, phone FROM students WHERE student_number = :sn LIMIT 1"),
         {"sn": student_number},
     ).fetchone()
     if row:
+        # Preserve existing name/phone when the incoming values are empty
+        # (e.g. the grades CSV has no phone — it must not wipe the roster phone).
+        new_name = name or row[1] or ""
+        new_phone = phone if phone else row[2]
         conn.execute(
             text(
                 "UPDATE students SET full_name = :n, phone = :p, updated_at = :now"
                 " WHERE id = :id"
             ),
-            {"n": name or "", "p": phone, "now": now, "id": row[0]},
+            {"n": new_name, "p": new_phone, "now": now, "id": row[0]},
         )
         return row[0]
     r = conn.execute(

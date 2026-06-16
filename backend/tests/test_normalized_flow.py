@@ -117,6 +117,8 @@ def test_full_professor_and_student_flow(app_client):
     assert float(credo["components"]["0"]["value"]) == 16.0
     assert float(credo["components"]["1"]["value"]) == 18.0
     assert credo["published"] is False
+    # Regression: the grades upload must NOT wipe the roster phone
+    assert credo["phone"] == "244938745635"
 
     # 5) Publish (portal channel) — creates publication_snapshots
     res = client.post("/api/v1/broadcast/", headers=auth, json={
