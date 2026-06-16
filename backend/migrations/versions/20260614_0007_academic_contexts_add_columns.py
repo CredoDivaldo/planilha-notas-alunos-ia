@@ -14,6 +14,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import inspect
 
 revision: str = "20260614_0007"
 down_revision: str | None = "20260610_0006"
@@ -22,13 +23,20 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # Idempotent: create_all may have already added these columns on a
+    # database whose alembic_version lagged behind (hybrid local DBs).
+    bind = op.get_bind()
+    existing = {c["name"] for c in inspect(bind).get_columns("academic_contexts")}
+    to_add = []
+    if "class_group_id" not in existing:
+        to_add.append(sa.Column("class_group_id", sa.Integer(), nullable=True))
+    if "subject_code" not in existing:
+        to_add.append(sa.Column("subject_code", sa.String(length=80), nullable=True))
+    if not to_add:
+        return
     with op.batch_alter_table("academic_contexts") as batch_op:
-        batch_op.add_column(
-            sa.Column("class_group_id", sa.Integer(), nullable=True)
-        )
-        batch_op.add_column(
-            sa.Column("subject_code", sa.String(length=80), nullable=True)
-        )
+        for col in to_add:
+            batch_op.add_column(col)
 
 
 def downgrade() -> None:
