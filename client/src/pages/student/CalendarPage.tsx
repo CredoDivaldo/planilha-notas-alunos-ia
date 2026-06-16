@@ -2,7 +2,7 @@
 // Story 7.8 — T1 (student variant)
 
 import { Download } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AppHeader } from '@/components/organisms/AppHeader'
 import { MonthCalendar } from '@/components/organisms/MonthCalendar'
 import { UpcomingEventsList } from '@/components/organisms/UpcomingEventsList'
@@ -13,29 +13,6 @@ import type { CalendarEvent } from '@/components/molecules/EventDot'
 // ---------------------------------------------------------------------------
 // Mock data — events with visivel_estudantes=true
 // ---------------------------------------------------------------------------
-const MOCK_STUDENT_EVENTS: CalendarEvent[] = [
-  {
-    id: 'sev-1',
-    date: new Date().toISOString().slice(0, 10),
-    type: 'exame',
-    title: 'Prova de Inglês Técnico',
-    time: '09:00–12:00',
-    location: 'Sala 3',
-    description: '',
-  },
-  {
-    id: 'sev-2',
-    date: (() => {
-      const d = new Date(); d.setDate(d.getDate() + 5); return d.toISOString().slice(0, 10)
-    })(),
-    type: 'entrega',
-    title: 'Entrega de Trabalho Final',
-    time: '23:59',
-    location: '',
-    description: '',
-  },
-]
-
 // ---------------------------------------------------------------------------
 // ICS export (read-only for student — AC12)
 // ---------------------------------------------------------------------------
@@ -69,15 +46,16 @@ function downloadIcs(events: CalendarEvent[]) {
 // Component
 // ---------------------------------------------------------------------------
 export default function StudentCalendarPage() {
-  const [events, setEvents] = useState<CalendarEvent[]>(MOCK_STUDENT_EVENTS)
+  const [events, setEvents] = useState<CalendarEvent[]>([])
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
 
-  // Load from student endpoint (Story 5.6 confirmed)
-  useState(() => {
-    apiFetch<CalendarEvent[]>('/api/v1/portal/me/calendar')
-      .then((d) => setEvents(Array.isArray(d) ? d : MOCK_STUDENT_EVENTS))
-      .catch(() => setEvents(MOCK_STUDENT_EVENTS))
-  })
+  // Load the student's published calendar events from the portal endpoint.
+  // The backend returns { events: [{id, date, time, type, title, location}] }.
+  useEffect(() => {
+    apiFetch<{ events: CalendarEvent[] }>('/api/v1/portal/me/calendar')
+      .then((d) => setEvents(d.events ?? []))
+      .catch(() => setEvents([]))
+  }, [])
 
   // 7-day filter for upcoming section
   const today = new Date()

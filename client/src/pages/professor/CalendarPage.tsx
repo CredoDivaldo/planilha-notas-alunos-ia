@@ -2,7 +2,7 @@
 // Story 7.8 — T1, T3, T4, T8, T9, T10, T11, T13
 
 import { Calendar } from 'lucide-react'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { AppHeader } from '@/components/organisms/AppHeader'
 import { MonthCalendar } from '@/components/organisms/MonthCalendar'
 import { UpcomingEventsList } from '@/components/organisms/UpcomingEventsList'
@@ -18,65 +18,18 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { apiFetch } from '@/lib/api'
-import type { CalendarEvent, EventType } from '@/components/molecules/EventDot'
+import type { CalendarEvent } from '@/components/molecules/EventDot'
 import { useActiveContext } from '@/contexts/ActiveContextContext'
 
 // ---------------------------------------------------------------------------
 // Fallback data (used when backend is unreachable in dev; not test fixtures)
 // ---------------------------------------------------------------------------
-const FALLBACK_EVENTS: CalendarEvent[] = [
-  {
-    id: 'ev-1',
-    date: new Date().toISOString().slice(0, 10),
-    type: 'exame',
-    title: 'Prova de Inglês Técnico',
-    time: '09:00–12:00',
-    location: 'Sala 3',
-    description: '',
-  },
-  {
-    id: 'ev-2',
-    date: (() => {
-      const d = new Date(); d.setDate(d.getDate() + 3); return d.toISOString().slice(0, 10)
-    })(),
-    type: 'entrega',
-    title: 'Entrega de Trabalho Final',
-    time: '23:59',
-    location: '',
-    description: '',
-  },
-  {
-    id: 'ev-3',
-    date: (() => {
-      const d = new Date(); d.setDate(d.getDate() + 10); return d.toISOString().slice(0, 10)
-    })(),
-    type: 'recurso',
-    title: 'Recurso de Matemática',
-    time: '14:00–16:00',
-    location: 'Sala 1',
-    description: '',
-  },
-]
-
 // Extended CalendarEvent with optional context_id for filtering
 type CalendarEventWithContext = CalendarEvent & { context_id?: string }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function formToEvent(data: EventFormData, id: string, contextId?: string): CalendarEventWithContext {
-  const timeParts = [data.startTime, data.endTime].filter(Boolean)
-  return {
-    id,
-    date: data.date,
-    type: data.type as EventType,
-    title: data.description,
-    time: timeParts.length === 2 ? `${timeParts[0]}–${timeParts[1]}` : timeParts[0] ?? undefined,
-    location: data.location || undefined,
-    description: data.notes || undefined,
-    context_id: contextId,
-  }
-}
 
 // T11 — ICS export (manual Blob, no npm package)
 function generateIcs(events: CalendarEvent[]): string {
@@ -206,7 +159,7 @@ export default function CalendarPage() {
   }))
 
   // Data
-  const [events, setEvents] = useState<CalendarEventWithContext[]>(FALLBACK_EVENTS)
+  const [events, setEvents] = useState<CalendarEventWithContext[]>([])
   const [selectedContextId, setSelectedContextId] = useState<string>('todos')
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventWithContext | null>(null)
 
@@ -222,64 +175,74 @@ export default function CalendarPage() {
     setTimeout(() => setStatusMsg(null), 4000)
   }
 
-  // Load events — mock fallback
-  useState(() => {
+  // Load events from the backend (the source of truth)
+  const reloadEvents = useCallback(() => {
     apiFetch<{ events: CalendarEventWithContext[] }>('/api/v1/calendar/events')
-      .then((d) => setEvents(d.events ?? FALLBACK_EVENTS))
-      .catch(() => setEvents(FALLBACK_EVENTS))
-  })
+      .then((d) => setEvents(d.events ?? []))
+      .catch(() => setEvents([]))
+  }, [])
+
+  useEffect(() => {
+    reloadEvents()
+  }, [reloadEvents])
 
   // Filtered events by context
   const filteredEvents = selectedContextId === 'todos'
     ? events
     : events.filter((ev) => ev.context_id === selectedContextId)
 
-  // T8 — Create event
-  const handleSave = useCallback(async (data: EventFormData, eventId?: string) => {
-    const ctxId = selectedContextId !== 'todos' ? selectedContextId : undefined
-    if (eventId) {
-      // T9 — Edit
-      try {
-        await apiFetch(`/api/v1/calendar/events/${eventId}`, {
-          method: 'PUT',
-          body: JSON.stringify({ ...data, context_id: ctxId }),
-        })
-      } catch {
-        // Optimistic update for mock
-      }
-      const updated = formToEvent(data, eventId, ctxId)
-      setEvents((prev) => prev.map((ev) => ev.id === eventId ? updated : ev))
-      setSelectedEvent(updated)
-      showStatus('Evento actualizado com sucesso.')
-    } else {
-      // Create
-      const newId = crypto.randomUUID()
-      try {
-        await apiFetch<{ id: string }>('/api/v1/calendar/events', {
-          method: 'POST',
-          body: JSON.stringify({ ...data, context_id: ctxId }),
-        })
-      } catch {
-        // Optimistic local create
-      }
-      const created = formToEvent(data, newId, ctxId)
-      setEvents((prev) => [...prev, created])
-      showStatus('Evento criado com sucesso.')
+  // Build the backend payload from the form (maps description→title, combines date+time)
+  const toEventBody = (data: EventFormData, ctxId: string | undefined) => {
+    const date = data.startTime ? `${data.date}T${data.startTime}` : data.date
+    const endsAt = data.endTime ? `${data.date}T${data.endTime}` : undefined
+    return {
+      title: data.description,
+      date,
+      type: data.type,
+      location: data.location || undefined,
+      endsAt,
+      context_id: ctxId,
     }
-  }, [selectedContextId])
+  }
+
+  // Create / edit event — persist to backend, surface errors, then reload
+  const handleSave = useCallback(async (data: EventFormData, eventId?: string) => {
+    // Prefer the context chosen in the modal; fall back to the page selector
+    const ctxId = data.contextId || (selectedContextId !== 'todos' ? selectedContextId : undefined)
+    const body = toEventBody(data, ctxId)
+    try {
+      if (eventId) {
+        await apiFetch(`/api/v1/calendar/events/${eventId}`, {
+          method: 'PUT', body: JSON.stringify(body),
+        })
+        showStatus('Evento actualizado com sucesso.')
+      } else {
+        await apiFetch('/api/v1/calendar/events', {
+          method: 'POST', body: JSON.stringify(body),
+        })
+        showStatus('Evento criado com sucesso.')
+      }
+      setModalOpen(false)
+      setEditingEvent(null)
+      reloadEvents()
+    } catch (err) {
+      showStatus(err instanceof Error ? err.message : 'Erro ao guardar o evento.', false)
+    }
+  }, [selectedContextId, reloadEvents])
 
   // T10 — Delete
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return
     try {
       await apiFetch(`/api/v1/calendar/events/${deleteTarget.id}`, { method: 'DELETE' })
-    } catch {
-      // Optimistic
+      setEvents((prev) => prev.filter((ev) => ev.id !== deleteTarget.id))
+      if (selectedEvent?.id === deleteTarget.id) setSelectedEvent(null)
+      showStatus('Evento eliminado.')
+    } catch (err) {
+      showStatus(err instanceof Error ? err.message : 'Erro ao eliminar o evento.', false)
+    } finally {
+      setDeleteTarget(null)
     }
-    setEvents((prev) => prev.filter((ev) => ev.id !== deleteTarget.id))
-    if (selectedEvent?.id === deleteTarget.id) setSelectedEvent(null)
-    setDeleteTarget(null)
-    showStatus('Evento eliminado.')
   }, [deleteTarget, selectedEvent])
 
   function openCreate() {
