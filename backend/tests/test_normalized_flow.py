@@ -29,6 +29,16 @@ def app_client(tmp_path):
     db_url = f"sqlite:///{db_file}"
     bootstrap_db(db_url, force=True)
     engine = create_engine(db_url, connect_args={"check_same_thread": False})
+
+    # Enforce foreign keys like the production engine does (catches FK bugs)
+    from sqlalchemy import event
+
+    @event.listens_for(engine, "connect")
+    def _fk_on(dbapi_connection, _record):  # noqa: ANN001
+        cur = dbapi_connection.cursor()
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
+
     # whatsapp_instance is added at runtime by the setup router; ensure it exists
     with engine.connect() as conn:
         try:
@@ -78,11 +88,15 @@ def test_full_professor_and_student_flow(app_client):
     ctx_id = ctx["id"]
     assert len(ctx["components"]) == 2
 
-    # 2) Upload students roster
-    students_csv = "numero_estudante,nome,turma,whatsapp\n2026001,Credo Lopes,EI1M,244938745635\n"
+    # 2) Upload students roster (2 students — the 2nd caught the FK→users bug)
+    students_csv = (
+        "numero_estudante,nome,turma,whatsapp\n"
+        "2026001,Credo Lopes,EI1M,244938745635\n"
+        "2026002,Ana Silva,EI1M,244900000000\n"
+    )
     res = client.post(f"/api/v1/students/upload?context_id={ctx_id}", headers=auth, files=_csv(students_csv))
     assert res.status_code == 200, res.text
-    assert res.json()["count"] == 1
+    assert res.json()["count"] == 2
 
     # 3) Upload grades for component 0 (P1) and component 1 (P2)
     for comp_idx, nota in ((0, "16"), (1, "18")):
@@ -94,15 +108,15 @@ def test_full_professor_and_student_flow(app_client):
         assert res.status_code == 200, res.text
         assert res.json()["count"] == 1
 
-    # 4) Read grades back — both components populated
+    # 4) Read grades back — both students enrolled; first has both components
     res = client.get(f"/grades/?context_id={ctx_id}", headers=auth)
     assert res.status_code == 200, res.text
     rows = res.json()["students"]
-    assert len(rows) == 1
-    comps = rows[0]["components"]
-    assert float(comps["0"]["value"]) == 16.0
-    assert float(comps["1"]["value"]) == 18.0
-    assert rows[0]["published"] is False
+    assert len(rows) == 2
+    credo = next(r for r in rows if r["studentNumber"] == "2026001")
+    assert float(credo["components"]["0"]["value"]) == 16.0
+    assert float(credo["components"]["1"]["value"]) == 18.0
+    assert credo["published"] is False
 
     # 5) Publish (portal channel) — creates publication_snapshots
     res = client.post("/api/v1/broadcast/", headers=auth, json={

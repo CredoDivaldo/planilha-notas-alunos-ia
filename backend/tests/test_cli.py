@@ -58,6 +58,6 @@ def test_bootstrap_db_applies_initial_academic_schema(tmp_path: Path) -> None:
     assert EXPECTED_TABLES.issubset(table_names)
     assert journal_mode == "wal"
     # Migrations run to head; legacy tables are dropped by 0012.
-    assert alembic_version == ("20260616_0012",)
+    assert alembic_version == ("20260616_0013",)
     assert "legacy_students" not in table_names
     assert "legacy_grades" not in table_names
