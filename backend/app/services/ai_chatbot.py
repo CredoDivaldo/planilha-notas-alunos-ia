@@ -35,11 +35,12 @@ NO_GRADES_MESSAGE = "Não tens notas publicadas ainda. Volta mais tarde para ver
 
 # System prompt template (Portuguese)
 SYSTEM_PROMPT_TEMPLATE = (
-    "És um assistente académico. Responde APENAS com base nos dados de notas"
-    " fornecidos abaixo. NÃO inventes notas, estados ou datas que não estejam"
-    " nos dados. Responde em Português. Se a pergunta não for sobre notas"
-    " académicas, redireciona educadamente.\n\n"
-    "Dados publicados do estudante {student_number}:\n"
+    "És um assistente académico. Responde APENAS com base nos dados fornecidos"
+    " abaixo (notas publicadas e eventos do calendário). NÃO inventes notas,"
+    " estados, datas ou eventos que não estejam nos dados. Responde em"
+    " Português. Se a pergunta não for sobre notas ou o calendário académico,"
+    " redireciona educadamente.\n\n"
+    "Dados do estudante {student_number}:\n"
     "{grades_context}\n\n"
     "Pergunta do estudante: {student_message}"
 )
@@ -242,20 +243,20 @@ class AIGradeQueryService:
                 "request_id": str | None,
             }
         """
-        # AC-1: Fetch student's published grades (publication_snapshots)
+        # Fetch published grades (all teaching assignments / professors) and
+        # the published calendar events for the student's contexts.
         grades_context = self._fetch_grades_context(
             session, student_id, request_id=request_id
         )
+        calendar_context = self._fetch_calendar_context(
+            session, student_id, request_id=request_id
+        )
 
-        # AC-4: If no published grades, return graceful message
-        if not grades_context or grades_context.strip() == "":
+        # If there's neither grades nor events, return a graceful message
+        if not (grades_context or "").strip() and not (calendar_context or "").strip():
             LOGGER.info(
-                "no_published_grades",
-                extra={
-                    "student_id": student_id,
-                    "student_number": student_number,
-                    "request_id": request_id,
-                },
+                "no_published_data",
+                extra={"student_id": student_id, "student_number": student_number, "request_id": request_id},
             )
             return {
                 "student_id": student_id,
@@ -265,15 +266,22 @@ class AIGradeQueryService:
                 "request_id": request_id,
             }
 
+        # Combine grades + calendar into a single context block
+        combined_context = (
+            "NOTAS PUBLICADAS:\n" + (grades_context or "(sem notas publicadas)")
+            + "\n\nEVENTOS DO CALENDÁRIO:\n" + (calendar_context or "(sem eventos no calendário)")
+        )
+
         # AC-3: Sanitize student message against prompt injection
         sanitized_message = self._sanitize_message(message)
 
-        # Build system prompt with grade context
+        # Build system prompt with the combined context
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
             student_number=student_number,
-            grades_context=grades_context,
+            grades_context=combined_context,
             student_message=sanitized_message,
         )
+        grades_context = combined_context
 
         # AC-1, AC-2: Call AI API and get response
         try:
@@ -379,6 +387,53 @@ class AIGradeQueryService:
                     "error_message": str(exc),
                     "request_id": request_id,
                 },
+            )
+            return ""
+
+    def _fetch_calendar_context(
+        self,
+        session: Session,
+        student_id: int,
+        *,
+        request_id: str | None = None,
+    ) -> str:
+        """Fetch published calendar events for the student's contexts."""
+        try:
+            from sqlalchemy import bindparam, text
+
+            ctx_rows = session.execute(
+                text("SELECT academic_context_id FROM class_enrollments WHERE student_id = :sid"),
+                {"sid": student_id},
+            ).fetchall()
+            ctx_ids = [str(r[0]) for r in ctx_rows if r[0] is not None]
+            if not ctx_ids:
+                return ""
+
+            rows = session.execute(
+                text(
+                    "SELECT title, starts_at, event_type, location FROM calendar_events"
+                    " WHERE internal_status = 'published'"
+                    "   AND (context_id IN :ids OR context_id IS NULL OR context_id = '')"
+                    " ORDER BY starts_at"
+                ).bindparams(bindparam("ids", expanding=True)),
+                {"ids": ctx_ids},
+            ).fetchall()
+
+            lines = []
+            for title, starts, etype, loc in rows:
+                if hasattr(starts, "strftime"):
+                    when = starts.strftime("%Y-%m-%d %H:%M")
+                else:
+                    when = str(starts or "")[:16]
+                line = f"- {title or 'Evento'} ({etype or 'evento'}) | Data: {when}"
+                if loc:
+                    line += f" | Local: {loc}"
+                lines.append(line)
+            return "\n".join(lines)
+        except Exception as exc:
+            LOGGER.error(
+                "calendar_context_fetch_error",
+                extra={"student_id": student_id, "error_message": str(exc), "request_id": request_id},
             )
             return ""
 

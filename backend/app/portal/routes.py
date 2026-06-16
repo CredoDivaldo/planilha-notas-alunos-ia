@@ -18,7 +18,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.portal.service import PortalAccessError, PortalService
@@ -403,35 +403,67 @@ async def get_context_grades(
         ) from exc
 
 
-@router.get("/me/calendar", response_model=Calendar, status_code=200)
+@router.get("/me/calendar", response_model=dict[str, Any], status_code=200)
 async def get_calendar(
     request: Request,
     session: Session = Depends(get_db_session),  # noqa: B008
     authenticated_student_id: int = Depends(get_authenticated_student_id),  # noqa: B008
-) -> Calendar:
-    """Get authenticated student's published calendar events.
+) -> dict[str, Any]:
+    """Get the authenticated student's published calendar events.
 
-    AC-4: Reads ONLY published calendar snapshots (draft excluded).
-    AC-2: Uses authenticated student ID.
-    AC-5: No internal audit history.
-
-    Returns:
-        Calendar with published events.
-
-    Raises:
-        HTTPException(401): Not authenticated.
-        HTTPException(500): Database error.
+    Reads published ``calendar_events`` scoped to the contexts the student is
+    enrolled in (plus context-less/global events). Returns the shape the
+    student PortalPage expects: ``{events: [{id, date, time, type, title, location}]}``.
     """
     request_id = getattr(request.state, "request_id", None)
-
     try:
-        service = PortalService()
-        result = service.get_calendar(
-            session,
-            authenticated_student_id,
-            request_id=request_id,
-        )
-        return Calendar(**result)
+        sid = authenticated_student_id
+        ctx_rows = session.execute(
+            text("SELECT academic_context_id FROM class_enrollments WHERE student_id = :sid"),
+            {"sid": sid},
+        ).fetchall()
+        ctx_ids = [str(r[0]) for r in ctx_rows if r[0] is not None]
+
+        if ctx_ids:
+            rows = session.execute(
+                text(
+                    "SELECT id, title, starts_at, ends_at, event_type, location, context_id"
+                    " FROM calendar_events"
+                    " WHERE internal_status = 'published'"
+                    "   AND (context_id IN :ids OR context_id IS NULL OR context_id = '')"
+                    " ORDER BY starts_at"
+                ).bindparams(bindparam("ids", expanding=True)),
+                {"ids": ctx_ids},
+            ).fetchall()
+        else:
+            rows = session.execute(
+                text(
+                    "SELECT id, title, starts_at, ends_at, event_type, location, context_id"
+                    " FROM calendar_events"
+                    " WHERE internal_status = 'published' AND (context_id IS NULL OR context_id = '')"
+                    " ORDER BY starts_at"
+                )
+            ).fetchall()
+
+        events: list[dict[str, Any]] = []
+        for r in rows:
+            starts = r[2]
+            if hasattr(starts, "strftime"):
+                date_str = starts.strftime("%Y-%m-%d")
+                time_str = starts.strftime("%H:%M")
+            else:
+                s = str(starts or "")
+                date_str = s[:10]
+                time_str = s[11:16] if len(s) >= 16 else None
+            events.append({
+                "id": str(r[0]),
+                "title": r[1] or "",
+                "date": date_str,
+                "time": time_str,
+                "type": r[4] or "evento",
+                "location": r[5],
+            })
+        return {"events": events}
     except Exception as exc:
         LOGGER.exception(
             "get_calendar_failed",

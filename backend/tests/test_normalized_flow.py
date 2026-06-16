@@ -149,3 +149,15 @@ def test_full_professor_and_student_flow(app_client):
     assert subj["disciplina"] == "Programação"
     assert subj["nota_final"] == 17.0
     assert subj["resultado"] == "aprovado"
+
+    # 7) Professor creates a calendar event in the context → student sees it
+    res = client.post("/api/v1/calendar/events", headers=auth, json={
+        "title": "Exame Final", "date": "2026-07-01T10:00:00", "type": "exame",
+        "context_id": str(ctx_id),
+    })
+    assert res.status_code == 201, res.text
+
+    res = client.get("/api/v1/portal/me/calendar", headers={"Authorization": f"Bearer {student_token}"})
+    assert res.status_code == 200, res.text
+    events = res.json()["events"]
+    assert any(e["title"] == "Exame Final" and e["date"] == "2026-07-01" for e in events)
