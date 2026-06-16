@@ -4,6 +4,8 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 healthcheckPath = "/api/v1/health"
-healthcheckTimeout = 30
+# Startup runs Alembic migrations + create_all before uvicorn binds, which can
+# take well over 30s on cold start. Give the healthcheck a generous window.
+healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3
+restartPolicyMaxRetries = 5
