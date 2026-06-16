@@ -2,7 +2,7 @@
 // AC1–AC13: route /portal, role=estudante guard, grades, calendar, WhatsApp banner, PDF
 
 import { Download } from 'lucide-react'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { apiFetch } from '@/lib/api'
@@ -146,8 +146,11 @@ function PortalContent({ userName }: { userName: string }) {
     }
   }, [])
 
-  // Trigger once on mount — pattern from GradesPage (avoids set-state-in-effect lint rule)
-  useState(() => { loadGrades(); loadCalendar() })
+  // Load grades + calendar once on mount
+  useEffect(() => {
+    void loadGrades()
+    void loadCalendar()
+  }, [loadGrades, loadCalendar])
 
   // AC13: redirect on session expiry
   if (sessionExpired) {

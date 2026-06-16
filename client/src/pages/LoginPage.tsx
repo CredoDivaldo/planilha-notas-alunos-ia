@@ -22,8 +22,8 @@ function PasswordRequirement({ met, label }: { met: boolean; label: string }) {
 }
 
 export default function LoginPage() {
-  const { login, isAuthenticated, role: currentRole, changePassword, requiresPasswordChange } =
-    useAuth()
+  const { login, isAuthenticated, role: currentRole, changePassword, requiresPasswordChange,
+    checkStudentStatus, activateStudent } = useAuth()
   const navigate = useNavigate()
 
   const [tab, setTab] = useState<Tab>('professor')
@@ -67,16 +67,33 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      await login({ email_or_student_number: identifier, password, role: tab })
+      if (tab === 'estudante') {
+        // First-access flow: if no account yet, the typed password becomes the
+        // account password (self-registration validated against the roster).
+        const status = await checkStudentStatus(studentNumber.trim())
+        if (!status.found_in_roster) {
+          setError('Número de estudante não encontrado. Fala com o teu professor.')
+          return
+        }
+        if (status.has_account) {
+          await login({ email_or_student_number: identifier, password, role: tab })
+        } else {
+          await activateStudent(studentNumber.trim(), password)
+        }
+      } else {
+        await login({ email_or_student_number: identifier, password, role: tab })
+      }
     } catch (err: unknown) {
       if (err instanceof Error) {
         const msg = err.message
         if (msg.includes('401') || msg.toLowerCase().includes('login failed')) {
-          setError('Email ou palavra-passe incorrectos.')
+          setError(tab === 'estudante' ? 'Palavra-passe incorrecta.' : 'Email ou palavra-passe incorrectos.')
         } else if (msg.includes('403')) {
           setError('Conta suspensa. Contacte o administrador.')
+        } else if (msg.toLowerCase().includes('mínimos') || msg.includes('422')) {
+          setError('A palavra-passe deve ter pelo menos 8 caracteres e uma maiúscula.')
         } else {
-          setError('Erro ao iniciar sessão. Tente novamente.')
+          setError(msg || 'Erro ao iniciar sessão. Tente novamente.')
         }
       }
     } finally {

@@ -13,6 +13,11 @@ interface ChangePasswordPayload {
   confirm_password: string
 }
 
+interface StudentStatus {
+  found_in_roster: boolean
+  has_account: boolean
+}
+
 interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
@@ -21,6 +26,8 @@ interface AuthContextType {
   login: (credentials: LoginCredentials) => Promise<void>
   logout: () => void
   changePassword: (payload: ChangePasswordPayload) => Promise<void>
+  checkStudentStatus: (studentNumber: string) => Promise<StudentStatus>
+  activateStudent: (studentNumber: string, password: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -94,6 +101,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('auth_user')
   }
 
+  const checkStudentStatus = async (studentNumber: string): Promise<StudentStatus> => {
+    const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
+    const res = await fetch(`${base}/auth/student/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ student_number: studentNumber }),
+    })
+    if (!res.ok) throw new Error('Erro ao verificar o número de estudante.')
+    return res.json() as Promise<StudentStatus>
+  }
+
+  const activateStudent = async (studentNumber: string, password: string) => {
+    const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
+    const res = await fetch(`${base}/auth/student/activate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        student_number: studentNumber,
+        password,
+        confirm_password: password,
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText })) as { detail?: string }
+      throw new Error(err.detail ?? `Activation failed: ${res.status}`)
+    }
+    const data = await res.json() as LoginApiResponse
+    const userData: User = { id: data.id, name: data.name, role: data.role, token: data.access_token }
+    setUser(userData)
+    localStorage.setItem('auth_user', JSON.stringify(userData))
+    setRequiresPasswordChange(false)
+  }
+
   const changePassword = async (payload: ChangePasswordPayload) => {
     const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
     const stored = localStorage.getItem('auth_user')
@@ -128,6 +168,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         changePassword,
+        checkStudentStatus,
+        activateStudent,
       }}
     >
       {children}
