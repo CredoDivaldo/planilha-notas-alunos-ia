@@ -34,6 +34,11 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Student two-step flow: enter number → verify → log in or set first password
+  const [studentStep, setStudentStep] = useState<'number' | 'login' | 'register'>('number')
+  const [checkingStudent, setCheckingStudent] = useState(false)
+  const [studentConfirmPw, setStudentConfirmPw] = useState('')
+
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showNew, setShowNew] = useState(false)
@@ -51,51 +56,100 @@ export default function LoginPage() {
 
   if (isAuthenticated && !requiresPasswordChange && currentRole) return null
 
-  const identifier = tab === 'professor' ? email : studentNumber
-  const canSubmit = identifier.trim().length > 0 && password.trim().length > 0 && !loading
+  // Student password requirements (first access)
+  const stuHasMinLen = password.length >= 8
+  const stuHasUpper = /[A-Z]/.test(password)
+  const stuPwMatch = password.length > 0 && password === studentConfirmPw
+
+  const canSubmit =
+    tab === 'professor'
+      ? email.trim().length > 0 && password.trim().length > 0 && !loading
+      : studentStep === 'number'
+        ? studentNumber.trim().length > 0 && !checkingStudent
+        : studentStep === 'login'
+          ? password.trim().length > 0 && !loading
+          : stuHasMinLen && stuHasUpper && stuPwMatch && !loading // register
 
   const handleTabChange = (t: Tab) => {
     setTab(t)
     setError('')
+    setStudentStep('number')
+    setPassword('')
+    setStudentConfirmPw('')
     const params = new URLSearchParams(window.location.search)
     params.set('role', t)
     window.history.replaceState({}, '', `${window.location.pathname}?${params}`)
   }
 
+  // Reset to step 1 if the student edits the number after verifying
+  const handleStudentNumberChange = (value: string) => {
+    setStudentNumber(value)
+    if (studentStep !== 'number') {
+      setStudentStep('number')
+      setPassword('')
+      setStudentConfirmPw('')
+      setError('')
+    }
+  }
+
+  const verifyStudentNumber = async () => {
+    setError('')
+    const num = studentNumber.trim()
+    if (!num) return
+    setCheckingStudent(true)
+    try {
+      const status = await checkStudentStatus(num)
+      if (!status.found_in_roster) {
+        setError('Número de estudante não reconhecido. Fala com o teu professor.')
+        return
+      }
+      setStudentStep(status.has_account ? 'login' : 'register')
+    } catch {
+      setError('Erro ao verificar o número. Tenta novamente.')
+    } finally {
+      setCheckingStudent(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    if (tab === 'professor') {
+      setLoading(true)
+      try {
+        await login({ email_or_student_number: email, password, role: 'professor' })
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : ''
+        if (msg.includes('401') || msg.toLowerCase().includes('login failed')) setError('Email ou palavra-passe incorrectos.')
+        else if (msg.includes('403')) setError('Conta suspensa. Contacte o administrador.')
+        else setError(msg || 'Erro ao iniciar sessão. Tente novamente.')
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+
+    // Student flow
+    if (studentStep === 'number') {
+      await verifyStudentNumber()
+      return
+    }
     setLoading(true)
     try {
-      if (tab === 'estudante') {
-        // First-access flow: if no account yet, the typed password becomes the
-        // account password (self-registration validated against the roster).
-        const status = await checkStudentStatus(studentNumber.trim())
-        if (!status.found_in_roster) {
-          setError('Número de estudante não encontrado. Fala com o teu professor.')
-          return
-        }
-        if (status.has_account) {
-          await login({ email_or_student_number: identifier, password, role: tab })
-        } else {
-          await activateStudent(studentNumber.trim(), password)
-        }
+      if (studentStep === 'login') {
+        await login({ email_or_student_number: studentNumber.trim(), password, role: 'estudante' })
       } else {
-        await login({ email_or_student_number: identifier, password, role: tab })
+        // register (first access)
+        if (!stuPwMatch) { setError('As palavras-passe não coincidem.'); return }
+        if (!stuHasMinLen || !stuHasUpper) { setError('A palavra-passe deve ter pelo menos 8 caracteres e uma maiúscula.'); return }
+        await activateStudent(studentNumber.trim(), password)
       }
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        const msg = err.message
-        if (msg.includes('401') || msg.toLowerCase().includes('login failed')) {
-          setError(tab === 'estudante' ? 'Palavra-passe incorrecta.' : 'Email ou palavra-passe incorrectos.')
-        } else if (msg.includes('403')) {
-          setError('Conta suspensa. Contacte o administrador.')
-        } else if (msg.toLowerCase().includes('mínimos') || msg.includes('422')) {
-          setError('A palavra-passe deve ter pelo menos 8 caracteres e uma maiúscula.')
-        } else {
-          setError(msg || 'Erro ao iniciar sessão. Tente novamente.')
-        }
-      }
+      const msg = err instanceof Error ? err.message : ''
+      if (msg.includes('401') || msg.toLowerCase().includes('login failed')) setError('Palavra-passe incorrecta.')
+      else if (msg.includes('403')) setError('Conta suspensa. Contacte o administrador.')
+      else setError(msg || 'Erro ao iniciar sessão. Tente novamente.')
     } finally {
       setLoading(false)
     }
@@ -279,36 +333,71 @@ export default function LoginPage() {
                     pattern="[0-9]*"
                     placeholder="ex: 2023001"
                     value={studentNumber}
-                    onChange={e => setStudentNumber(e.target.value)}
+                    onChange={e => handleStudentNumberChange(e.target.value)}
                     className="pl-10"
                     autoFocus
+                    readOnly={studentStep !== 'number'}
                   />
+                </div>
+                {studentStep === 'register' && (
+                  <p className="text-xs text-success">
+                    Primeiro acesso — define a tua palavra-passe.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Password field: always for professor; for student only after the number is verified */}
+            {(tab === 'professor' || studentStep !== 'number') && (
+              <div className="space-y-1.5">
+                <Label htmlFor="password">
+                  {studentStep === 'register' ? 'Criar palavra-passe' : 'Palavra-passe'}
+                </Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-primary" />
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className="pl-10 pr-10"
+                    autoComplete={studentStep === 'register' ? 'new-password' : 'current-password'}
+                    autoFocus={tab === 'estudante'}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
                 </div>
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Palavra-passe</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-primary" />
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="pl-10 pr-10"
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
+            {/* Confirm + requirements: only on student first access */}
+            {tab === 'estudante' && studentStep === 'register' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="student-confirm">Confirmar palavra-passe</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-primary" />
+                  <Input
+                    id="student-confirm"
+                    type={showPassword ? 'text' : 'password'}
+                    value={studentConfirmPw}
+                    onChange={e => setStudentConfirmPw(e.target.value)}
+                    className="pl-10"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div className="space-y-1 pt-1">
+                  <PasswordRequirement met={stuHasMinLen} label="Pelo menos 8 caracteres" />
+                  <PasswordRequirement met={stuHasUpper} label="Pelo menos uma letra maiúscula" />
+                  <PasswordRequirement met={stuPwMatch} label="As palavras-passe coincidem" />
+                </div>
               </div>
-            </div>
+            )}
 
             {error && (
               <div role="alert" className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
@@ -318,8 +407,24 @@ export default function LoginPage() {
             )}
 
             <Button type="submit" disabled={!canSubmit} className="w-full glow-blue">
-              {loading ? 'A entrar…' : tab === 'professor' ? 'Entrar' : 'Entrar como Aluno'}
+              {tab === 'professor'
+                ? (loading ? 'A entrar…' : 'Entrar')
+                : studentStep === 'number'
+                  ? (checkingStudent ? 'A verificar…' : 'Continuar')
+                  : studentStep === 'register'
+                    ? (loading ? 'A criar…' : 'Criar palavra-passe e entrar')
+                    : (loading ? 'A entrar…' : 'Entrar')}
             </Button>
+
+            {tab === 'estudante' && studentStep !== 'number' && (
+              <button
+                type="button"
+                onClick={() => handleStudentNumberChange(studentNumber)}
+                className="text-xs text-muted-foreground hover:text-foreground text-center"
+              >
+                ← Usar outro número
+              </button>
+            )}
           </form>
 
           {tab === 'professor' && (
@@ -331,9 +436,9 @@ export default function LoginPage() {
             </p>
           )}
 
-          {tab === 'estudante' && (
+          {tab === 'estudante' && studentStep === 'number' && (
             <p className="mt-4 text-xs text-muted-foreground text-center">
-              Primeiro acesso? Será pedida troca de palavra-passe.
+              Insere o teu número de estudante para continuar.
             </p>
           )}
         </div>

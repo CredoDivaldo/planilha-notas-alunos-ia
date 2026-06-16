@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { apiFetch } from '@/lib/api'
+import { useAuth } from '@/contexts/AuthContext'
 import type { ContextItem } from '@/types'
 
 interface ActiveContextType {
@@ -14,35 +15,42 @@ interface ActiveContextType {
 const ActiveContextContext = createContext<ActiveContextType | null>(null)
 
 export function ActiveContextProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth()
+  const userId = user?.id ?? null
+  const role = user?.role ?? null
+
   const [contexts, setContexts] = useState<ContextItem[]>([])
-  const [activeContextId, setActiveContextIdState] = useState<string | null>(
-    () => sessionStorage.getItem('active_context_id'),
-  )
+  const [activeContextId, setActiveContextIdState] = useState<string | null>(null)
 
   const reloadContexts = useCallback(() => {
+    // Contexts are a professor concept; clear for non-professors / logged-out.
+    if (!userId || role !== 'professor') {
+      setContexts([])
+      setActiveContextIdState(null)
+      return
+    }
     apiFetch<ContextItem[]>('/academic-contexts/')
       .then((data) => {
         setContexts(data)
         setActiveContextIdState((prev) => {
+          // Keep the current selection only if it belongs to THIS account's list.
           if (prev && data.some((c) => c.id === prev)) return prev
-          const firstId = data[0]?.id ?? null
-          if (firstId) sessionStorage.setItem('active_context_id', firstId)
-          return firstId
+          return data[0]?.id ?? null
         })
       })
       .catch(() => {
         setContexts([])
-        // Keep existing active context ID if user had one; don't override with mock
+        setActiveContextIdState(null)
       })
-  }, [])
+  }, [userId, role])
 
+  // Reload whenever the authenticated user changes (login / logout / switch).
   useEffect(() => {
     reloadContexts()
   }, [reloadContexts])
 
   const setActiveContextId = useCallback((id: string) => {
     setActiveContextIdState(id)
-    sessionStorage.setItem('active_context_id', id)
   }, [])
 
   const activeContext = contexts.find((c) => c.id === activeContextId) ?? null
