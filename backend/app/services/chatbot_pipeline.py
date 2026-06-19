@@ -1,12 +1,16 @@
-"""End-to-end chatbot pipeline (Story 6.3).
+"""Pipeline (linha de montagem) do chatbot — junta todos os passos por ordem.
 
-Orchestrates the complete flow:
-1. Identify student by phone (Story 6.1)
-2. Check rate limit (AC-2)
-3. Query grades + generate AI response (Story 6.2)
-4. Handle failures gracefully (AC-3)
-5. Send reply via WhatsApp (AC-1)
-6. Log interaction (AC-5)
+PT: Este ficheiro coordena ("orquestra") tudo o que acontece quando chega uma
+mensagem, passo a passo:
+  1. Identificar o aluno (pelo telefone, por um registo guardado, ou pelo nome).
+  2. Verificar o limite diário de mensagens.
+  3. Pedir ao serviço de IA a resposta com base nas notas.
+  4. Tratar falhas sem rebentar.
+  5. Enviar a resposta de volta pelo WhatsApp.
+  6. Registar a interacção.
+Cada passo está numa função/serviço próprio; aqui é só a sequência.
+
+End-to-end chatbot pipeline (Story 6.3).
 
 AC-1: Full flow delivers AI reply via WhatsApp.
 AC-2: Rate limiting blocks excessive messages.
@@ -72,6 +76,8 @@ class ChatbotPipeline:
             ai_service: Optional custom AI service (for testing).
                 If None, a new instance is created.
         """
+        # Recebe (ou cria) o limitador e o serviço de IA. Poder passá-los de fora
+        # facilita os testes (injecção de dependências).
         self.rate_limiter = rate_limiter or ChatbotRateLimiter()
         self.ai_service = ai_service or AIGradeQueryService()
 
@@ -114,7 +120,7 @@ class ChatbotPipeline:
         """
         timestamp = datetime.now(UTC).isoformat()
 
-        # AC-4: Identify student by phone / saved @lid link / pushName
+        # PASSO 1: identificar de quem é a mensagem.
         student_row = self._identify_student(
             session, normalized_phone, push_name=push_name, lid=lid, request_id=request_id
         )
@@ -128,14 +134,21 @@ class ChatbotPipeline:
                 if rec:
                     self._save_lid_link(session, lid, instance, rec[1])
                     reply = rec[3]
-                    if reply:
-                        await send_whatsapp_text(
-                            instance=instance,
-                            phone_number=reply,
-                            message=LINK_OK_MSG.format(name=rec[2] or ""),
-                            request_id=request_id,
-                        )
-                    self._log_interaction(session, reply or candidate, rec[0], "linked", request_id)
+                    # Reply in the same chat thread where the student sent the number
+                    # (i.e. back to the @lid JID). Also send to the registered phone
+                    # as fallback if different.
+                    reply_targets = list(dict.fromkeys(filter(None, [lid, reply])))
+                    for rt in reply_targets:
+                        try:
+                            await send_whatsapp_text(
+                                instance=instance,
+                                phone_number=rt,
+                                message=LINK_OK_MSG.format(name=rec[2] or ""),
+                                request_id=request_id,
+                            )
+                        except Exception:
+                            pass
+                    self._log_interaction(session, reply or lid or candidate, rec[0], "linked", request_id)
                     return {
                         "outcome": "linked", "student_id": rec[0], "phone": reply or "",
                         "message_sent": LINK_OK_MSG, "ai_called": False, "timestamp": timestamp,
@@ -146,16 +159,25 @@ class ChatbotPipeline:
                     pass
 
         if not student_row:
-            # Unknown sender. If we have a real phone (non-@lid student) we can
-            # ask them to register; with @lid-only we cannot reply yet.
+            # Unknown sender: prompt them for their student number.
+            # If we have a real phone use it; otherwise fall back to the full @lid
+            # JID (Evolution API routes messages to @lid contacts via the JID directly).
             sent_msg = ASK_NUMBER_MSG
-            if normalized_phone:
-                await send_whatsapp_text(
-                    instance=instance,
-                    phone_number=normalized_phone,
-                    message=ASK_NUMBER_MSG,
-                    request_id=request_id,
-                )
+            reply_target = normalized_phone or lid
+            if reply_target:
+                try:
+                    await send_whatsapp_text(
+                        instance=instance,
+                        phone_number=reply_target,
+                        message=ASK_NUMBER_MSG,
+                        request_id=request_id,
+                    )
+                except Exception as exc:
+                    LOGGER.warning(
+                        "chatbot_ask_number_send_failed",
+                        extra={"reply_target": reply_target, "error": str(exc), "request_id": request_id},
+                    )
+                    sent_msg = ""
             else:
                 sent_msg = ""  # could not deliver
 
@@ -181,7 +203,7 @@ class ChatbotPipeline:
                 "message_sent": "", "ai_called": False, "timestamp": timestamp,
             }
 
-        # AC-2: Check rate limit
+        # PASSO 2: verificar o limite diário. Se excedido, avisa e termina aqui.
         if self.rate_limiter.is_blocked(normalized_phone):
             # Rate limit reached: send limit message
             await send_whatsapp_text(
@@ -205,7 +227,7 @@ class ChatbotPipeline:
             )
             return outcome_dict
 
-        # Story 6.2: Generate AI response
+        # PASSO 3: pedir à IA a resposta com base nas notas do aluno.
         ai_result = self.ai_service.generate_grade_response(
             session, student_id, student_number, message_text,
             request_id=request_id,
@@ -221,10 +243,10 @@ class ChatbotPipeline:
             if response_message == AI_FAILURE_MSG:
                 outcome = "ai_failure"
 
-        # Record rate limit for next message
+        # Conta esta mensagem para o limite diário.
         self.rate_limiter.record(normalized_phone)
 
-        # AC-1: Send reply via WhatsApp
+        # PASSO 4: enviar a resposta de volta pelo WhatsApp.
         await send_whatsapp_text(
             instance=instance,
             phone_number=normalized_phone,
@@ -232,7 +254,7 @@ class ChatbotPipeline:
             request_id=request_id,
         )
 
-        # AC-5: Log interaction
+        # PASSO 5: registar a interacção (para auditoria/diagnóstico).
         self._log_interaction(
             session, normalized_phone, student_id, outcome, request_id, ai_called
         )
