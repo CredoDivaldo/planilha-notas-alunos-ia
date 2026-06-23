@@ -1,7 +1,14 @@
+"""Ferramenta de linha de comandos (CLI) para operações locais do backend.
+
+Permite, a partir do terminal, criar a base de dados, e importar em massa
+contextos académicos, notas e pautas de alunos a partir de ficheiros CSV.
+Cada "subcomando" (bootstrap-db, import-grades, ...) corresponde a uma função
+abaixo. É chamado com, por exemplo: `python -m backend.app.cli import-grades ...`.
+"""
 from __future__ import annotations
 
-import argparse
-import csv
+import argparse  # constrói o interpretador de argumentos do terminal
+import csv       # leitura de ficheiros CSV
 import json
 import logging
 from collections.abc import Sequence
@@ -43,10 +50,12 @@ def _validate_upload_context(
 
     Returns: (valid, error_message)
     """
+    # Query ORM: procura na BD o contexto com este id e devolve o 1.º (ou None).
     context = session.query(AcademicContext).filter_by(id=context_id).first()
     if not context:
         return False, f"Context {context_id} does not exist"
 
+    # Regra de segurança: o professor só pode mexer nos seus próprios contextos.
     if context.professor_id != professor_id:
         return False, f"Professor {professor_id} does not own context {context_id}"
 
@@ -147,11 +156,15 @@ def bootstrap_academic_contexts(
     errors: list[dict[str, Any]] = []
 
     try:
+        # `with Session(...)` abre uma sessão de BD e fecha-a no fim automaticamente.
         with Session(engine) as session:
+            # Abre o CSV; DictReader lê cada linha como um dicionário {coluna: valor}.
             with open(csv_path, encoding="utf-8") as csvfile:
                 reader = csv.DictReader(csvfile)
-                for row_num, row in enumerate(reader, start=2):  # Start at 2 (header is row 1)
+                # enumerate(..., start=2): numera as linhas a partir de 2 (a 1 é o cabeçalho).
+                for row_num, row in enumerate(reader, start=2):
                     try:
+                        # int(...) converte texto do CSV para número; pode falhar → except abaixo.
                         professor_id = int(row["professor_id"])
                         turma = row["turma"]
                         subject = row["subject"]
@@ -170,9 +183,10 @@ def bootstrap_academic_contexts(
                             notes=notes if notes else None,
                             status="draft",
                         )
-                        session.add(context)
+                        session.add(context)  # marca para inserir (ainda não grava)
                         created += 1
                     except (KeyError, ValueError) as exc:
+                        # Linha inválida (coluna em falta ou número mal formado): conta e regista.
                         failed += 1
                         errors.append({
                             "row": row_num,
@@ -180,6 +194,7 @@ def bootstrap_academic_contexts(
                             "data": dict(row),
                         })
 
+            # dry_run = "ensaio": só grava na BD (commit) se NÃO for ensaio.
             if not dry_run:
                 session.commit()
                 LOGGER.info("bootstrap_academic_contexts_completed", extra={
@@ -403,6 +418,8 @@ def _json_print(report: dict[str, Any]) -> None:
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
 
 
+# Define quais os subcomandos disponíveis e que argumentos cada um aceita.
+# É o argparse que depois lê o que foi escrito no terminal e valida tudo.
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Academic backend local operations")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -463,9 +480,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# Ponto de entrada da CLI: lê os argumentos e despacha para a função certa.
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(argv)  # transforma o texto do terminal em `args`
 
     if args.command == "bootstrap-db":
         _json_print(bootstrap_db(args.database_url, args.force))
@@ -502,5 +520,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 2
 
 
+# Só corre `main()` se o ficheiro for executado directamente (não ao ser importado).
+# O código de saída de main() vira o "exit code" do processo.
 if __name__ == "__main__":
     raise SystemExit(main())

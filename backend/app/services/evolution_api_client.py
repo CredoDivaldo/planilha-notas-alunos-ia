@@ -1,4 +1,12 @@
-"""Evolution API client for WhatsApp message delivery (Stories 6.3, 8.2).
+"""Cliente da Evolution API — fala com o serviço externo de WhatsApp.
+
+PT: Este ficheiro faz os pedidos HTTP ao serviço que realmente envia/recebe
+mensagens de WhatsApp (a Evolution API). Tem funções para enviar texto, ver o
+estado da ligação, criar a instância e obter o QR code. Truque importante: se a
+Evolution não estiver configurada (sem EVOLUTION_API_URL), as funções devolvem uma
+resposta "simulada" — assim a app e os testes funcionam sem um WhatsApp real ligado.
+
+Evolution API client for WhatsApp message delivery (Stories 6.3, 8.2).
 
 Provides send_whatsapp_text(), connection_state(), create_instance(), and
 get_qrcode() functions. The lifecycle helpers added in Story 8.2 are thin
@@ -81,7 +89,7 @@ async def send_whatsapp_text(
         message = message[:4096]
 
     if not _is_configured():
-        # Dry-run mode: log + return simulated success
+        # Modo simulado: não há WhatsApp configurado → finge sucesso e regista no log.
         LOGGER.info(
             "evolution_api_send_whatsapp_simulated",
             extra={
@@ -109,18 +117,20 @@ async def send_whatsapp_text(
         },
     )
 
-    import httpx  # local import — keep top-level imports clean
+    import httpx  # cliente HTTP assíncrono (faz pedidos pela internet)
 
     api_key = _api_key() or ""
     base_url = _base_url() or ""
     url = f"{base_url.rstrip('/')}/message/sendText/{instance}"
     headers = {"apikey": api_key, "Content-Type": "application/json"}
+    # `payload`: os dados que enviamos no corpo do pedido (em JSON).
     payload = {
         "number": phone_number,
         "textMessage": {"text": message},
     }
 
     try:
+        # Abre um cliente HTTP, envia o POST e espera (await) pela resposta.
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(url, json=payload, headers=headers)
         response.raise_for_status()
@@ -186,8 +196,10 @@ async def send_whatsapp_text_mock(
 # ---------------------------------------------------------------------------
 
 
+# Excepção personalizada: criamos o nosso próprio tipo de erro (herda de RuntimeError)
+# para distinguir falhas da Evolution API e tratá-las de forma específica.
 class EvolutionApiError(RuntimeError):
-    """Raised when the Evolution API returns a 4xx/5xx response or is unreachable.
+    """Erro próprio para falhas da Evolution API (resposta 4xx/5xx ou inacessível).
 
     Story 8.2 AC-5: the router maps this to HTTP 502 with a sanitised
     detail message. The original response is preserved as ``status_code``

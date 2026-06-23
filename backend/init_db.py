@@ -47,9 +47,12 @@ def main() -> None:
     cfg = Config("alembic.ini")
     cfg.set_main_option("sqlalchemy.url", db_url)
 
+    # Três cenários possíveis ao arrancar:
+    # 1) BD vazia → cria tudo do zero correndo todas as migrações.
     if not existing_tables:
         LOGGER.info("Fresh database — running all Alembic migrations")
         alembic_command.upgrade(cfg, "head")
+    # 2) Já tem tabelas mas sem controlo do Alembic → "carimba" a versão e completa o que falta.
     elif not has_alembic_tracking:
         LOGGER.info(
             "Tables exist without Alembic tracking — stamping head and patching missing tables"
@@ -58,6 +61,7 @@ def main() -> None:
         # Also create any ORM-only tables that might be missing
         from backend.app.models import Base
         Base.metadata.create_all(engine)
+    # 3) Já tem controlo do Alembic → apenas aplica migrações em falta (seguro repetir).
     else:
         LOGGER.info("Alembic tracking found — upgrading to head")
         alembic_command.upgrade(cfg, "head")

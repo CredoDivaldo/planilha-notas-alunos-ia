@@ -1,8 +1,9 @@
-"""WhatsApp message template rendering.
+"""Preenchimento de modelos de mensagem do WhatsApp.
 
-Substitutes placeholders in a professor-authored template with real values.
-Supports both ``{{var}}`` (frontend default) and ``{var}`` syntaxes, plus
-Portuguese names and English aliases.
+PT: O professor escreve um modelo com "espaços reservados" (ex.: "Olá {{nome}}, a
+tua nota é {{nota_final}}"). Esta função substitui cada espaço pelo valor real do
+aluno, gerando a mensagem final personalizada. Aceita {{var}} e {var}, e nomes em
+português ou inglês para a mesma variável.
 """
 from __future__ import annotations
 
@@ -27,6 +28,7 @@ def render_message_template(template: str | None, **variables: Any) -> str:
     resultado = str(variables.get("resultado", "") or "")
     numero = str(variables.get("numero", "") or "")
 
+    # Dicionário que liga cada nome de variável ao valor a inserir.
     mapping = {
         "nome": nome,
         "name": nome,
@@ -40,6 +42,7 @@ def render_message_template(template: str | None, **variables: Any) -> str:
         "numero": numero,
         "student_number": numero,
     }
+    # Para cada variável, substitui no texto tanto {{var}} como {var} pelo valor.
     out = template
     for key, val in mapping.items():
         out = out.replace("{{" + key + "}}", val).replace("{" + key + "}", val)

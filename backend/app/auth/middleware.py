@@ -1,4 +1,8 @@
-"""Auth observability middleware.
+"""Middleware de observabilidade da autenticação (registo/auditoria).
+
+PT: Regista nos logs, de forma estruturada, o contexto de autenticação de cada
+pedido (id do pedido, utilizador, papel, tipo de evento e motivo de falha).
+Serve para auditoria e diagnóstico. NUNCA regista senhas nem tokens.
 
 Logs structured auth context for every request:
   - request_id
@@ -19,7 +23,8 @@ from fastapi import Request
 
 LOGGER = logging.getLogger("backend.auth")
 
-# Auth event type constants — must match audit_log.auth_event_type values.
+# Constantes com os tipos de evento de auth (usar nomes em vez de strings soltas
+# evita erros de escrita e centraliza os valores válidos).
 AUTH_EVENT_LOGIN = "login"
 AUTH_EVENT_FAILED_LOGIN = "failed_login"
 AUTH_EVENT_PASSWORD_CHANGE = "password_change"

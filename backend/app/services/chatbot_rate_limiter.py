@@ -1,4 +1,9 @@
-"""Rate limiting for chatbot interactions (Story 6.3).
+"""Limitador de uso do chatbot (rate limiting).
+
+PT: Impede que um mesmo número de telefone faça demasiadas perguntas por dia
+(por defeito 10). Guarda em memória, num dicionário, quantas mensagens cada número
+já enviou hoje; à meia-noite (UTC) o contador "reinicia-se" naturalmente porque a
+data muda. É simples e suficiente para um MVP (perde-se ao reiniciar o servidor).
 
 Implements daily rate limiting keyed by normalized phone number.
 AC-2: Blocks excessive messages (configurable daily limit).
@@ -32,7 +37,8 @@ class ChatbotRateLimiter:
             daily_limit: Maximum messages per day per phone number (default: 10)
         """
         self.daily_limit = daily_limit
-        # Dict: {normalized_phone: {"count": int, "date": str (YYYY-MM-DD)}}
+        # Dicionário onde se guarda, por número, quantas mensagens enviou e em que dia:
+        # {telefone: {"count": nº, "date": "AAAA-MM-DD"}}
         self._counters: dict[str, dict] = {}
 
     def _get_date_key(self) -> str:
@@ -60,11 +66,11 @@ class ChatbotRateLimiter:
         entry = self._counters[normalized_phone]
         today = self._get_date_key()
 
-        # If date has changed, reset the counter
+        # Se o último registo é de outro dia, hoje ainda não enviou nada → não bloqueado.
         if entry.get("date") != today:
             return False
 
-        # Check if limit reached
+        # Bloqueado se já atingiu (ou passou) o limite diário.
         count = entry.get("count", 0)
         blocked = count >= self.daily_limit
 

@@ -1,4 +1,13 @@
-"""AI Grade Query Service (Stories 6.2, 9.0).
+"""Serviço de IA para responder a perguntas dos alunos sobre as suas notas.
+
+PT: Quando um aluno pergunta algo (ex.: "qual foi a minha nota a Matemática?"),
+este serviço: (1) vai buscar à BD as notas PUBLICADAS e os eventos do calendário
+desse aluno, (2) monta um "prompt" (texto de instruções) com esse contexto, e
+(3) envia-o a um modelo de IA (DeepSeek por defeito; Claude/OpenAI como alternativa)
+que escreve a resposta em português. Importante: a IA só pode usar os dados
+fornecidos — é instruída a NÃO inventar notas nem datas.
+
+AI Grade Query Service (Stories 6.2, 9.0).
 
 Provides AI-powered responses to student questions about their grades
 using DeepSeek as the primary provider (Story 9.0 switch).
@@ -33,7 +42,8 @@ FALLBACK_MESSAGE = "Não foi possível processar o teu pedido agora. Tenta mais 
 # Message for students with no published grades
 NO_GRADES_MESSAGE = "Não tens notas publicadas ainda. Volta mais tarde para verificar."
 
-# System prompt template (Portuguese)
+# "System prompt": as instruções base dadas à IA antes da pergunta do aluno.
+# Os {campos} entre chavetas são preenchidos depois com .format(...).
 SYSTEM_PROMPT_TEMPLATE = (
     "És um assistente académico. Responde APENAS com base nos dados fornecidos"
     " abaixo (notas publicadas e eventos do calendário). NÃO inventes notas,"
@@ -46,8 +56,11 @@ SYSTEM_PROMPT_TEMPLATE = (
 )
 
 
+# "Provider" = adaptador para um serviço de IA concreto. Todos herdam de AIProvider
+# e implementam o mesmo método `call(...)`, por isso o resto do código os trata da
+# mesma forma (polimorfismo). Assim trocar de IA é só trocar o provider.
 class ClaudeProvider(AIProvider):
-    """Claude API provider via Anthropic SDK."""
+    """Adaptador para a API da Claude (Anthropic)."""
 
     def __init__(self, api_key: str) -> None:
         """Initialize Claude provider.
@@ -187,6 +200,8 @@ class AIGradeQueryService:
 
         If API key is missing for the configured provider, raises ValueError.
         """
+        # Escolhe o provider de IA conforme a variável de ambiente AI_PROVIDER.
+        # Se faltar a respectiva chave de API, levanta erro logo aqui.
         provider_name = os.getenv("AI_PROVIDER", "deepseek").lower()
 
         if provider_name == "deepseek":
@@ -283,7 +298,8 @@ class AIGradeQueryService:
         )
         grades_context = combined_context
 
-        # AC-1, AC-2: Call AI API and get response
+        # Chama a IA. Tudo dentro de try/except: se a IA falhar, devolve-se uma
+        # mensagem de recurso em vez de rebentar (o aluno nunca vê um erro técnico).
         try:
             ai_response = self.provider.call(system_prompt, sanitized_message)
 
@@ -437,15 +453,12 @@ class AIGradeQueryService:
             )
             return ""
 
+    # @staticmethod: método que não usa `self` (não depende da instância) — é só
+    # uma função utilitária agrupada na classe.
     @staticmethod
     def _sanitize_message(message: str) -> str:
-        """Sanitize student message against prompt injection.
-
-        Simple sanitization:
-        - Escape HTML entities
-        - Limit length to 500 chars
-        - Remove control characters
-        """
+        """Limpa a mensagem do aluno para evitar abusos ("prompt injection")."""
+        # Escapa HTML, remove caracteres de controlo e limita o tamanho a 500.
         if not message:
             return ""
 

@@ -1,4 +1,12 @@
-"""WhatsApp Chatbot endpoints (Stories 6.1, 6.2).
+"""Router do CHATBOT de WhatsApp — recebe e responde a mensagens dos alunos.
+
+PT: Quando um aluno escreve no WhatsApp, o serviço externo (Evolution API) faz um
+"webhook" — um pedido HTTP para o nosso /webhook — entregando a mensagem. Aqui
+validamos um token de segurança, descobrimos de quem é o número de telefone, e
+passamos a mensagem ao "pipeline" (identificar → limitar → IA → responder). O
+endpoint /test permite ao professor experimentar a resposta da IA sem enviar nada.
+
+WhatsApp Chatbot endpoints (Stories 6.1, 6.2).
 
 POST /api/v1/chatbot/webhook — Receives messages from Evolution API (Story 6.1).
 
@@ -45,6 +53,8 @@ def get_chatbot_pipeline(request: Request) -> ChatbotPipeline:
     Returns:
         ChatbotPipeline instance
     """
+    # `global`: indica que vamos alterar as variáveis de módulo (e não criar novas locais).
+    # Criamos o pipeline uma única vez e reutilizamo-lo (padrão "singleton").
     global _chatbot_pipeline, _rate_limiter
 
     if _chatbot_pipeline is None:
@@ -133,8 +143,10 @@ class TestChatbotResponse(BaseModel):
 # -----------------------------------------------------------------------
 
 
+# Dependência de segurança: confirma que quem chama o webhook conhece o token
+# secreto (senão qualquer pessoa na internet podia injectar mensagens falsas).
 async def validate_webhook_token(request: Request) -> str:
-    """Validate X-Webhook-Token header.
+    """Valida o token do webhook (cabeçalho X-Webhook-Token ou parâmetro ?token=).
 
     AC-2: Missing or incorrect token returns 401.
 
@@ -204,12 +216,15 @@ def get_db_session(request: Request) -> Session:
 # -----------------------------------------------------------------------
 
 
+# POST /webhook → ponto de entrada das mensagens vindas do WhatsApp.
+# `token: str = Depends(validate_webhook_token)` faz o FastAPI validar o token
+# ANTES de entrar na função: se for inválido, nem chega aqui (responde 401).
 @router.post("/webhook", response_model=WebhookResponse)
 async def receive_webhook(
     request: Request,
     token: str = Depends(validate_webhook_token),
 ) -> WebhookResponse:
-    """Receive message webhook from Evolution API.
+    """Recebe a mensagem do WhatsApp (via Evolution API) e encaminha-a ao pipeline.
 
     AC-5: Non-message events return 200 silently.
     AC-1: Valid token → 200 OK immediately.
@@ -242,7 +257,7 @@ async def receive_webhook(
             request_id=request_id,
         )
 
-    # AC-5: Ignore non-message events silently
+    # Só nos interessam mensagens novas ("messages.upsert"); o resto ignora-se com 200.
     event = payload_data.get("event")
     if event != "messages.upsert":
         LOGGER.debug(
@@ -316,14 +331,15 @@ async def receive_webhook(
         [c for c in phone_candidates if c],
     )
 
-    # AC-3: Normalize phone — pick the first candidate that is NOT a @lid id
+    # Escolhe o primeiro candidato que seja mesmo um telefone (e não um "@lid").
+    # `continue` salta para o próximo do ciclo; `break` pára assim que encontra um válido.
     normalized_phone = ""
     for cand in phone_candidates:
         if not cand:
             continue
         if "@lid" in str(cand):
-            continue  # skip Linked-ID, not a real phone
-        normalized_phone = normalize_phone(str(cand))
+            continue  # ignora o Linked-ID, não é um número real
+        normalized_phone = normalize_phone(str(cand))  # uniformiza o formato do número
         if normalized_phone:
             break
 
@@ -372,7 +388,8 @@ async def receive_webhook(
             pipeline = get_chatbot_pipeline(request)
             instance = payload_data.get("instance", "default")
 
-            # AC-1 through AC-6: Process message end-to-end
+            # Processa a mensagem de ponta a ponta (identificar → IA → responder).
+            # `await` espera pelo resultado desta operação assíncrona.
             result = await pipeline.process_message(
                 session,
                 normalized_phone,
@@ -426,13 +443,15 @@ async def receive_webhook(
         session.close()
 
 
+# POST /test → "ensaio": o professor testa a resposta da IA para um aluno, sem
+# enviar nada pelo WhatsApp. Útil para validar antes de usar a sério.
 @router.post("/test", response_model=TestChatbotResponse)
 async def test_chatbot(
     request: Request,
     payload: TestChatbotRequest,
     token: str = Depends(validate_webhook_token),
 ) -> TestChatbotResponse:
-    """Dry-run endpoint for AI grade query service (Story 6.2).
+    """Endpoint de ensaio para o serviço de IA de consulta de notas (Story 6.2).
 
     AC-6: Professor-only endpoint returning AI response without sending WhatsApp.
 

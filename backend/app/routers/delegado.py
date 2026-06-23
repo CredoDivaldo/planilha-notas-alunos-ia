@@ -1,8 +1,11 @@
-"""Delegado portal router.
+"""Router do DELEGADO de turma — visão limitada para o representante dos alunos.
 
-Routes under /api/v1/delegado (matches frontend paths):
-  GET /api/v1/delegado/students       — students in delegado's context
-  GET /api/v1/delegado/system-status  — system status summary
+PT: O delegado é um aluno com permissões extra: pode ver os colegas da(s) sua(s)
+turma(s) e um resumo do estado do sistema. Dois endpoints:
+  GET /api/v1/delegado/students       → alunos das turmas onde é delegado
+  GET /api/v1/delegado/system-status  → contagens gerais (alunos, contextos, notas)
+A nota técnica: o padrão do auxiliar de autenticação (_get_user_id) repete-se em
+vários routers — descobre o utilizador a partir do token de sessão.
 """
 from __future__ import annotations
 
@@ -70,7 +73,8 @@ async def get_students(request: Request) -> list[DelegateStudent]:
     user_id = _get_user_id(request)
     engine = _get_engine(request)
     with engine.connect() as conn:
-        # Return only students enrolled in contexts where this user is an active delegate
+        # Devolve só os alunos das turmas onde ESTE utilizador é delegado activo.
+        # Os JOIN ligam várias tabelas: students ↔ inscrições ↔ atribuições de delegado.
         rows = conn.execute(
             text(
                 "SELECT DISTINCT s.id, s.student_number, s.full_name, s.phone"

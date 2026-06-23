@@ -13,6 +13,9 @@ import PublishPage from '@/pages/professor/PublishPage'
 import ProfessorCalendarPage from '@/pages/professor/CalendarPage'
 import StudentCalendarPage from '@/pages/student/CalendarPage'
 
+// "Rota privada": só deixa ver a página se o utilizador estiver autenticado;
+// caso contrário, reencaminha (Navigate) para o /login. As variantes Delegate/
+// StudentRoute fazem o mesmo mas exigindo também um papel (role) específico.
 function PrivateRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth()
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
@@ -40,10 +43,13 @@ function StudentRoute({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+// Tabela de rotas: associa cada endereço (URL) à página a mostrar. É aqui que se
+// percebe o mapa do site (ex.: "/notas" → página de notas do professor).
 export function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Cada <Route> liga um caminho a um componente de página. */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route
@@ -118,6 +124,7 @@ export function AppRouter() {
             </StudentRoute>
           }
         />
+        {/* "*" apanha qualquer endereço desconhecido e leva-o para a raiz. */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

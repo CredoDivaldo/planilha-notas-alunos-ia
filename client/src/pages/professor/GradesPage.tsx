@@ -169,6 +169,44 @@ export default function GradesPage() {
     [contextItem, activeContextId, loadData, showStatus],
   )
 
+  const handleImportMulti = useCallback(
+    async (file: File): Promise<{ total: number; components: { csv_column: string; component_name: string; component_index: number; count: number }[]; unmatched_columns: string[] }> => {
+      if (!contextItem) return { total: 0, components: [], unmatched_columns: [] }
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        const url = `/api/v1/grades/upload-multi?context_id=${contextItem.id}`
+        const res = await apiFetch<{ total: number; components: { csv_column: string; component_name: string; component_index: number; count: number }[]; unmatched_columns: string[] }>(url, {
+          method: 'POST',
+          body: formData,
+          headers: {},
+        })
+        for (const comp of res.components) {
+          const entry: ImportHistoryEntry = {
+            id: crypto.randomUUID(),
+            componentName: comp.component_name,
+            timestamp: new Date().toISOString(),
+            count: comp.count,
+          }
+          setImportHistory((prev) => {
+            const next = [entry, ...prev].slice(0, 10)
+            try { localStorage.setItem(`import_history_${contextItem.id}`, JSON.stringify(next)) } catch { /* ignore */ }
+            return next
+          })
+        }
+        const names = res.components.map((c) => c.component_name).join(', ')
+        showStatus(`${res.total} notas importadas (${names})`, 'success')
+        if (activeContextId) void loadData(activeContextId)
+        return res
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Erro ao importar notas'
+        showStatus(`Erro: ${errorMsg}`, 'error')
+        throw err
+      }
+    },
+    [contextItem, activeContextId, loadData, showStatus],
+  )
+
   if (loading || !contextItem) {
     return (
       <div className="min-h-screen bg-background">
@@ -361,6 +399,7 @@ export default function GradesPage() {
         onClose={() => setImportModalOpen(false)}
         components={contextItem.components}
         onImport={handleImport}
+        onImportMulti={handleImportMulti}
       />
     </div>
   )

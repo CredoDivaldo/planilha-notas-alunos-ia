@@ -1,4 +1,9 @@
-"""Server-side session management.
+"""Gestão de sessões no servidor (quem está autenticado).
+
+PT: Após o login, criamos uma "sessão" na BD e enviamos ao navegador apenas um
+identificador aleatório (o cookie `sid`). Em cada pedido seguinte, esse id prova
+quem é o utilizador. A sessão tem validade (TTL) e é renovada no login/troca de
+senha para evitar roubo de sessão.
 
 Sessions are stored in ``user_sessions`` table.
 The client receives only an opaque session ID via an HttpOnly cookie.
@@ -33,7 +38,8 @@ _SESSION_ID_BYTES: int = 64
 
 
 def generate_session_id() -> str:
-    """Return a cryptographically secure random session ID."""
+    """Gera um id de sessão aleatório e seguro (impossível de adivinhar)."""
+    # secrets (e não random) é o módulo próprio para fins de segurança.
     return secrets.token_hex(_SESSION_ID_BYTES)
 
 
@@ -67,7 +73,9 @@ def create_session(
     """
     session_id = generate_session_id()
     now = datetime.now(UTC)
-    expires_at = now + timedelta(hours=ttl_hours)
+    expires_at = now + timedelta(hours=ttl_hours)  # validade = agora + TTL
+    # SQL com parâmetros (:id, :user_id, ...): os valores entram pelo dicionário
+    # abaixo, nunca colados na string → protege contra SQL injection.
     conn.execute(
         text(
             "INSERT INTO user_sessions (id, user_id, created_at, expires_at, is_active,"
@@ -105,7 +113,8 @@ def rotate_session(
         The new session ID.
     """
     now = datetime.now(UTC)
-    # Invalidate old session
+    # Desactiva a sessão antiga e a seguir cria uma nova (rotação) — assim um id
+    # capturado antes do login deixa de ser válido.
     conn.execute(
         text(
             "UPDATE user_sessions SET is_active = false, rotated_at = :now"
@@ -139,6 +148,7 @@ def get_active_session(conn: Connection, *, session_id: str) -> dict | None:
         Row dict with keys: id, user_id, expires_at.
     """
     now = datetime.now(UTC).replace(tzinfo=None)
+    # Só devolve a sessão se: existe, está activa E ainda não expirou.
     row = conn.execute(
         text(
             "SELECT id, user_id, expires_at FROM user_sessions"
@@ -148,4 +158,5 @@ def get_active_session(conn: Connection, *, session_id: str) -> dict | None:
     ).fetchone()
     if row is None:
         return None
+    # Converte a linha (tuplo) num dicionário com nomes — mais fácil de usar.
     return {"id": row[0], "user_id": row[1], "expires_at": row[2]}

@@ -1,4 +1,11 @@
-"""Pure CSV parsing/normalising helpers (Story 8.1 — Epic 8 cutover).
+"""Funções puras de leitura e normalização de CSV.
+
+PT: "Funções puras" = só recebem dados e devolvem dados, sem mexer na base de dados
+nem em ficheiros (mais fáceis de testar). Aqui lê-se o texto do CSV, transforma-se em
+linhas/colunas, uniformizam-se os nomes das colunas (ex.: aceitar "numero", "id" ou
+"numero_estudante" para o mesmo campo) e valida-se se tem as colunas obrigatórias.
+
+Pure CSV parsing/normalising helpers (Story 8.1 — Epic 8 cutover).
 
 These functions are the Python port of the legacy Express service:
     src/services/csv-parser.js
@@ -84,21 +91,26 @@ def parse_csv(text: str) -> ParsedCsv:
     Mirrors ``parseCsv(buffer)`` in the legacy module — same options
     (columns=True, skip_empty_lines=True, trim=True).
     """
+    # DictReader lê o CSV transformando cada linha num dicionário {coluna: valor}.
     reader = csv.DictReader(io.StringIO(text))
     headers: list[str] = list(reader.fieldnames or [])
+    # List comprehension com filtro: para cada linha, limpa os espaços de cada valor;
+    # o `if any(...)` no fim ignora linhas completamente vazias.
     rows = [
         {k: (v.strip() if isinstance(v, str) else v) for k, v in row.items()}
         for row in reader
-        if any((v or "").strip() for v in row.values())  # skip empty lines
+        if any((v or "").strip() for v in row.values())  # salta linhas vazias
     ]
     return ParsedCsv(headers=headers, rows=rows)
 
 
+# Devolve o valor da PRIMEIRA coluna que existir entre os nomes candidatos.
+# Serve para aceitar vários nomes alternativos para o mesmo campo (aliases).
 def _first_present(raw: dict[str, Any], candidates: tuple[str, ...]) -> str:
     for col in candidates:
         if col in raw and str(raw[col] or "").strip():
             return str(raw[col]).strip()
-    return ""
+    return ""  # nenhuma das colunas candidatas tinha valor
 
 
 def normalize_student(raw: dict[str, Any]) -> dict[str, str]:
@@ -173,3 +185,53 @@ def check_file_size(size: int) -> ValidationResult:
             ),
         )
     return ValidationResult(valid=True, error=None)
+
+
+# ---------------------------------------------------------------------------
+# Multi-component grade matching
+# ---------------------------------------------------------------------------
+
+NON_GRADE_COLS: set[str] = {
+    *IDENTIFIER_COLS, *NAME_COLS, *SUBJECT_COLS,
+    "turma", "telefone", "phone", "whatsapp",
+    "resultado", "result", "media_final", "media",
+}
+
+
+def _normalize_for_match(value: str) -> str:
+    decomposed = unicodedata.normalize("NFD", value)
+    ascii_only = decomposed.encode("ascii", "ignore").decode("ascii")
+    return ascii_only.strip().lower().replace(" ", "").replace("_", "")
+
+
+@dataclass(frozen=True)
+class ColumnMatch:
+    csv_column: str
+    component_name: str
+    component_index: int
+
+
+def match_grade_columns(
+    csv_headers: list[str],
+    component_names: list[str],
+) -> list[ColumnMatch]:
+    """Match CSV column headers to assessment component names.
+
+    Returns a list of matches (csv_column → component index).
+    Uses accent-insensitive, case-insensitive comparison.
+    """
+    norm_components = [_normalize_for_match(n) for n in component_names]
+    matches: list[ColumnMatch] = []
+    for header in csv_headers:
+        norm_header = _normalize_for_match(header)
+        if norm_header in {_normalize_for_match(c) for c in NON_GRADE_COLS}:
+            continue
+        for idx, norm_comp in enumerate(norm_components):
+            if norm_header == norm_comp:
+                matches.append(ColumnMatch(
+                    csv_column=header,
+                    component_name=component_names[idx],
+                    component_index=idx,
+                ))
+                break
+    return matches

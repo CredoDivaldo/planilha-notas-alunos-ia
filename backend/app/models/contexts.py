@@ -1,4 +1,11 @@
-"""Academic context models for professor grade management (Story 5.4).
+"""Modelos de "contexto académico" — o coração da organização das notas.
+
+PT: Um AcademicContext representa uma combinação única de professor + turma +
+disciplina + semestre + turno. É a "fronteira" que diz a que aula pertence cada
+nota e cada aluno. Semester e Shift são tabelas de referência (criadas pela
+instituição). ClassEnrollment liga alunos a um contexto (a pauta da turma).
+
+Academic context models for professor grade management (Story 5.4).
 
 This module provides the core data model for scoping grades and student rosters
 to specific academic contexts. Each context represents a unique combination of
@@ -200,10 +207,12 @@ class ContextSubjectConfiguration(Base, TimestampMixin):
     # }
     configuration_json: Mapped[str] = mapped_column(Text, nullable=False)
 
+    # A configuração é guardada como texto JSON. Estes dois métodos convertem
+    # entre texto (na BD) e dicionário Python (no código):
     def get_config(self) -> dict[str, Any]:
-        """Parse and return configuration as dictionary."""
-        return cast(dict[str, Any], json.loads(self.configuration_json))
+        """Lê o JSON guardado e devolve-o como dicionário Python."""
+        return cast(dict[str, Any], json.loads(self.configuration_json))  # texto → dict
 
     def set_config(self, config: dict[str, Any]) -> None:
-        """Store configuration as JSON string."""
-        self.configuration_json = json.dumps(config)
+        """Recebe um dicionário e guarda-o como texto JSON."""
+        self.configuration_json = json.dumps(config)  # dict → texto

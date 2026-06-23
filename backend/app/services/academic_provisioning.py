@@ -1,4 +1,11 @@
-"""Academic provisioning service — populate the normalized relational model.
+"""Serviço de provisionamento académico — preenche o modelo relacional.
+
+PT: Conjunto de funções "garante que existe" (find-or-create): cada uma procura um
+registo (professor, disciplina, turma, aluno, nota...) e, se não existir, cria-o; em
+qualquer caso devolve o id. Por isso são "idempotentes" — chamar duas vezes não
+duplica nada. O padrão repete-se em quase todas as funções deste ficheiro.
+
+Academic provisioning service — populate the normalized relational model.
 
 The professor-facing flow is simple (create context, upload students CSV,
 upload grades CSV, publish). These helpers translate that flow into the
@@ -27,8 +34,10 @@ def _now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
+# Cria um "slug": um código simples só com letras/números (ex.: "Matemática II"
+# → "matematica-ii"). Útil como código estável de disciplinas/turmas.
 def _slug(value: Any, maxlen: int = 60) -> str:
-    """ASCII slug for stable, unique-ish codes (subjects, class groups)."""
+    """Código ASCII estável a partir de um texto (ex.: para disciplinas/turmas)."""
     decomposed = unicodedata.normalize("NFD", str(value or ""))
     ascii_only = decomposed.encode("ascii", "ignore").decode("ascii")
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", ascii_only).strip("-").lower()
@@ -40,13 +49,16 @@ def _slug(value: Any, maxlen: int = 60) -> str:
 # ---------------------------------------------------------------------------
 
 
+# Exemplo do padrão "find-or-create" (as funções ensure_* seguintes são iguais):
 def ensure_professor(conn: Any, user_id: int, name: str | None) -> int:
+    # 1) Procura: já existe um professor para este utilizador?
     row = conn.execute(
         text("SELECT id FROM professors WHERE user_id = :uid LIMIT 1"),
         {"uid": user_id},
     ).fetchone()
     if row:
-        return row[0]
+        return row[0]  # encontrou → devolve o id existente
+    # 2) Não existe → cria e devolve o novo id (RETURNING id).
     r = conn.execute(
         text(
             "INSERT INTO professors (user_id, full_name, created_at, updated_at)"
@@ -215,8 +227,9 @@ def ensure_student(
         {"sn": student_number},
     ).fetchone()
     if row:
-        # Preserve existing name/phone when the incoming values are empty
-        # (e.g. the grades CSV has no phone — it must not wipe the roster phone).
+        # Se o aluno já existe, NÃO apaga o nome/telefone actuais quando os novos
+        # valores vêm vazios (ex.: o CSV de notas não traz telefone → mantém o da pauta).
+        # O `or` escolhe o primeiro valor "verdadeiro" (não vazio).
         new_name = name or row[1] or ""
         new_phone = phone if phone else row[2]
         conn.execute(
@@ -267,7 +280,9 @@ def upsert_grade(
     value: Any,
     user_id: int | None = None,
 ) -> int:
-    """Insert/update a grade entry (status=validated). Keyed by (student, assessment)."""
+    """Insere ou actualiza uma nota (upsert): se já existe actualiza, senão cria."""
+    # "upsert" = update + insert. Procura a nota deste aluno nesta componente; se já
+    # existir, actualiza o valor; caso contrário, insere uma nova.
     now = _now()
     row = conn.execute(
         text(

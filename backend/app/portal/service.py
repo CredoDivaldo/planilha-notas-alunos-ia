@@ -1,4 +1,13 @@
-"""Portal Service — read-only view of student's published academic data.
+"""Serviço do PORTAL do aluno — vista SÓ DE LEITURA dos dados já publicados.
+
+PT: É a lógica por trás do que o aluno vê quando entra: o resumo das suas notas,
+as notas de uma disciplina e o calendário. Regra de ouro de segurança: lê APENAS as
+notas publicadas (publication_snapshots com is_current=True) e só as do próprio aluno
+autenticado — nunca as notas internas/rascunho de outros. As consultas aqui usam o
+construtor de queries do SQLAlchemy (`select(...).join(...).where(...)`) em vez de SQL
+escrito à mão.
+
+Portal Service — read-only view of student's published academic data.
 
 AC-1: Portal reads ONLY publication_snapshots WHERE is_current=True.
 AC-2: Authenticated student identity scopes all queries.
@@ -72,8 +81,9 @@ class PortalService:
             ]
         }
         """
-        # Query: student's current enrollments + contexts + latest snapshots
-        # Note: AcademicContext.id is used as teaching_assignment_id in PublicationSnapshot
+        # Monta a consulta com o construtor do SQLAlchemy: escolhe colunas (select),
+        # liga tabelas (join) e filtra (where). É equivalente a um SELECT ... JOIN ...
+        # mas escrito em Python — o SQLAlchemy traduz para SQL.
         stmt = select(
             ClassEnrollment.student_id,
             ClassEnrollment.enrollment_status,
@@ -128,7 +138,8 @@ class PortalService:
         if not rows:
             return {"student_id": authenticated_student_id, "contexts": []}
 
-        # Aggregate by context
+        # Agrupa os resultados por contexto (disciplina), usando um dicionário
+        # indexado pelo id do contexto para não repetir entradas.
         contexts_by_id: dict[int, dict[str, Any]] = {}
         for row in rows:
             ctx_id = row.context_id
@@ -209,7 +220,8 @@ class PortalService:
         Raises:
         - PortalAccessError if student not enrolled in context.
         """
-        # Verify student is enrolled in this context
+        # Segurança: confirma que o aluno está mesmo inscrito neste contexto antes
+        # de mostrar qualquer nota (impede ver notas de turmas onde não pertence).
         enrollment = session.query(ClassEnrollment).filter_by(
             academic_context_id=context_id,
             student_id=authenticated_student_id,
@@ -435,7 +447,9 @@ class PortalService:
         )
 
 
+# Excepção própria para acessos não autorizados ao portal (ex.: tentar ver
+# uma turma onde não está inscrito). Quem chama apanha-a e responde com erro.
 class PortalAccessError(Exception):
-    """Raised when student attempts unauthorized portal access."""
+    """Lançada quando o aluno tenta aceder a algo a que não tem direito."""
 
     pass

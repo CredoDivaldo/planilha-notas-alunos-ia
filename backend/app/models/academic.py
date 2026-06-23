@@ -1,4 +1,12 @@
-"""Academic ORM models: GradeEntry, CalculationResult, AuditLog.
+"""Modelos ORM académicos internos: GradeEntry, CalculationResult, AuditLog.
+
+PT: Estes modelos são o "lado interno" das notas (nunca são mostrados ao aluno
+directamente — para o aluno usa-se o `publication.py`). GradeEntry guarda cada
+nota individual; CalculationResult guarda a nota final calculada por uma fórmula;
+AuditLog é um registo de auditoria (histórico do que aconteceu). As constantes
+no topo definem os estados válidos de uma nota (draft → validated → voided).
+
+Academic ORM models: GradeEntry, CalculationResult, AuditLog.
 
 These represent the *internal* side of the grade lifecycle.  Portal-facing
 data lives exclusively in ``publication.py`` models.
@@ -35,6 +43,7 @@ from backend.app.models.base import Base, TimestampMixin
 # GradeEntry lifecycle constants
 # ---------------------------------------------------------------------------
 
+# Estados possíveis de uma nota: rascunho, validada, anulada.
 GRADE_STATUS_DRAFT = "draft"
 GRADE_STATUS_VALIDATED = "validated"
 GRADE_STATUS_VOIDED = "voided"

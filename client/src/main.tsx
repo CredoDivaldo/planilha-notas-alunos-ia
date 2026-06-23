@@ -7,6 +7,8 @@ import { ThemeProvider } from 'next-themes'
 import './index.css'
 import App from './App.tsx'
 
+// Ponto de entrada do frontend: "monta" a aplicação React dentro do elemento
+// <div id="root"> do index.html. O ThemeProvider activa o tema (claro/escuro).
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>

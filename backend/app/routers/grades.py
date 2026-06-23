@@ -1,8 +1,10 @@
-"""Grades router — student grades per academic context (normalized model).
+"""Router de NOTAS — gere as notas dos alunos de cada contexto académico.
 
-Routes (no /api/v1 prefix — matches frontend apiFetch paths):
-  GET   /grades/?context_id={id}   — all enrolled students + grades for a context
-  PATCH /grades/{grade_id}         — update a single grade value
+PT: Um "router" agrupa endpoints (URLs) relacionados. Aqui há dois:
+  GET   /grades/?context_id={id}   → lista todos os alunos inscritos + as suas notas
+  PATCH /grades/{grade_id}         → altera o valor de uma nota
+O frontend chama estes endereços. Cada função decorada com @router.get/@router.patch
+responde a um deles. As consultas à BD usam SQL com parâmetros (seguro).
 """
 from __future__ import annotations
 
@@ -15,15 +17,19 @@ from sqlalchemy import text
 
 LOGGER = logging.getLogger("backend.grades")
 
+# Objecto que recolhe as rotas deste ficheiro; é depois ligado à app no main.py.
 router = APIRouter(tags=["grades"])
 
 
 # ---------------------------------------------------------------------------
-# Auth helper
+# Auxiliar de autenticação
 # ---------------------------------------------------------------------------
 
+# Descobre QUEM está a fazer o pedido a partir do cabeçalho "Authorization".
+# Devolve o id do professor; se não houver sessão válida, lança erro 401.
 def _get_professor_id(request: Request) -> int:
     auth = request.headers.get("authorization", "")
+    # O cabeçalho vem como "Bearer <id_sessao>"; removemos o prefixo para ficar só o id.
     session_id = auth.removeprefix("Bearer ").strip() if auth.startswith("Bearer ") else None
     if not session_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Não autenticado.")
@@ -55,25 +61,28 @@ def _get_engine(request: Request):
 # Schemas
 # ---------------------------------------------------------------------------
 
-class GradeValueOut(BaseModel):
+# Schemas Pydantic: descrevem o formato exacto dos dados que entram/saem da API.
+# O FastAPI usa-os para validar e converter automaticamente para/de JSON.
+
+class GradeValueOut(BaseModel):       # uma nota individual devolvida ao frontend
     gradeId: str
-    value: float | None
+    value: float | None               # pode ser None (nota ainda não lançada)
 
 
-class StudentRowOut(BaseModel):
+class StudentRowOut(BaseModel):       # uma linha da pauta: aluno + as suas notas
     studentId: str
     studentNumber: str
     studentName: str
     phone: str | None = None
-    components: dict[str, GradeValueOut]
+    components: dict[str, GradeValueOut]  # dicionário {posição: nota}
     published: bool
 
 
-class GradesListOut(BaseModel):
+class GradesListOut(BaseModel):       # resposta do GET /grades/: lista de alunos
     students: list[StudentRowOut]
 
 
-class GradePatchRequest(BaseModel):
+class GradePatchRequest(BaseModel):   # corpo do PATCH: o novo valor da nota
     value: float | None
 
 
@@ -81,12 +90,14 @@ class GradePatchRequest(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
+# GET /grades/?context_id=... → devolve a pauta completa (alunos + notas) de um contexto.
 @router.get("/grades/", response_model=GradesListOut)
 async def get_grades(context_id: int, request: Request) -> GradesListOut:
-    prof_id = _get_professor_id(request)
+    prof_id = _get_professor_id(request)   # garante que está autenticado
     engine = _get_engine(request)
 
     with engine.connect() as conn:
+        # Confirma que o contexto existe E pertence a este professor (segurança).
         ctx_row = conn.execute(
             text(
                 "SELECT id, teaching_assignment_id FROM academic_contexts"
@@ -122,8 +133,10 @@ async def get_grades(context_id: int, request: Request) -> GradesListOut:
             {"cid": context_id},
         ).fetchall()
 
+        # Percorre cada aluno inscrito e monta a sua linha da pauta.
         student_rows: list[StudentRowOut] = []
         for student_id, student_number, full_name, phone in enrolled:
+            # Começa com todas as notas vazias (dict comprehension: uma entrada por componente).
             components: dict[str, GradeValueOut] = {
                 key: GradeValueOut(gradeId="", value=None) for key in component_keys
             }
@@ -166,6 +179,8 @@ async def get_grades(context_id: int, request: Request) -> GradesListOut:
         return GradesListOut(students=student_rows)
 
 
+# PATCH /grades/{grade_id} → altera o valor de uma única nota.
+# {grade_id} na URL chega como argumento; `body` é o JSON enviado (validado pelo schema).
 @router.patch("/grades/{grade_id}", response_model=GradeValueOut)
 async def patch_grade(grade_id: int, body: GradePatchRequest, request: Request) -> GradeValueOut:
     prof_id = _get_professor_id(request)
@@ -173,7 +188,7 @@ async def patch_grade(grade_id: int, body: GradePatchRequest, request: Request) 
     now = datetime.now(UTC).replace(tzinfo=None)
 
     with engine.connect() as conn:
-        # Verify the grade belongs to this professor's teaching assignment
+        # Verifica que a nota pertence mesmo a uma turma deste professor (segurança).
         row = conn.execute(
             text(
                 "SELECT ge.id FROM grade_entries ge"
@@ -192,5 +207,5 @@ async def patch_grade(grade_id: int, body: GradePatchRequest, request: Request) 
             ),
             {"val": body.value, "now": now, "gid": grade_id},
         )
-        conn.commit()
+        conn.commit()  # confirma a alteração na BD
         return GradeValueOut(gradeId=str(grade_id), value=body.value)

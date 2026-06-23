@@ -1,4 +1,13 @@
-"""Roster & teaching ORM models for the normalized academic schema.
+"""Modelos ORM de pessoas e ensino (alunos, professores, turmas, disciplinas...).
+
+PT: Cada classe abaixo = uma tabela na base de dados. Os atributos com
+`mapped_column(...)` são as colunas. Padrão a reconhecer:
+  - `__tablename__` → nome da tabela.
+  - `id: Mapped[int] = mapped_column(primary_key=True)` → chave primária (id único).
+  - `Mapped[str]` vs `Mapped[str | None]` → coluna obrigatória vs opcional (pode ser nula).
+  - `nullable=False` → não pode ficar vazio; `server_default=...` → valor por defeito na BD.
+
+Roster & teaching ORM models for the normalized academic schema.
 
 These map 1:1 to the tables created in the initial migration
 (``20260528_0001_initial_academic_schema``). They were previously accessed
@@ -49,14 +58,15 @@ class Subject(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(40), server_default="active", nullable=False)
 
 
+# Tabela "students": exemplo comentado do padrão (as outras classes seguem-no igual).
 class Student(Base, TimestampMixin):
-    __tablename__ = "students"
+    __tablename__ = "students"                                    # nome da tabela na BD
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    student_number: Mapped[str] = mapped_column(String(80), nullable=False)
-    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    id: Mapped[int] = mapped_column(primary_key=True)             # id único do aluno
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # liga à conta (pode não ter)
+    student_number: Mapped[str] = mapped_column(String(80), nullable=False)  # nº de matrícula (obrigatório)
+    full_name: Mapped[str] = mapped_column(String(255), nullable=False)      # nome completo
+    phone: Mapped[str | None] = mapped_column(String(80), nullable=True)     # telefone (opcional, p/ WhatsApp)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     current_class_group_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     course_id: Mapped[int | None] = mapped_column(Integer, nullable=True)

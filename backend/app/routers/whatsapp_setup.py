@@ -1,4 +1,9 @@
-"""Per-professor WhatsApp instance setup router.
+"""Router de CONFIGURAÇÃO do WhatsApp por professor.
+
+PT: Cada professor liga a SUA própria conta de WhatsApp (uma "instância" na Evolution
+API), para que os alunos falem com o número dele. Aqui estão os endpoints para criar
+a instância, obter o QR code de emparelhamento, configurar o webhook e desligar.
+A maioria são operações de bastidores/diagnóstico — não tratam directamente de notas.
 
 Each professor creates and manages their own Evolution instance so that their
 students communicate via the professor's own WhatsApp number.
@@ -94,7 +99,7 @@ def _get_professor_instance(engine, prof_id: int) -> str:
         ).fetchone()
     if row and row[0]:
         return row[0]
-    # Generate a deterministic instance name
+    # Se ainda não tem nome guardado, gera um previsível a partir do id (ex.: "prof-7").
     return f"prof-{prof_id}"
 
 
@@ -235,9 +240,10 @@ async def setup_create(request: Request) -> SetupCreateResponse:
     )
 
 
+# GET /qr → devolve o QR code que o professor lê no telemóvel para ligar o WhatsApp.
 @router.get("/qr", response_model=SetupQrResponse)
 async def setup_qr(request: Request) -> SetupQrResponse:
-    """Get the QR code for the professor's WhatsApp instance."""
+    """Obtém o QR code da instância de WhatsApp do professor."""
     prof_id = _get_professor_id(request)
     engine = _get_engine(request)
     instance_name = _get_professor_instance(engine, prof_id)

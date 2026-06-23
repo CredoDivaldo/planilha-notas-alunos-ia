@@ -1,3 +1,10 @@
+"""Ponto de entrada da aplicação backend (FastAPI).
+
+Este ficheiro monta a aplicação web: liga a base de dados no arranque, regista
+todos os "routers" (grupos de rotas/endpoints da API), expõe o /health e serve
+o frontend já compilado. O objecto `app` no fim é o que o servidor (uvicorn)
+executa.
+"""
 from __future__ import annotations
 
 import logging
@@ -30,6 +37,8 @@ LOGGER = logging.getLogger("backend.app")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 
 
+# Modelo Pydantic: descreve o formato (schema) da resposta do endpoint /health.
+# Cada atributo com anotação de tipo vira um campo validado no JSON devolvido.
 class HealthResponse(BaseModel):
     status: str
     service: str
@@ -38,6 +47,8 @@ class HealthResponse(BaseModel):
     request_id: str
 
 
+# Modelo Pydantic para erros: formato uniforme de qualquer falha da API.
+# `extra="forbid"` rejeita campos inesperados (mais rigoroso/seguro).
 class ErrorResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -47,6 +58,9 @@ class ErrorResponse(BaseModel):
     request_id: str | None = None
 
 
+# `lifespan` corre uma vez no arranque (antes do `yield`) e uma vez no encerramento
+# (depois do `yield`). Aqui preparamos a ligação à base de dados e guardamo-la em
+# `app.state` para todas as rotas a poderem reutilizar.
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from sqlalchemy.orm import sessionmaker
@@ -77,6 +91,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine.dispose()
 
 
+# Middleware: função que "envolve" TODOS os pedidos. Aqui atribui um identificador
+# único (request_id) a cada pedido, útil para seguir um erro nos logs.
 async def request_id_middleware(
     request: Request,
     call_next: Callable[[Request], Awaitable[Any]],
@@ -96,11 +112,13 @@ def _request_id_from(request: Request) -> str | None:
     return getattr(request.state, "request_id", None)
 
 
+# Fábrica da aplicação: cria e configura o objecto FastAPI. Separar numa função
+# permite criar apps independentes nos testes (com settings diferentes).
 def create_app(settings: Settings | None = None) -> FastAPI:
     resolved_settings = settings or get_settings()
     app = FastAPI(title=resolved_settings.app_name, version="0.1.0", lifespan=lifespan)
     app.state.settings = resolved_settings
-    app.middleware("http")(request_id_middleware)
+    app.middleware("http")(request_id_middleware)  # activa o middleware acima
 
     # Auth router — login, register, change-password
     app.include_router(auth_router)
@@ -132,7 +150,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Per-professor WhatsApp instance setup
     app.include_router(whatsapp_setup_router)
 
-    # Health endpoint — must be registered BEFORE the SPA catch-all below
+    # Endpoint de "saúde": permite verificar se a API está viva e ligada à BD.
+    # O decorador @app.get(...) regista esta função como resposta a pedidos GET.
+    # Tem de vir ANTES do catch-all do SPA para não ser engolido por ele.
     @app.get(f"{resolved_settings.api_prefix}/health", response_model=HealthResponse)
     async def health(request: Request) -> HealthResponse:
         database_runtime = getattr(request.app.state, "database_runtime", None)
@@ -180,6 +200,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # Everything else is a React Router path → return index.html.
             return FileResponse(os.path.join(static_dir, "index.html"))
 
+    # Apanha qualquer erro não tratado e devolve um JSON de erro uniforme (500),
+    # em vez de expor o "stack trace" ao utilizador.
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         request_id = _request_id_from(request)
@@ -196,4 +218,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
+# Instância concreta usada em produção: é este `app` que o uvicorn arranca.
 app = create_app()

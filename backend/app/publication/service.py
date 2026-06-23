@@ -1,4 +1,12 @@
-"""Publication Service — grade broadcast and snapshot lifecycle.
+"""Serviço de PUBLICAÇÃO — controla como as notas passam a estar visíveis ao aluno.
+
+PT: Nenhuma nota aparece no portal do aluno até o professor "publicar". Publicar cria:
+um BroadcastJob (a acção), e uma PublicationSnapshot por aluno (a foto imutável da nota).
+Regra-chave de imutabilidade: uma snapshot nunca é editada; republicar cria uma NOVA
+versão (snapshot_version +1) e marca a anterior como is_current=False (mantida para
+histórico/auditoria). Assim há sempre exactamente UMA nota "actual" por aluno/disciplina.
+
+Publication Service — grade broadcast and snapshot lifecycle.
 
 Core invariant:
     No grade becomes visible in the student portal before the professor's
@@ -74,12 +82,10 @@ ACTION_DELIVERY_FAILED = "delivery_failed"
 # ---------------------------------------------------------------------------
 
 
+# Erro próprio para falhas nas validações ANTES de publicar (ex.: não há notas
+# validadas, ou não há destinatários). Quando ocorre, nada é publicado.
 class PreflightError(ValueError):
-    """Raised when broadcast preflight validation fails.
-
-    The BroadcastJob is set to status='failed' before this exception is raised.
-    No snapshots are created.
-    """
+    """Lançada quando as validações prévias à publicação falham (nada é publicado)."""
 
 
 # ---------------------------------------------------------------------------
@@ -231,10 +237,11 @@ class PublicationService:
         snapshots: list[PublicationSnapshot] = []
         teaching_assignment_id = job.teaching_assignment_id
 
+        # Para cada aluno, cria uma nova snapshot da sua nota.
         for entry in grade_data:
             student_id: int = entry["student_id"]
 
-            # Determine next snapshot version
+            # Descobre a maior versão já existente e soma 1 (a 1.ª publicação fica versão 1).
             max_version_row = session.execute(
                 select(func.max(PublicationSnapshot.snapshot_version)).where(
                     PublicationSnapshot.student_id == student_id,
@@ -243,7 +250,8 @@ class PublicationService:
             ).scalar()
             next_version = (max_version_row or 0) + 1
 
-            # Invalidate previous current snapshot for this student/context
+            # "Desliga" a snapshot que era a actual (is_current=False), para que só
+            # a nova fique marcada como actual a seguir.
             session.execute(
                 update(PublicationSnapshot)
                 .where(

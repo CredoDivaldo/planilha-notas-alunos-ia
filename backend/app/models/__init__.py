@@ -1,4 +1,10 @@
-"""ORM models package for the Academic Platform."""
+"""Pacote dos modelos ORM da Plataforma Académica.
+
+PT: Este ficheiro junta num só sítio todos os modelos (tabelas) espalhados pelos
+vários ficheiros, para o resto do código os poder importar com uma única linha:
+`from backend.app.models import Student, GradeEntry, ...`. O `__all__` lista o
+que é "público" deste pacote.
+"""
 from __future__ import annotations
 
 from backend.app.models.academic import AuditLog, CalculationResult, GradeEntry

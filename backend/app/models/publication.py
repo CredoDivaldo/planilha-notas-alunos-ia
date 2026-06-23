@@ -1,4 +1,13 @@
-"""Publication ORM models: BroadcastJob, PublicationSnapshot, NotificationDelivery.
+"""Modelos de publicação — o que fica VISÍVEL para os alunos.
+
+PT: O aluno nunca vê as notas internas (grade_entries). Quando o professor decide
+"publicar", cria-se um BroadcastJob (a acção), grava-se uma PublicationSnapshot
+(cópia imutável da nota que o aluno passa a ver) e regista-se cada envio em
+NotificationDelivery (ex.: WhatsApp enviado/falhado). PublishedCalendarSnapshot
+faz o mesmo para datas de exames/provas no calendário do aluno.
+Regra central: uma snapshot nunca é alterada; republicar cria uma nova versão.
+
+Publication ORM models: BroadcastJob, PublicationSnapshot, NotificationDelivery.
 
 These models form the *publication boundary*:
 - BroadcastJob      — records the explicit professor action that triggers publication

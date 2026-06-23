@@ -1,4 +1,11 @@
-"""Academic contexts router — CRUD for professor's teaching contexts.
+"""Router dos CONTEXTOS ACADÉMICOS — CRUD das "turmas/disciplinas" do professor.
+
+PT: Um contexto = uma disciplina que o professor dá a uma turma, num semestre/turno.
+Aqui estão os 5 endpoints do CRUD (listar, ver, criar, editar, apagar). Criar um
+contexto também "provisiona" automaticamente as entidades relacionadas (professor,
+disciplina, turma, componentes de avaliação) — ver `_provision_context`.
+
+Academic contexts router — CRUD for professor's teaching contexts.
 
 Routes (no /api/v1 prefix — matches frontend apiFetch paths):
   GET    /academic-contexts/           — list contexts for logged-in professor
@@ -159,6 +166,8 @@ def _get_or_create_default_ids(conn: Any, sem_id_hint: int | None, shift_id_hint
     return sem_id, shift_id
 
 
+# "Provisionar" = garantir que existem todas as entidades de que o contexto depende.
+# Cria-as se faltarem e devolve os ids da atribuição de ensino e da turma.
 def _provision_context(
     conn: Any,
     user_id: int,
@@ -168,7 +177,7 @@ def _provision_context(
     shift_id: int,
     components: list,
 ) -> tuple[int, int]:
-    """Provision the normalized entities for a context. Returns (ta_id, class_group_id)."""
+    """Cria/garante as entidades relacionadas de um contexto. Devolve (ta_id, class_group_id)."""
     urow = conn.execute(
         text("SELECT display_name, username FROM users WHERE id = :id LIMIT 1"),
         {"id": user_id},
@@ -280,6 +289,7 @@ def _build_context_item(conn: Any, row: Any, prof_id: int) -> ContextItemOut:
 # Routes
 # ---------------------------------------------------------------------------
 
+# LER lista (GET): devolve todos os contextos do professor autenticado.
 @router.get("/academic-contexts/", response_model=list[ContextItemOut])
 async def list_contexts(request: Request) -> list[ContextItemOut]:
     prof_id = _get_professor_id(request)
@@ -312,6 +322,7 @@ async def get_context(context_id: int, request: Request) -> ContextItemOut:
         return _build_context_item(conn, row, prof_id)
 
 
+# CRIAR (POST): provisiona as entidades e insere o novo contexto.
 @router.post("/academic-contexts/", status_code=status.HTTP_201_CREATED, response_model=ContextItemOut)
 async def create_context(body: ContextCreateRequest, request: Request) -> ContextItemOut:
     prof_id = _get_professor_id(request)
@@ -454,6 +465,8 @@ async def update_context(context_id: int, body: ContextUpdateRequest, request: R
         return _build_context_item(conn, updated, prof_id)
 
 
+# APAGAR (DELETE): remove o contexto E tudo o que depende dele (notas, componentes,
+# inscrições, atribuição de ensino) — apaga "em cascata" para não deixar lixo na BD.
 @router.delete("/academic-contexts/{context_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_context(context_id: int, request: Request) -> None:
     prof_id = _get_professor_id(request)

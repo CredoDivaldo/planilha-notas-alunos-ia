@@ -1,4 +1,8 @@
-"""Argon2id password hashing and verification service.
+"""Serviço de senhas (Argon2id) — criar e verificar "hashes" de palavras-passe.
+
+PT: Uma palavra-passe nunca é guardada em texto. Guarda-se apenas o seu "hash"
+(uma impressão digital irreversível). Para validar o login, voltamos a calcular
+o hash e comparamos. Argon2id é um algoritmo moderno e resistente a ataques.
 
 Only hashes are stored; cleartext passwords are never logged or persisted.
 """
@@ -36,6 +40,8 @@ def verify_password(password_hash: str, plaintext: str) -> bool:
     try:
         return _HASHER.verify(password_hash, plaintext)
     except (VerifyMismatchError, VerificationError):
+        # Em caso de erro devolve sempre False (não revela o motivo da falha,
+        # para não dar pistas a um atacante).
         return False
 
 

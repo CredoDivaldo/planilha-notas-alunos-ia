@@ -1,4 +1,10 @@
-"""DeepSeek AI Provider (Story 9.0 — Provider Switch).
+"""Provider de IA DeepSeek — adaptador concreto para a API do DeepSeek.
+
+PT: O DeepSeek oferece uma API "compatível com OpenAI", por isso reutilizamos o
+cliente `openai` apontando para o endereço do DeepSeek. Aqui está a classe-base
+abstracta `AIProvider` (o contrato) e a sua implementação `DeepSeekProvider`.
+
+DeepSeek AI Provider (Story 9.0 — Provider Switch).
 
 Integrates with DeepSeek's chat API via the OpenAI-compatible SDK.
 DeepSeek exposes https://api.deepseek.com as an OpenAI-compatible endpoint,
@@ -19,10 +25,13 @@ from typing import Any
 LOGGER = logging.getLogger("backend.deepseek_provider")
 
 
+# Classe abstracta (ABC = Abstract Base Class): define o "contrato" comum a todos
+# os providers de IA, mas não pode ser usada directamente. Cada provider real (DeepSeek,
+# Claude, OpenAI) herda dela e é OBRIGADO a implementar o método `call`.
 class AIProvider(ABC):
-    """Abstract base class for AI providers."""
+    """Classe-base abstracta para os providers de IA (define o método obrigatório)."""
 
-    @abstractmethod
+    @abstractmethod  # marca o método como obrigatório nas subclasses
     def call(self, system_prompt: str, user_message: str) -> str:
         """Call the AI provider with given prompts.
 

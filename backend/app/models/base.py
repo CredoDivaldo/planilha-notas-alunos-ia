@@ -1,4 +1,10 @@
-"""Declarative base and common mixins for SQLAlchemy 2.x ORM models."""
+"""Base comum dos modelos ORM (SQLAlchemy 2.x).
+
+PT: Um "modelo ORM" é uma classe Python que representa uma tabela da base de dados;
+cada atributo é uma coluna. Todos os modelos do projecto herdam de `Base`. O
+`TimestampMixin` é um "bloco reutilizável" que acrescenta as colunas de datas
+(criado_em / actualizado_em) a qualquer modelo que o inclua.
+"""
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -22,12 +28,14 @@ class TimestampMixin:
     the ORM (no raw SQL).
     """
 
+    # Coluna preenchida automaticamente com a data/hora de criação do registo.
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         server_default=text("CURRENT_TIMESTAMP"),
         default=lambda: datetime.now(UTC),
         nullable=False,
     )
+    # Igual à anterior, mas `onupdate` actualiza-a sempre que o registo muda.
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         server_default=text("CURRENT_TIMESTAMP"),

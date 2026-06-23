@@ -1,4 +1,11 @@
-"""Portal API routes — read-only endpoints for authenticated students.
+"""Rotas do PORTAL do aluno — endpoints só de leitura para o estudante autenticado.
+
+PT: Aqui estão os endereços que a página do aluno consulta para mostrar o seu resumo,
+notas e calendário. Toda a lógica pesada está no PortalService; estas funções só ligam
+o endpoint ao serviço e tratam erros. A autenticação verifica que é mesmo um aluno
+(role 'estudante') — ver get_authenticated_student_id.
+
+Portal API routes — read-only endpoints for authenticated students.
 
 Endpoints:
   GET /api/v1/portal/me              — academic summary + contexts
@@ -132,8 +139,10 @@ def get_db_session(request: Request) -> Generator[Session, None, None]:
         session.close()
 
 
+# Dependência: descobre o id do ALUNO autenticado e garante que é mesmo um estudante.
+# Percurso: token → sessão → utilizador (tem de ter role 'estudante') → registo de aluno.
 def get_authenticated_student_id(request: Request) -> int:
-    """Resolve the authenticated student's ``students.id`` from the session.
+    """Resolve o ``students.id`` do aluno autenticado a partir da sessão.
 
     Bearer token → user_sessions → users (role must be 'estudante') →
     students (linked by user_id). Raises 401 if not an authenticated student.
@@ -179,6 +188,8 @@ def get_authenticated_student_id(request: Request) -> int:
 # -----------------------------------------------------------------------
 
 
+# GET /api/v1/portal/me → resumo académico do aluno (disciplinas + notas actuais).
+# Os dois `Depends(...)` injectam automaticamente a sessão de BD e o id do aluno.
 @router.get("/me", response_model=AcademicSummary, status_code=200)
 async def get_academic_summary(
     request: Request,

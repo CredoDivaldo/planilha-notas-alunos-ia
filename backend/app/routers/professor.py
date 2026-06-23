@@ -1,4 +1,12 @@
-"""Professor-side endpoints (Story 8.2 — Epic 8 cutover).
+"""Router do PROFESSOR — publicação de notas e gestão do WhatsApp.
+
+PT: É aqui que vive a operação principal: "disparar" (broadcast) as notas finais.
+O cálculo da nota final faz-se por MÉDIA PONDERADA (cada componente tem um peso) na
+função `_normalized_broadcast`. Depois publica-se a nota no portal do aluno e,
+opcionalmente, envia-se uma mensagem de WhatsApp. Há também endpoints para ligar/ver
+o estado da conta de WhatsApp (Evolution API). `dry_run` = simulação (não grava nem envia).
+
+Professor-side endpoints (Story 8.2 — Epic 8 cutover).
 
 Five endpoints, all under ``/api/v1``:
 
@@ -147,6 +155,7 @@ def _safe_detail(message: str) -> str:
     return message
 
 
+# Formata a nota para texto: "14" se for inteira, "14.5" se tiver decimais.
 def _nota_str(nota_final: float) -> str:
     return str(int(nota_final)) if nota_final == int(nota_final) else str(nota_final)
 
@@ -196,6 +205,7 @@ async def _normalized_broadcast(
         ),
         {"ta": teaching_assignment_id},
     ).fetchall()
+    # Lista dos ids das componentes e dicionário {id_componente: peso}.
     comp_ids = [r[0] for r in ad_rows]
     weights = {r[0]: float(r[1] or 0) for r in ad_rows}
 
@@ -227,14 +237,16 @@ async def _normalized_broadcast(
             {"s": sid, "ta": teaching_assignment_id},
         ).fetchall()
         vals = {adid: (float(v) if v is not None else None) for adid, v in grows}
-        # Only complete students (all components present) are published
+        # Só se publica a nota se o aluno tiver TODAS as componentes lançadas.
+        # `any(... is None ...)` → True se faltar pelo menos uma nota.
         if not comp_ids or any(vals.get(cid) is None for cid in comp_ids):
             continue
+        # MÉDIA PONDERADA: soma de (nota × peso/100) de cada componente.
         total = sum(vals[cid] * weights[cid] / 100 for cid in comp_ids)
-        nota_final = round(total * 10) / 10
-        approved = nota_final >= 10
+        nota_final = round(total * 10) / 10   # arredonda a 1 casa decimal
+        approved = nota_final >= 10           # aprovado se a média ≥ 10
 
-        # Audience filter
+        # Filtro de destinatários: o professor pode enviar só a aprovados ou só a reprovados.
         if audience == "approved" and not approved:
             continue
         if audience == "rejected" and approved:
@@ -258,6 +270,7 @@ async def _normalized_broadcast(
                 "student_number": snum or "", "reason": "Sem número WhatsApp cadastrado",
             })
             continue
+        # Constrói a mensagem substituindo os campos {nome}, {nota}, etc., no modelo.
         msg = render_message_template(
             message_template,
             nome=sname or "", disciplina=disciplina, semestre=semestre,
@@ -265,7 +278,7 @@ async def _normalized_broadcast(
             numero=snum or "",
         )
         try:
-            await send_whatsapp_text(instance, sphone, msg)
+            await send_whatsapp_text(instance, sphone, msg)  # envio assíncrono via WhatsApp
             sent += 1
         except Exception as exc:
             LOGGER.warning("broadcast_send_failed", extra={"error": str(exc), "student": snum})
@@ -309,8 +322,9 @@ async def _normalized_broadcast(
     response_model=BroadcastResponse,
     status_code=status.HTTP_200_OK,
 )
+# POST /broadcast/ → ponto de entrada para publicar/enviar notas de um contexto.
 async def broadcast(request: Request, payload: BroadcastRequest) -> BroadcastResponse:
-    """AC-2 / AC-4: trigger the publication workflow.
+    """Dispara o fluxo de publicação de notas (real ou em simulação/dry_run).
 
     ``dry_run=True`` (or ``mode=='simulation'`` from the legacy dashboard
     field) returns ``{simulated: true, ...}`` and does not persist

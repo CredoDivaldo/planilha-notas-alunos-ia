@@ -1,4 +1,8 @@
-"""Phone number normalization for WhatsApp integration.
+"""Normalização de números de telefone (para o WhatsApp).
+
+PT: O mesmo número pode chegar escrito de várias formas: "+244912345678",
+"00244...", "244...@s.whatsapp.net" ou com espaços. Esta função reduz tudo a um
+formato único — só dígitos — para depois conseguirmos comparar/encontrar o aluno.
 
 Handles Evolution API remoteJid format normalization:
   - Input: "244912345678@s.whatsapp.net" or "+244912345678" or "00244912345678"
@@ -38,16 +42,17 @@ def normalize_phone(raw_phone: str) -> str:
     if not raw_phone:
         return ""
 
-    # Step 1: Strip @s.whatsapp.net suffix
+    # Passo 1: tirar o sufixo "@s.whatsapp.net" (split("@")[0] = parte antes do @).
     phone = raw_phone.split("@")[0]
 
-    # Step 2: Remove leading + or 00
+    # Passo 2: remover o prefixo internacional "+" ou "00" do início.
     if phone.startswith("+"):
         phone = phone[1:]
     elif phone.startswith("00"):
         phone = phone[2:]
 
-    # Step 3: Keep digits only
+    # Passo 3: ficar só com os dígitos (descarta espaços, traços, etc.).
+    # "".join(...) junta numa string só os caracteres que são números.
     phone = "".join(c for c in phone if c.isdigit())
 
     return phone

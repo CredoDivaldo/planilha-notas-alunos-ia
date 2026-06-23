@@ -30,6 +30,9 @@ interface AuthContextType {
   activateStudent: (studentNumber: string, password: string) => Promise<void>
 }
 
+// Um "Context" do React é uma forma de partilhar dados (aqui: o utilizador e as
+// funções de login/logout) com toda a árvore de componentes, sem ter de os passar
+// manualmente de pai para filho. É o equivalente a um "estado global" da autenticação.
 const AuthContext = createContext<AuthContextType | null>(null)
 
 function loadUserFromStorage(): User | null {
@@ -70,12 +73,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(loadUserFromStorage)
   const [requiresPasswordChange, setRequiresPasswordChange] = useState(false)
 
+  // Faz login: envia as credenciais ao endpoint /auth/login do backend e, se
+  // correr bem, guarda o utilizador (com o token) na memória e no localStorage.
   const login = async (credentials: LoginCredentials) => {
     const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
     const res = await fetch(`${base}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(credentials),
+      body: JSON.stringify(credentials),  // converte o objecto em texto JSON
     })
 
     if (!res.ok) {
@@ -178,6 +183,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
+// "Hook" personalizado: atalho para qualquer componente aceder à autenticação
+// com `const { user, login } = useAuth()`. Lança erro se for usado fora do Provider.
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used within AuthProvider')

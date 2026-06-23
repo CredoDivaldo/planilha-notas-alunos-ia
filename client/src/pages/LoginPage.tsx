@@ -21,11 +21,16 @@ function PasswordRequirement({ met, label }: { met: boolean; label: string }) {
   )
 }
 
+// Página de login. Exemplo típico de componente React com "estado": cada `useState`
+// cria uma variável que, quando muda, faz a página voltar a desenhar-se. Aqui há
+// estado para o separador activo, email, senha, erros, etc.
 export default function LoginPage() {
+  // useAuth() dá acesso às funções de autenticação partilhadas (ver AuthContext).
   const { login, isAuthenticated, role: currentRole, changePassword, requiresPasswordChange,
     checkStudentStatus, activateStudent } = useAuth()
-  const navigate = useNavigate()
+  const navigate = useNavigate()  // permite mudar de página por código
 
+  // [valor, função-que-o-altera] = useState(valorInicial)
   const [tab, setTab] = useState<Tab>('professor')
   const [email, setEmail] = useState('')
   const [studentNumber, setStudentNumber] = useState('')
@@ -45,6 +50,8 @@ export default function LoginPage() {
   const [changeLoading, setChangeLoading] = useState(false)
   const [changeError, setChangeError] = useState('')
 
+  // useEffect: corre quando algo na lista de dependências (no fim) muda. Aqui,
+  // assim que o utilizador fica autenticado, reencaminha-o para o painel certo.
   useEffect(() => {
     if (isAuthenticated && !requiresPasswordChange && currentRole) {
       const dest =

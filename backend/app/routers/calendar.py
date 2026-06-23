@@ -1,10 +1,11 @@
-"""Calendar events router.
+"""Router do CALENDÁRIO — gere os eventos (exames, provas, recursos) do professor.
 
-Routes under /api/v1/calendar (matches frontend paths):
-  GET    /api/v1/calendar/events          — list all events for professor
-  POST   /api/v1/calendar/events          — create event
-  PUT    /api/v1/calendar/events/{id}     — update event
-  DELETE /api/v1/calendar/events/{id}     — delete event
+PT: Implementa o CRUD completo (Criar, Ler, Actualizar, Apagar) de eventos:
+  GET    /api/v1/calendar/events       → listar eventos do professor
+  POST   /api/v1/calendar/events       → criar evento
+  PUT    /api/v1/calendar/events/{id}  → editar evento
+  DELETE /api/v1/calendar/events/{id}  → apagar evento
+Cada verbo HTTP (GET/POST/PUT/DELETE) corresponde a uma operação do CRUD.
 """
 from __future__ import annotations
 
@@ -101,8 +102,11 @@ class EventUpdateRequest(BaseModel):
     context_id: str | None = None
 
 
+# Separa uma data/hora em duas partes: data "AAAA-MM-DD" e hora "HH:MM" (ou None).
+# Devolve um tuplo (dois valores de uma vez). Aceita tanto objectos datetime
+# como texto, daí o `hasattr(..., "strftime")` (verifica se é um datetime).
 def _split_dt(value) -> tuple[str, str | None]:
-    """Return (YYYY-MM-DD, HH:MM | None) from a datetime or timestamp string."""
+    """Devolve (AAAA-MM-DD, HH:MM | None) a partir de um datetime ou texto."""
     if value is None:
         return "", None
     if hasattr(value, "strftime"):
@@ -129,6 +133,7 @@ def _row_to_out(row) -> CalendarEventOut:
     )
 
 
+# LER (GET): devolve todos os eventos criados por este professor, ordenados por data.
 @router.get("/events", response_model=CalendarEventsResponse)
 async def list_events(request: Request) -> CalendarEventsResponse:
     user_id = _get_user_id(request)
@@ -144,9 +149,11 @@ async def list_events(request: Request) -> CalendarEventsResponse:
             ),
             {"uid": user_id},
         ).fetchall()
+        # Converte cada linha da BD num objecto de saída (list comprehension).
         return CalendarEventsResponse(events=[_row_to_out(r) for r in rows])
 
 
+# CRIAR (POST): insere um novo evento e devolve-o já com o id gerado (201 Created).
 @router.post("/events", response_model=CalendarEventOut, status_code=status.HTTP_201_CREATED)
 async def create_event(body: EventCreateRequest, request: Request) -> CalendarEventOut:
     user_id = _get_user_id(request)
@@ -185,18 +192,22 @@ async def create_event(body: EventCreateRequest, request: Request) -> CalendarEv
         return _row_to_out(row)
 
 
+# ACTUALIZAR (PUT): edita um evento existente, mas só os campos que vieram preenchidos.
 @router.put("/events/{event_id}", response_model=CalendarEventOut)
 async def update_event(event_id: int, body: EventUpdateRequest, request: Request) -> CalendarEventOut:
     user_id = _get_user_id(request)
     engine = _get_engine(request)
     now = datetime.now(UTC).replace(tzinfo=None)
     with engine.connect() as conn:
+        # Confirma que o evento existe e é deste professor antes de editar.
         row = conn.execute(
             text("SELECT id FROM calendar_events WHERE id = :eid AND created_by_user_id = :uid LIMIT 1"),
             {"eid": event_id, "uid": user_id},
         ).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="Evento não encontrado.")
+        # Constrói o UPDATE dinamicamente: só inclui no SQL os campos enviados.
+        # `updates` guarda os valores; `set_clauses` guarda os pedaços "coluna = :param".
         updates: dict = {"now": now, "eid": event_id}
         set_clauses = ["updated_at = :now"]
         if body.title is not None:
@@ -217,6 +228,7 @@ async def update_event(event_id: int, body: EventUpdateRequest, request: Request
         if body.context_id is not None:
             updates["ctx_id"] = body.context_id
             set_clauses.append("context_id = :ctx_id")
+        # Junta os pedaços com vírgulas, formando o SET final do UPDATE.
         conn.execute(
             text(f"UPDATE calendar_events SET {', '.join(set_clauses)} WHERE id = :eid"),
             updates,
@@ -232,6 +244,7 @@ async def update_event(event_id: int, body: EventUpdateRequest, request: Request
         return _row_to_out(updated)
 
 
+# APAGAR (DELETE): remove o evento (só se for deste professor). 204 = sem conteúdo.
 @router.delete("/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_event(event_id: int, request: Request) -> None:
     user_id = _get_user_id(request)
@@ -242,5 +255,6 @@ async def delete_event(event_id: int, request: Request) -> None:
             {"eid": event_id, "uid": user_id},
         )
         conn.commit()
+        # rowcount = nº de linhas afectadas; 0 significa que não havia nada para apagar.
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Evento não encontrado.")
