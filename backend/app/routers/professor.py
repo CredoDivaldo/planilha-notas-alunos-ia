@@ -41,6 +41,7 @@ from backend.app.services.evolution_api_client import (
     get_qrcode,
     send_whatsapp_text,
 )
+from backend.app.utils.phone import ensure_country_code
 
 LOGGER = logging.getLogger("backend.professor.routes")
 
@@ -278,7 +279,7 @@ async def _normalized_broadcast(
             numero=snum or "",
         )
         try:
-            await send_whatsapp_text(instance, sphone, msg)  # envio assíncrono via WhatsApp
+            await send_whatsapp_text(instance, ensure_country_code(sphone), msg)
             sent += 1
         except Exception as exc:
             LOGGER.warning("broadcast_send_failed", extra={"error": str(exc), "student": snum})

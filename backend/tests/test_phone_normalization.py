@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from backend.app.utils.phone import normalize_phone
+from backend.app.utils.phone import ensure_country_code, normalize_phone
 
 
 class TestPhoneNormalization:
@@ -91,3 +91,34 @@ class TestPhoneNormalization:
         """Format with dots as separators."""
         result = normalize_phone("+244.91.234.5678")
         assert result == "244912345678"
+
+
+class TestEnsureCountryCode:
+    """Test ensure_country_code adds 244 for Angolan local numbers."""
+
+    def test_local_angolan_number(self) -> None:
+        assert ensure_country_code("923557393") == "244923557393"
+
+    def test_already_has_country_code(self) -> None:
+        assert ensure_country_code("244923557393") == "244923557393"
+
+    def test_plus_prefix_stripped(self) -> None:
+        assert ensure_country_code("+244923557393") == "244923557393"
+
+    def test_double_zero_prefix(self) -> None:
+        assert ensure_country_code("00244923557393") == "244923557393"
+
+    def test_portuguese_number_unchanged(self) -> None:
+        assert ensure_country_code("351912345678") == "351912345678"
+
+    def test_empty_string(self) -> None:
+        assert ensure_country_code("") == ""
+
+    def test_with_spaces(self) -> None:
+        assert ensure_country_code("92 355 7393") == "244923557393"
+
+    def test_number_starting_with_9_nine_digits(self) -> None:
+        assert ensure_country_code("941045715") == "244941045715"
+
+    def test_number_not_starting_with_9(self) -> None:
+        assert ensure_country_code("123456789") == "123456789"

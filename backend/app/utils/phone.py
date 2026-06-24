@@ -56,3 +56,30 @@ def normalize_phone(raw_phone: str) -> str:
     phone = "".join(c for c in phone if c.isdigit())
 
     return phone
+
+
+def ensure_country_code(phone: str, default_code: str = "244") -> str:
+    """Garante que o número tem o código de país (Angola = 244).
+
+    Números angolanos têm 9 dígitos e começam por 9. Se o número já tiver
+    o código de país (12 dígitos para Angola), devolve-o tal qual.
+
+    Examples:
+        >>> ensure_country_code("923557393")
+        '244923557393'
+        >>> ensure_country_code("244923557393")
+        '244923557393'
+        >>> ensure_country_code("+244923557393")
+        '244923557393'
+        >>> ensure_country_code("351912345678")
+        '351912345678'
+    """
+    digits = normalize_phone(phone)
+    if not digits:
+        return ""
+    if digits.startswith(default_code):
+        return digits
+    # 9 dígitos começando por 9 → número angolano local sem código de país
+    if len(digits) == 9 and digits.startswith("9"):
+        return default_code + digits
+    return digits
