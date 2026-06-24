@@ -358,8 +358,7 @@ async def broadcast(request: Request, payload: BroadcastRequest) -> BroadcastRes
                             _text("SELECT whatsapp_instance FROM users WHERE id = :uid LIMIT 1"),
                             {"uid": _prof_user_id},
                         ).fetchone()
-                        # Use DB value if present, otherwise deterministic fallback (same logic as _get_professor_instance)
-                        _prof_instance = (_inst_row[0] if _inst_row and _inst_row[0] else None) or f"prof-{_prof_user_id}"
+                        _prof_instance = (_inst_row[0] if _inst_row and _inst_row[0] else None)
     except Exception:
         pass
 
