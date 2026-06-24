@@ -336,7 +336,7 @@ export default function PublishPage() {
         body: JSON.stringify({
           context_id: contextId,
           audience: failedIds,
-          channels: Array.from(channels),
+          channels: ['whatsapp', 'portal'],
           message_template: messageTemplate,
         }),
       })
